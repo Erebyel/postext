@@ -1084,6 +1084,8 @@ describe("package exports", () => {
       "EAN_ADDON_GAP",
       "ean13Symbol",
       "isbnCaption",
+      "EAN13_MIN_MAGNIFICATION",
+      "isbnBarcodeSvg",
       "resolveLength",
       "resolveBindingMeasures",
       "checkProfileAccepts",
@@ -1091,6 +1093,7 @@ describe("package exports", () => {
       "signaturePages",
       "leafMm",
       "spineFromRuns",
+      "spineSafeMargin",
       "softcoverSheet",
       "caseBoard",
       "caseSpineWidth",
@@ -1104,6 +1107,9 @@ describe("package exports", () => {
       "PRODUCTION_FILE_VERSION",
       "exportProductionProfiles",
       "importProductionProfiles",
+      "BARCODE_RESOURCE_ID",
+      "coverPage",
+      "coverMarkdown",
     ]);
   });
 });

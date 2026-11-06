@@ -77,7 +77,14 @@ interface Panel {
    *  margin (a hinge score, the board a case wraps). */
   clearLeft?: number;
   clearRight?: number;
+  /** Safe margin at the left and right edges instead of the sheet's (a
+   *  spine, too narrow for it). */
+  safeX?: number;
 }
+
+/** Safe margin either side inside a spine: 2 mm, 1 mm on spines of 9 mm
+ *  or less (IngramSpark). */
+export const spineSafeMargin = (spine: number): number => (spine > 9 ? 2 : 1);
 
 /** Lays panels side by side from `x0`, all `height` high from `y0`, with
  *  the given lines between them. */
@@ -97,7 +104,7 @@ function row(
     return {
       name: p.name,
       rect,
-      safe: inset(rect, safe + (p.clearLeft ?? 0), vertical, safe + (p.clearRight ?? 0), vertical),
+      safe: inset(rect, (p.safeX ?? safe) + (p.clearLeft ?? 0), vertical, (p.safeX ?? safe) + (p.clearRight ?? 0), vertical),
     };
   });
 }
@@ -115,7 +122,7 @@ export function softcoverSheet(trim: TrimMm, spine: number, m: ResolvedBindingMe
   const panels: Panel[] = [
     ...(flaps ? [{ name: 'flapBack' as const, width: m.flapWidth }] : []),
     { name: 'back', width: panelW, clearRight: m.hingeScore },
-    { name: 'spine', width: spine },
+    { name: 'spine', width: spine, safeX: spineSafeMargin(spine) },
     { name: 'front', width: panelW, clearLeft: m.hingeScore },
     ...(flaps ? [{ name: 'flapFront' as const, width: m.flapWidth }] : []),
   ];
@@ -162,7 +169,7 @@ export function caseSheet(trim: TrimMm, caseSpine: number, m: ResolvedBindingMea
   const panels: Panel[] = [
     { name: 'back', width: board.width, clearLeft: m.board },
     { name: 'jointBack', width: m.joint },
-    { name: 'spine', width: caseSpine },
+    { name: 'spine', width: caseSpine, safeX: spineSafeMargin(caseSpine) },
     { name: 'jointFront', width: m.joint },
     { name: 'front', width: board.width, clearRight: m.board },
   ];
@@ -200,7 +207,7 @@ export function jacketSheet(trim: TrimMm, caseSpine: number, m: ResolvedBindingM
   const panels: Panel[] = [
     { name: 'flapBack', width: m.jacketFlapWidth },
     { name: 'back', width: panelW },
-    { name: 'spine', width: spine },
+    { name: 'spine', width: spine, safeX: spineSafeMargin(spine) },
     { name: 'front', width: panelW },
     { name: 'flapFront', width: m.jacketFlapWidth },
   ];

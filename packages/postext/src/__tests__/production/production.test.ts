@@ -3,11 +3,14 @@ import {
   caseSheet,
   caseSpineWidth,
   checkProfileAccepts,
+  coverMarkdown,
+  coverPage,
   ean13CheckDigit,
   ean13Symbol,
   endpaperSheet,
   exportProductionProfiles,
   importProductionProfiles,
+  isbnBarcodeSvg,
   isbnCaption,
   jacketSheet,
   pageRunsOf,
@@ -249,5 +252,66 @@ describe('versionSheets', () => {
     expect(versionSheets({ id: 'r', name: 'R', binding: 'nope' }, trim, runs)).toEqual({
       warnings: [{ kind: 'bindingProfileMissing', profile: 'nope' }],
     });
+  });
+});
+
+describe('coverPage', () => {
+  const m = resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, trim);
+
+  it('gives each zone a frame in its safe area, measured from the trim', () => {
+    const sheet = softcoverSheet(trim, 20, m, true);
+    const cover = coverPage(sheet);
+    expect(cover.slots).toEqual(['flapBack', 'back', 'spine', 'front', 'flapFront']);
+    const front = cover.template.frames!.find((f) => f.name === 'front')!;
+    const safe = zone(sheet, 'front').safe;
+    expect(front.placement!.offset!.x!.value).toBeCloseTo(safe.x - sheet.trim.x, 3);
+    expect(front.width).toEqual({ value: Math.round(safe.width * 1000) / 1000, unit: 'mm' });
+    expect(cover.page.width).toEqual({ value: sheet.trim.width, unit: 'mm' });
+    expect(cover.page.cutLines!.bleed).toEqual({ value: m.bleed, unit: 'mm' });
+  });
+
+  it('turns the spine frame to read up it, or down it', () => {
+    const sheet = softcoverSheet(trim, 20, m, false);
+    const up = coverPage(sheet).template.frames!.find((f) => f.name === 'spine')!;
+    expect(up.rotate).toBe(-90);
+    expect(up.width).toEqual({ value: zone(sheet, 'spine').safe.height, unit: 'mm' });
+    const down = coverPage(sheet, { spineText: { direction: 'topToBottom' } }).template.frames!.find((f) => f.name === 'spine')!;
+    expect(down.rotate).toBe(90);
+  });
+
+  it('leaves a spine too thin for text without a frame', () => {
+    expect(coverPage(softcoverSheet(trim, 4, m, false)).slots).not.toContain('spine');
+  });
+
+  it("marks the folds inside the trim, not a case's turn-in folds", () => {
+    const soft = softcoverSheet(trim, 20, m, true);
+    expect(coverPage(soft).page.cutLines!.foldMarks!.length).toBe(soft.lines.length);
+    const c = resolveBindingMeasures({ id: 'y', name: 'Y', style: 'caseFlat' }, trim);
+    const cs = caseSheet(trim, 26, c);
+    expect(coverPage(cs).page.cutLines!.foldMarks!.length).toBe(4);
+  });
+
+  it('draws the barcode in the back cover by the spine and the foot', () => {
+    const sheet = softcoverSheet(trim, 20, m, false);
+    const cover = coverPage(sheet, { isbn: '978-0-306-40615-7' });
+    const el = cover.template.decoration!.elements[0] as { placement: { offset: { x: { value: number } }; size: { width: { value: number } } } };
+    const back = zone(sheet, 'back').safe;
+    expect(el.placement.offset.x.value + el.placement.size.width.value).toBeCloseTo(back.x + back.width - sheet.trim.x, 2);
+    expect(new TextDecoder().decode(cover.files['isbn-barcode.svg'])).toContain('ISBN 978-0-306-40615-7');
+    expect(coverPage(sheet, { isbn: 'nope' }).resources).toEqual([]);
+  });
+
+  it('writes the cover Markdown with a frame per filled slot', () => {
+    expect(coverMarkdown('cover', { front: '# T', back: '' }, ['back', 'front'])).toBe(
+      '::::page{template="cover"}\n\n:::frame{slot="front"}\n\n# T\n\n:::\n\n::::',
+    );
+  });
+});
+
+describe('isbnBarcodeSvg', () => {
+  it('measures 37.29 mm across the symbol and its quiet zones at 100 %', () => {
+    expect(isbnBarcodeSvg('9780306406157')!.width).toBeCloseTo(113 * 0.33, 3);
+    expect(isbnBarcodeSvg('9780306406157', { magnification: 0.5 })!.width).toBeCloseTo(113 * 0.33 * 0.8, 3);
+    expect(isbnBarcodeSvg('978')).toBeUndefined();
   });
 });
