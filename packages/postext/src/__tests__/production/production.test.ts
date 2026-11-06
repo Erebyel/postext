@@ -13,7 +13,9 @@ import {
   isbnBarcodeSvg,
   isbnCaption,
   jacketSheet,
+  PROMO_FORMATS,
   pageRunsOf,
+  promoSheet,
   parseIsbn,
   resolveBindingMeasures,
   resolveLength,
@@ -363,5 +365,21 @@ describe('zone placement', () => {
     expect(frames.front!.verticalAlign).toBe('bottom');
     expect(frames.back!.verticalAlign).toBeUndefined();
     expect(frames.spine!.verticalAlign).toBe('middle');
+  });
+});
+
+describe('promoSheet', () => {
+  it('recomposes the front cover in a screen format, without bleed or marks', () => {
+    const sheet = promoSheet(trim, 'epub', 5);
+    expect(sheet.width).toBe(150);
+    expect(sheet.height).toBeCloseTo(240, 6);
+    expect(sheet.zones.map((z) => z.name)).toEqual(['front']);
+    expect(promoSheet(trim, 'square', 5).height).toBe(150);
+    const cover = coverPage(sheet, { isbn: '978-0-306-40615-7', design: { image: { resourceId: 'p', area: 'front' } } });
+    expect(cover.page.cutLines).toEqual({ enabled: false });
+    expect(cover.slots).toEqual(['front']);
+    expect(cover.resources).toEqual([]);
+    expect((cover.template.decoration!.elements[0] as { placement: { size: { height: { value: number } } } }).placement.size.height.value).toBeCloseTo(240, 3);
+    expect(PROMO_FORMATS.story).toEqual({ width: 1080, height: 1920 });
   });
 });

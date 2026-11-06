@@ -5601,6 +5601,12 @@ export interface SandboxLabels {
   productionSheetJacket: string;
   productionSheetEndpaperFront: string;
   productionSheetEndpaperBack: string;
+  productionSheetEpub: string;
+  productionSheetSquare: string;
+  productionSheetStory: string;
+  productionSheetLandscape: string;
+  productionSheetPixels: string;
+  productionExportImage: string;
   productionSheetSize: string;
   productionTexts: string;
   productionTextsIntro: string;

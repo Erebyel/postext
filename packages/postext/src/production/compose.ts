@@ -173,7 +173,10 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     width: mm(sheet.trim.width),
     height: mm(sheet.trim.height),
     margins: { top: mm(0), bottom: mm(0), left: mm(0), right: mm(0) },
-    cutLines: { enabled: true, bleed: mm(sheet.bleed), ...(folds.length ? { foldMarks: folds } : {}) },
+    // A screen picture has no bleed and no marks.
+    cutLines: sheet.kind === 'promo'
+      ? { enabled: false }
+      : { enabled: true, bleed: mm(sheet.bleed), ...(folds.length ? { foldMarks: folds } : {}) },
   };
   const template: PageTemplate = {
     id: options.templateId ?? 'cover',

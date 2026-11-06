@@ -9,6 +9,8 @@
 import {
   coverMarkdown,
   coverPage,
+  promoSheet,
+  PROMO_FORMATS,
   resolveFolioConfig,
   resolveHeadingsConfig,
   resolvePageConfig,
@@ -20,6 +22,7 @@ import {
   type CoverZoneName,
   type Dimension,
   type PageRun,
+  type PromoFormat,
   type ParagraphStyleConfig,
   type PostextConfig,
   type ProductionSheet,
@@ -133,7 +136,12 @@ export function planPageCount(bookPages: Record<string, { pageIndex: number; pag
 }
 
 /** Which sheet of a version is shown or exported. */
-export type SheetChoice = 'cover' | 'jacket' | 'endpaperFront' | 'endpaperBack';
+export type SheetChoice = 'cover' | 'jacket' | 'endpaperFront' | 'endpaperBack' | PromoFormat;
+
+/** The screen pictures every version offers after its print sheets. */
+export const PROMO_CHOICES = Object.keys(PROMO_FORMATS) as PromoFormat[];
+
+export const isPromo = (choice: SheetChoice): choice is PromoFormat => choice in PROMO_FORMATS;
 
 /** The sheets a version has, in the order the panel offers them. */
 export function sheetChoices(sheets: VersionSheets): SheetChoice[] {
@@ -141,10 +149,17 @@ export function sheetChoices(sheets: VersionSheets): SheetChoice[] {
     'cover',
     ...(sheets.jacket ? ['jacket' as const] : []),
     ...(sheets.endpapers ? ['endpaperFront' as const, 'endpaperBack' as const] : []),
+    ...PROMO_CHOICES,
   ];
 }
 
-export function pickSheet(sheets: VersionSheets, choice: SheetChoice): ProductionSheet {
+/** The sheet of a choice; a screen picture is recomposed from the front
+ *  cover at `trim` (the book's trim). */
+export function pickSheet(sheets: VersionSheets, choice: SheetChoice, trim?: TrimMm): ProductionSheet {
+  if (isPromo(choice)) {
+    const front = sheets.cover.zones.find((z) => z.name === 'front')!.rect;
+    return promoSheet(trim ?? { width: front.width, height: front.height }, choice, sheets.measures.safeMargin);
+  }
   switch (choice) {
     case 'jacket': return sheets.jacket ?? sheets.cover;
     case 'endpaperFront': return sheets.endpapers?.front ?? sheets.cover;
@@ -327,7 +342,7 @@ export function coverDocumentInput(
 /** A file name for a sheet: the book's title, the version and the sheet. */
 export function sheetFileName(title: string, version: string, sheet: SheetChoice): string {
   const base = `${title}-${version}-${sheet}`.trim().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '');
-  return `${base || 'cover'}.pdf`;
+  return `${base || 'cover'}.${isPromo(sheet) ? 'jpg' : 'pdf'}`;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);

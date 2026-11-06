@@ -1100,6 +1100,8 @@ describe("package exports", () => {
       "caseSheet",
       "jacketSheet",
       "endpaperSheet",
+      "PROMO_FORMATS",
+      "promoSheet",
       "isCaseBinding",
       "findBindingProfile",
       "versionSheets",

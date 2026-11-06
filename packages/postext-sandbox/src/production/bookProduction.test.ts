@@ -40,8 +40,9 @@ describe('book production', () => {
     const paper = sheetsOf(newVersion('paperback', 'Rústica'), config, 242, []);
     const hard = sheetsOf({ ...newVersion('hardcover', 'Cartoné'), flaps: true }, config, 242, []);
     if (!('cover' in paper) || !('cover' in hard)) throw new Error('no profile');
-    expect(sheetChoices(paper)).toEqual(['cover']);
-    expect(sheetChoices(hard)).toEqual(['cover', 'jacket', 'endpaperFront', 'endpaperBack']);
+    expect(sheetChoices(paper)).toEqual(['cover', 'epub', 'square', 'story', 'landscape']);
+    expect(sheetChoices(hard)).toEqual(['cover', 'jacket', 'endpaperFront', 'endpaperBack', 'epub', 'square', 'story', 'landscape']);
+    expect(pickSheet(hard, 'story', { width: 150, height: 230 }).height).toBeCloseTo((150 * 1920) / 1080, 6);
     expect(pickSheet(hard, 'jacket').kind).toBe('jacket');
     // 256 pages after rounding to 16: 128 leaves of 120 µm, plus 0.5 mm.
     expect(paper.spine.used).toBeCloseTo(128 * 0.12 + 0.5, 6);
@@ -71,6 +72,7 @@ describe('book production', () => {
 
   it('names the file after the book, the version and the sheet', () => {
     expect(sheetFileName('El título', 'Cartoné', 'jacket')).toBe('El-título-Cartoné-jacket.pdf');
+    expect(sheetFileName('El título', 'Rústica', 'epub')).toBe('El-título-Rústica-epub.jpg');
   });
 
   it('reads a stored record, leaving out what does not read', () => {

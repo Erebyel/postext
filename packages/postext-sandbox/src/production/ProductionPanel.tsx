@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Trash2, Upload, X } from 'lucide-react';
 import {
   BUILT_IN_BINDING_PROFILES,
+  PROMO_FORMATS,
   exportProductionProfiles,
   importProductionProfiles,
   parseIsbn,
@@ -12,6 +13,7 @@ import {
   resolveFolioConfig,
   resolvePageConfig,
   resolveBodyTextConfig,
+  resolveColorValue,
   resolveHeadingsConfig,
   resolvePrintConfig,
   type BindingProfile,
@@ -36,6 +38,8 @@ import { createPdfFontProvider } from '../viewport/pdf/pdfFontProvider.js';
 import { useLayoutWorker } from '../worker/useLayoutWorker.js';
 import {
   COVER_TEXT_ZONES,
+  bookTrimMm,
+  isPromo,
   DESIGN_ZONES,
   WORKING_BOOK,
   coverDocumentInput,
@@ -168,6 +172,10 @@ export function ProductionPanel() {
   const plan = useBookPlan();
   const chapters = useSandboxSelector((s) => s.chapters);
   const bookResources = useSandboxSelector((s) => s.resources);
+  const bookTextHex = useMemo(() => {
+    const color = resolveBodyTextConfig(config.bodyText, config.locale).color;
+    return resolveColorValue(color, config.colorPalette, { hex: '#000000', model: 'hex' }).hex.slice(0, 7).toLowerCase();
+  }, [config]);
   // The book the cover belongs to: its title, subtitle, author and ISBN
   // come from the first chapter's front matter.
   const metadata = useMemo(() => bookMetadata(chapters) as Record<string, unknown>, [chapters]);
@@ -339,6 +347,7 @@ export function ProductionPanel() {
             <DesignSection
               design={record.design ?? {}}
               resources={bookResources}
+              bookTextHex={bookTextHex}
               labels={labels}
               onChange={(design) => update({ ...record, design })}
             />
@@ -524,9 +533,12 @@ const DESIGN_ZONE_LABEL: Record<DesignZone, keyof Labels> = {
 };
 
 /** A colour or none: the swatch, and a button that clears it. */
-function ColorField({ label, value, clearLabel, onChange }: {
+function ColorField({ label, value, fallback = '#ffffff', clearLabel, onChange }: {
   label: string;
   value: string | undefined;
+  /** The colour in use while none is set (the paper, the book's text):
+   *  shown faded, so choosing any other is a change. */
+  fallback?: string;
   clearLabel: string;
   onChange: (hex: string | undefined) => void;
 }) {
@@ -537,7 +549,7 @@ function ColorField({ label, value, clearLabel, onChange }: {
         <input
           type="color"
           aria-label={label}
-          value={value ?? '#ffffff'}
+          value={value ?? fallback}
           onChange={(e) => onChange(e.target.value)}
           className={cn('h-6 w-9 cursor-pointer rounded border border-(--pt-control-border) bg-transparent p-0', !value && 'opacity-40')}
         />
@@ -550,9 +562,11 @@ function ColorField({ label, value, clearLabel, onChange }: {
 /** The cover's look, shared by every version: a ground for the whole
  *  sheet, one of the book's pictures over it, a ground per zone, and the
  *  colour of the text. */
-function DesignSection({ design, resources, labels, onChange }: {
+function DesignSection({ design, resources, bookTextHex, labels, onChange }: {
   design: CoverDesignSettings;
   resources: readonly Resource[];
+  /** The book's text colour, the text's until the design sets one. */
+  bookTextHex: string;
   labels: Labels;
   onChange: (d: CoverDesignSettings) => void;
 }) {
@@ -607,7 +621,7 @@ function DesignSection({ design, resources, labels, onChange }: {
           onChange={(v) => setZone(zone, v)}
         />
       ))}
-      <ColorField label={labels.productionDesignTextColor} value={design.textColor} clearLabel={labels.productionDesignClear} onChange={(v) => set('textColor', v)} />
+      <ColorField label={labels.productionDesignTextColor} value={design.textColor} fallback={bookTextHex} clearLabel={labels.productionDesignClear} onChange={(v) => set('textColor', v)} />
     </section>
   );
 }
@@ -765,7 +779,30 @@ const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
   jacket: 'productionSheetJacket',
   endpaperFront: 'productionSheetEndpaperFront',
   endpaperBack: 'productionSheetEndpaperBack',
+  epub: 'productionSheetEpub',
+  square: 'productionSheetSquare',
+  story: 'productionSheetStory',
+  landscape: 'productionSheetLandscape',
 };
+
+/** A screen picture of a laid-out promo sheet: its page painted at the
+ *  format's pixel width on white, as a JPEG. */
+async function promoImage(doc: VDTDocument, width: number, height: number): Promise<Uint8Array | null> {
+  const page = doc.pages[0];
+  if (!page) return null;
+  const painted = document.createElement('canvas');
+  renderPageToCanvas(page, doc, painted, { scale: width / page.width });
+  const out = document.createElement('canvas');
+  out.width = width;
+  out.height = height;
+  const ctx = out.getContext('2d');
+  if (!ctx) return null;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(painted, 0, 0, width, height);
+  const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/jpeg', 0.92));
+  return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+}
 
 function SheetPreview({ config, version, texts, design, bookResources, sheets, choices, shown, onChoose, labels, fileTitle }: {
   config: PostextConfig;
@@ -790,7 +827,7 @@ function SheetPreview({ config, version, texts, design, bookResources, sheets, c
   const doc = built?.doc ?? null;
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const sheet = pickSheet(sheets, shown);
+  const sheet = pickSheet(sheets, shown, bookTrimMm(config));
   const input = useMemo(
     () => coverDocumentInput(sheet, version, texts, config, design, bookResources),
     [sheet, version, texts, config, design, bookResources],
@@ -828,8 +865,24 @@ function SheetPreview({ config, version, texts, design, bookResources, sheets, c
     canvas.style.height = `${(width * page.height) / page.width}px`;
   }, [doc]);
 
+  const exportImage = async () => {
+    if (!built || built.input !== input || !isPromo(built.sheet)) return;
+    setBusy(true);
+    try {
+      const px = PROMO_FORMATS[built.sheet];
+      const bytes = await promoImage(built.doc, px.width, px.height);
+      if (!bytes) return;
+      const name = sheetFileName(fileTitle, version.name, built.sheet);
+      downloadBytes(bytes, name, 'image/jpeg');
+      announce(fill(labels.productionExported, { name }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const exportPdf = async () => {
     if (!built || built.input !== input) return;
+    if (isPromo(built.sheet)) return exportImage();
     setBusy(true);
     announce(labels.productionExporting);
     try {
@@ -875,14 +928,16 @@ function SheetPreview({ config, version, texts, design, bookResources, sheets, c
         />
       )}
       <p className="m-0 text-xs text-(--slate)">
-        {(isCaseCover ? labels.productionSheetCase : String(labels[SHEET_LABEL[shown]]))} · {fill(labels.productionSheetSize, { width: mm1(sheet.width), height: mm1(sheet.height) })}
+        {(isCaseCover ? labels.productionSheetCase : String(labels[SHEET_LABEL[shown]]))} · {isPromo(shown)
+          ? fill(labels.productionSheetPixels, { width: String(PROMO_FORMATS[shown].width), height: String(PROMO_FORMATS[shown].height) })
+          : fill(labels.productionSheetSize, { width: mm1(sheet.width), height: mm1(sheet.height) })}
       </p>
       <div ref={wrapRef} className="w-full overflow-hidden rounded border border-(--rule) bg-white">
         {failed ? <p className="m-0 p-2 text-xs text-(--slate)">{labels.productionPreviewFailed}</p> : <canvas ref={canvasRef} className="block" />}
       </div>
       <div className="flex justify-end">
         <Button variant="primary" size="sm" disabled={!built || built.input !== input || busy} onClick={() => void exportPdf()}>
-          {busy ? labels.productionExporting : labels.productionExportPdf}
+          {busy ? labels.productionExporting : isPromo(shown) ? labels.productionExportImage : labels.productionExportPdf}
         </Button>
       </div>
     </section>

@@ -47,7 +47,7 @@ export interface SheetLine {
 }
 
 export interface ProductionSheet {
-  kind: 'softcover' | 'case' | 'jacket' | 'endpaper';
+  kind: 'softcover' | 'case' | 'jacket' | 'endpaper' | 'promo';
   /** The whole sheet, bleed or turn-in included, mm. */
   width: number;
   height: number;
@@ -258,6 +258,40 @@ export function endpaperSheet(
     bleed: b,
     zones,
     lines: [{ x: fold, kind: 'fold' }, { x: glueX, kind: 'glue' }],
+    spine: 0,
+  };
+}
+
+/** Pictures of the front cover for screens: an EPUB's cover and the usual
+ *  social media sizes, in pixels. */
+export type PromoFormat = 'epub' | 'square' | 'story' | 'landscape';
+
+export const PROMO_FORMATS: Readonly<Record<PromoFormat, { width: number; height: number }>> = {
+  // The cover image most EPUB stores ask for (Apple Books, Kobo, KDP):
+  // 1600 × 2560 px, 1 : 1.6.
+  epub: { width: 1600, height: 2560 },
+  square: { width: 1080, height: 1080 },
+  story: { width: 1080, height: 1920 },
+  // Link previews (Open Graph).
+  landscape: { width: 1200, height: 630 },
+};
+
+/** The front cover recomposed in a screen format: one zone, the front,
+ *  as wide as the trim so its type keeps its size against it, as tall as
+ *  the format says; no bleed, no folds. */
+export function promoSheet(trim: TrimMm, format: PromoFormat, safeMargin: number): ProductionSheet {
+  const px = PROMO_FORMATS[format];
+  const width = trim.width;
+  const height = (width * px.height) / px.width;
+  const rect = { x: 0, y: 0, width, height };
+  return {
+    kind: 'promo',
+    width,
+    height,
+    trim: rect,
+    bleed: 0,
+    zones: [{ name: 'front', rect, safe: inset(rect, safeMargin, safeMargin, safeMargin, safeMargin) }],
+    lines: [],
     spine: 0,
   };
 }
