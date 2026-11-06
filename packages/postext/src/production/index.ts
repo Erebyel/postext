@@ -1,0 +1,7 @@
+export * from './isbn.js';
+export * from './measures.js';
+export * from './spine.js';
+export * from './geometry.js';
+export * from './version.js';
+export * from './exchange.js';
+export { DEFAULT_BINDING_MEASURES, BUILT_IN_BINDING_PROFILES, DEFAULT_SPINE_TEXT } from '../defaults/output/production.js';

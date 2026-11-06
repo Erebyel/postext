@@ -20,6 +20,7 @@ export { columnRuleSegments, footnoteRuleSegments, pageColumnRule } from './pain
 export type { FootnoteRuleSegment, ColumnRuleSegment } from './paint/columnRule.js';
 export { cropMarkSegments } from './paint/cropMarks.js';
 export * from './color/index.js';
+export * from './production/index.js';
 export { preflightDocument, placedImageResolutions } from './checks/preflight.js';
 export type { PreflightIssue, PreflightKind, PreflightOptions, PreflightSeverity, PlacedImageResolution } from './checks/preflight.js';
 export {
