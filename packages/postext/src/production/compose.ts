@@ -9,12 +9,12 @@
 import { DEFAULT_SPINE_TEXT } from '../defaults/output/production.js';
 import type { PageTemplate } from '../composed/types/templates.js';
 import type { FrameConfig } from '../composed/types/frames.js';
-import type { DesignImageElement } from '../types/designElements.js';
-import type { Dimension, PageConfig } from '../types/page.js';
+import type { DesignBoxElement, DesignElement, DesignImageElement } from '../types/designElements.js';
+import type { ColorValue, Dimension, PageConfig } from '../types/page.js';
 import type { Resource } from '../types/resources/resources.js';
 import type { ProductionVersion } from '../types/output/production.js';
 import { isbnBarcodeSvg } from './barcodeSvg.js';
-import type { CoverZoneName, ProductionSheet, SheetZone } from './geometry.js';
+import type { CoverZoneName, ProductionSheet, SheetRect, SheetZone } from './geometry.js';
 
 const mm = (value: number): Dimension => ({ value: Math.round(value * 1000) / 1000, unit: 'mm' });
 
@@ -23,6 +23,19 @@ const mm = (value: number): Dimension => ({ value: Math.round(value * 1000) / 10
 const SLOT_ZONES: ReadonlySet<CoverZoneName> = new Set(['flapBack', 'back', 'spine', 'front', 'flapFront', 'pastedown', 'flyleaf']);
 
 export const BARCODE_RESOURCE_ID = 'isbn-barcode';
+
+/** The look of a sheet, shared by every version: a ground for the whole
+ *  sheet, a picture over it and a ground for each zone. Grounds and pictures that reach an edge of the sheet run into
+ *  its bleed (a case's turn-in). */
+export interface CoverDesign {
+  background?: ColorValue;
+  /** A bitmap or SVG resource of the book, filling the whole sheet or
+   *  only the front cover, cropped to cover it about `focus`. */
+  image?: { resourceId: string; area?: 'sheet' | 'front'; focus?: { x: number; y: number } };
+  /** A ground per zone, over the sheet's and its picture. Endpapers take
+   *  their `pastedown` and `flyleaf`. */
+  zones?: Partial<Record<CoverZoneName, ColorValue>>;
+}
 
 export interface CoverPageOptions {
   /** Id of the page template. Default `'cover'`. */
@@ -34,6 +47,55 @@ export interface CoverPageOptions {
   isbnAddOn?: string;
   /** Barcode size against nominal (0.8 … 2). Default 1. */
   barcodeMagnification?: number;
+  design?: CoverDesign;
+}
+
+/** A zone's rectangle run out into the bleed at the sheet's edges. */
+function toBleed(r: SheetRect, sheet: ProductionSheet): SheetRect {
+  const eps = 0.01;
+  const t = sheet.trim;
+  const x0 = r.x <= t.x + eps ? 0 : r.x;
+  const y0 = r.y <= t.y + eps ? 0 : r.y;
+  const x1 = r.x + r.width >= t.x + t.width - eps ? sheet.width : r.x + r.width;
+  const y1 = r.y + r.height >= t.y + t.height - eps ? sheet.height : r.y + r.height;
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+
+/** Placed on the sheet: the bleed box's corner is the sheet's. */
+const onSheet = (r: SheetRect) => ({
+  anchor: { to: 'bleed' as const, edge: 'top-left' as const },
+  offset: { x: mm(r.x), y: mm(r.y) },
+  size: { width: mm(r.width), height: mm(r.height) },
+});
+
+/** The decoration a design draws under the frames: the sheet's ground, its
+ *  picture, then each zone's ground. */
+function designElements(sheet: ProductionSheet, design: CoverDesign | undefined): DesignElement[] {
+  if (!design) return [];
+  const out: DesignElement[] = [];
+  const whole = { x: 0, y: 0, width: sheet.width, height: sheet.height };
+  if (design.background) {
+    out.push({ kind: 'box', id: 'cover-ground', placement: onSheet(whole), style: { backgroundColor: design.background } } as DesignBoxElement);
+  }
+  if (design.image?.resourceId) {
+    const front = sheet.zones.find((z) => z.name === 'front');
+    const area = design.image.area === 'front' && front ? toBleed(front.rect, sheet) : whole;
+    out.push({
+      kind: 'image',
+      id: 'cover-image',
+      resourceId: design.image.resourceId,
+      decorative: true,
+      fit: 'cover',
+      ...(design.image.focus ? { focus: design.image.focus } : {}),
+      placement: onSheet(area),
+    });
+  }
+  for (const zone of sheet.zones) {
+    const color = design.zones?.[zone.name];
+    if (!color) continue;
+    out.push({ kind: 'box', id: `cover-zone-${zone.name}`, placement: onSheet(toBleed(zone.rect, sheet)), style: { backgroundColor: color } } as DesignBoxElement);
+  }
+  return out;
 }
 
 export interface CoverPage {
@@ -105,6 +167,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     header: false,
     footer: false,
   };
+  const elements: DesignElement[] = designElements(sheet, options.design);
   const resources: Resource[] = [];
   const files: Record<string, Uint8Array> = {};
   const back = sheet.zones.find((z) => z.name === 'back');
@@ -137,8 +200,9 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
         size: { width: mm(barcode.width), height: mm(barcode.height) },
       },
     };
-    template.decoration = { elements: [element] };
+    elements.push(element);
   }
+  if (elements.length > 0) template.decoration = { elements };
   return { page, template, resources, files, slots: frames.map((f) => f.name as CoverZoneName) };
 }
 

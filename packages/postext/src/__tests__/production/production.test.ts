@@ -315,3 +315,42 @@ describe('isbnBarcodeSvg', () => {
     expect(isbnBarcodeSvg('978')).toBeUndefined();
   });
 });
+
+describe('cover design', () => {
+  const m = resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, trim);
+  const ink = (hex: string) => ({ hex, model: 'hex' as const });
+  type Placed = { id: string; kind: string; fit?: string; placement: { offset: { x: { value: number }; y: { value: number } }; size: { width: { value: number }; height: { value: number } } } };
+
+  it('draws the ground, the picture and the zones under the barcode, into the bleed', () => {
+    const sheet = softcoverSheet(trim, 20, m, true);
+    const cover = coverPage(sheet, {
+      isbn: '978-0-306-40615-7',
+      design: { background: ink('#123456'), image: { resourceId: 'photo' }, zones: { spine: ink('#ffcc00'), flapFront: ink('#eeeeee') } },
+    });
+    const els = cover.template.decoration!.elements as Placed[];
+    expect(els.map((e) => e.id)).toEqual(['cover-ground', 'cover-image', 'cover-zone-spine', 'cover-zone-flapFront', 'isbn-barcode']);
+    const ground = els[0]!;
+    expect(ground.placement.size.width.value).toBeCloseTo(sheet.width, 3);
+    expect(els[1]!.fit).toBe('cover');
+    // The spine runs from the top of the bleed to its foot, between its folds.
+    const spine = els[2]!;
+    expect(spine.placement.offset.y.value).toBe(0);
+    expect(spine.placement.size.height.value).toBeCloseTo(sheet.height, 3);
+    expect(spine.placement.offset.x.value).toBeCloseTo(zone(sheet, 'spine').rect.x, 3);
+    // The front flap reaches the right edge of the bleed.
+    const flap = els[3]!;
+    expect(flap.placement.offset.x.value + flap.placement.size.width.value).toBeCloseTo(sheet.width, 3);
+  });
+
+  it('puts the picture on the front cover only when asked', () => {
+    const sheet = softcoverSheet(trim, 20, m, false);
+    const els = coverPage(sheet, { design: { image: { resourceId: 'photo', area: 'front' } } }).template.decoration!.elements as Placed[];
+    const front = zone(sheet, 'front').rect;
+    expect(els[0]!.placement.offset.x.value).toBeCloseTo(front.x, 3);
+    expect(els[0]!.placement.offset.x.value + els[0]!.placement.size.width.value).toBeCloseTo(sheet.width, 3);
+  });
+
+  it('draws nothing without a design', () => {
+    expect(coverPage(softcoverSheet(trim, 20, m, false)).template.decoration).toBeUndefined();
+  });
+});

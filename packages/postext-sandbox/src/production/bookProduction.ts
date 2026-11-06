@@ -14,12 +14,15 @@ import {
   versionSheets,
   type BindingProfile,
   type CoverPage,
+  type ColorValue,
+  type CoverDesign,
   type CoverZoneName,
   type Dimension,
   type PageRun,
   type PostextConfig,
   type ProductionSheet,
   type ProductionVersion,
+  type Resource,
   type TrimMm,
   type VersionSheets,
 } from 'postext';
@@ -28,6 +31,18 @@ import {
 export const COVER_TEXT_ZONES = ['front', 'spine', 'back', 'flapFront', 'flapBack'] as const;
 export type CoverTextZone = (typeof COVER_TEXT_ZONES)[number];
 
+/** The zones a design grounds in the panel: the flaps share one. */
+export const DESIGN_ZONES = ['front', 'spine', 'back', 'flaps'] as const;
+export type DesignZone = (typeof DESIGN_ZONES)[number];
+
+/** The cover's look, shared by every version, colours as `#rrggbb`. */
+export interface CoverDesignSettings {
+  background?: string;
+  image?: { resourceId: string; area?: 'sheet' | 'front' };
+  zones?: Partial<Record<DesignZone, string>>;
+  textColor?: string;
+}
+
 /** A book's production, kept per project. */
 export interface BookProduction {
   projectId: string;
@@ -35,6 +50,7 @@ export interface BookProduction {
   activeVersionId?: string;
   /** The cover's text by zone, Markdown; the same for every version. */
   texts: Partial<Record<CoverTextZone, string>>;
+  design?: CoverDesignSettings;
   updatedAt: number;
 }
 
@@ -147,19 +163,47 @@ export function sheetsOf(
 
 /** What to lay out for a sheet: the book's design with the sheet's page
  *  and template, and the cover's Markdown. Endpapers take no text yet. */
+const ink = (hex: string): ColorValue => ({ hex, model: 'hex' });
+
+/** The core's design for a sheet from the panel's settings. */
+export function coverDesignOf(settings: CoverDesignSettings | undefined): CoverDesign | undefined {
+  if (!settings) return undefined;
+  const zones: CoverDesign['zones'] = {};
+  const z = settings.zones ?? {};
+  if (z.front) zones.front = ink(z.front);
+  if (z.spine) zones.spine = ink(z.spine);
+  if (z.back) zones.back = ink(z.back);
+  if (z.flaps) {
+    zones.flapFront = ink(z.flaps);
+    zones.flapBack = ink(z.flaps);
+  }
+  const design: CoverDesign = {
+    ...(settings.background ? { background: ink(settings.background) } : {}),
+    ...(settings.image?.resourceId ? { image: { resourceId: settings.image.resourceId, area: settings.image.area ?? 'sheet' } } : {}),
+    ...(Object.keys(zones).length > 0 ? { zones } : {}),
+  };
+  return Object.keys(design).length > 0 ? design : undefined;
+}
+
 export function coverDocumentInput(
   sheet: ProductionSheet,
   version: ProductionVersion,
   texts: BookProduction['texts'],
   config: PostextConfig,
-): { cover: CoverPage; config: PostextConfig; markdown: string } {
+  settings?: CoverDesignSettings,
+  bookResources: readonly Resource[] = [],
+): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
+  const design = isCover ? coverDesignOf(settings) : undefined;
   const cover = coverPage(sheet, {
     templateId: 'production-sheet',
     ...(isCover && version.isbn ? { isbn: version.isbn } : {}),
     ...(version.isbnAddOn ? { isbnAddOn: version.isbnAddOn } : {}),
     ...(version.spineText ? { spineText: version.spineText } : {}),
+    ...(design ? { design } : {}),
   });
+  const picture = design?.image ? bookResources.find((r) => r.id === design.image!.resourceId) : undefined;
+  const textColor = isCover && settings?.textColor ? ink(settings.textColor) : undefined;
   const content: Partial<Record<CoverZoneName, string>> = isCover ? texts : {};
   // The cover's headings take the book's type, not its chapter openers:
   // no designs, numbers or page breaks, and no heading styles.
@@ -170,6 +214,7 @@ export function coverDocumentInput(
         ...config.headings,
         levels: config.headings.levels.map((l) => ({
           ...l,
+          ...(textColor ? { color: textColor } : {}),
           numberingTemplate: '',
           breakBefore: { enabled: false },
           ...(l.advancedDesign ? { advancedDesign: { ...l.advancedDesign, enabled: false } } : {}),
@@ -178,9 +223,11 @@ export function coverDocumentInput(
     : config.headings;
   return {
     cover,
+    resources: [...cover.resources, ...(picture ? [picture] : [])],
     config: {
       ...rest,
-      ...(headings ? { headings } : {}),
+      ...(headings ? { headings: textColor ? { ...headings, color: textColor } : headings } : textColor ? { headings: { color: textColor } } : {}),
+      ...(textColor ? { bodyText: { ...config.bodyText, color: textColor } } : {}),
       page: { ...config.page, ...cover.page, ...(config.page?.dpi ? { dpi: config.page.dpi } : {}) },
       header: { elements: [] },
       footer: { elements: [] },
@@ -213,6 +260,7 @@ export function readBookProduction(raw: unknown): BookProduction | null {
       if (typeof t === 'string') texts[zone] = t;
     }
   }
+  const design = readDesign(raw.design);
   const active = typeof raw.activeVersionId === 'string' && versions.some((v) => v.id === raw.activeVersionId)
     ? raw.activeVersionId
     : undefined;
@@ -221,6 +269,28 @@ export function readBookProduction(raw: unknown): BookProduction | null {
     versions,
     ...(active ? { activeVersionId: active } : {}),
     texts,
+    ...(design ? { design } : {}),
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
   };
+}
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+function readDesign(raw: unknown): CoverDesignSettings | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out: CoverDesignSettings = {};
+  if (typeof raw.background === 'string' && HEX.test(raw.background)) out.background = raw.background;
+  if (typeof raw.textColor === 'string' && HEX.test(raw.textColor)) out.textColor = raw.textColor;
+  if (isRecord(raw.image) && typeof raw.image.resourceId === 'string') {
+    out.image = { resourceId: raw.image.resourceId, ...(raw.image.area === 'front' ? { area: 'front' as const } : {}) };
+  }
+  if (isRecord(raw.zones)) {
+    const zones: NonNullable<CoverDesignSettings['zones']> = {};
+    for (const z of DESIGN_ZONES) {
+      const c = raw.zones[z];
+      if (typeof c === 'string' && HEX.test(c)) zones[z] = c;
+    }
+    if (Object.keys(zones).length > 0) out.zones = zones;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }

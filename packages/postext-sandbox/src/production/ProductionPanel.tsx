@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Trash2, Upload } from 'lucide-react';
+import { Download, Trash2, Upload, X } from 'lucide-react';
 import {
   BUILT_IN_BINDING_PROFILES,
   exportProductionProfiles,
@@ -16,6 +16,7 @@ import {
   type PostextConfig,
   type ProductionVersion,
   type ProductionWarning,
+  type Resource,
   type VDTDocument,
   type VersionSheets,
 } from 'postext';
@@ -24,6 +25,8 @@ import { useBookPlan, useSandboxLabels, useSandboxSelector } from '../context/Sa
 import { Button, ConfirmPopover, IconButton, PanelBody, PanelHeader, SegmentedControl, Select, Switch, announce, cn, type SelectOption } from '../ui/index.js';
 import { bookMetadata } from '../book/compose.js';
 import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
+import { ensureResourceImages } from '../controls/media/resourceImages.js';
+import { buildPdfResourceBytes } from '../viewport/pdf/pdfResourceBytes.js';
 import { downloadBytes } from '../storage/persistence.js';
 import { fill } from '../print/fillTokens.js';
 import { loadPrintProfile, outputProfileBaseUrl } from '../print/printSetup.js';
@@ -31,6 +34,7 @@ import { createPdfFontProvider } from '../viewport/pdf/pdfFontProvider.js';
 import { useLayoutWorker } from '../worker/useLayoutWorker.js';
 import {
   COVER_TEXT_ZONES,
+  DESIGN_ZONES,
   WORKING_BOOK,
   coverDocumentInput,
   emptyProduction,
@@ -43,7 +47,9 @@ import {
   sheetFileName,
   sheetsOf,
   type BookProduction,
+  type CoverDesignSettings,
   type CoverTextZone,
+  type DesignZone,
   type SheetChoice,
 } from './bookProduction.js';
 import {
@@ -156,6 +162,7 @@ export function ProductionPanel() {
   const projects = useSandboxSelector((s) => s.projects);
   const plan = useBookPlan();
   const chapters = useSandboxSelector((s) => s.chapters);
+  const bookResources = useSandboxSelector((s) => s.resources);
   // The book the cover belongs to: its title, subtitle, author and ISBN
   // come from the first chapter's front matter.
   const metadata = useMemo(() => bookMetadata(chapters) as Record<string, unknown>, [chapters]);
@@ -323,11 +330,22 @@ export function ProductionPanel() {
             </section>
           )}
 
+          {version && record && (
+            <DesignSection
+              design={record.design ?? {}}
+              resources={bookResources}
+              labels={labels}
+              onChange={(design) => update({ ...record, design })}
+            />
+          )}
+
           {version && record && ready && complete && (
             <SheetPreview
               config={config}
               version={version}
               texts={record.texts}
+              design={record.design}
+              bookResources={bookResources}
               sheets={ready}
               choices={choices}
               shown={shown}
@@ -483,6 +501,102 @@ function SpineSummary({ config, sheets, labels }: {
   );
 }
 
+const DESIGN_ZONE_LABEL: Record<DesignZone, keyof Labels> = {
+  front: 'productionZoneFront',
+  spine: 'productionZoneSpine',
+  back: 'productionZoneBack',
+  flaps: 'productionDesignFlaps',
+};
+
+/** A colour or none: the swatch, and a button that clears it. */
+function ColorField({ label, value, clearLabel, onChange }: {
+  label: string;
+  value: string | undefined;
+  clearLabel: string;
+  onChange: (hex: string | undefined) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <span>{label}</span>
+      <span className="flex items-center gap-1">
+        <input
+          type="color"
+          aria-label={label}
+          value={value ?? '#ffffff'}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn('h-6 w-9 cursor-pointer rounded border border-(--pt-control-border) bg-transparent p-0', !value && 'opacity-40')}
+        />
+        {value && <IconButton label={`${clearLabel}: ${label}`} icon={<X size={12} aria-hidden="true" />} onClick={() => onChange(undefined)} />}
+      </span>
+    </div>
+  );
+}
+
+/** The cover's look, shared by every version: a ground for the whole
+ *  sheet, one of the book's pictures over it, a ground per zone, and the
+ *  colour of the text. */
+function DesignSection({ design, resources, labels, onChange }: {
+  design: CoverDesignSettings;
+  resources: readonly Resource[];
+  labels: Labels;
+  onChange: (d: CoverDesignSettings) => void;
+}) {
+  const pictures = resources.filter((r) => r.kind === 'bitmap' || r.kind === 'svg');
+  const NONE = '__none__';
+  const set = <K extends keyof CoverDesignSettings>(key: K, value: CoverDesignSettings[K] | undefined) => {
+    const next = { ...design };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    onChange(next);
+  };
+  const setZone = (zone: DesignZone, hex: string | undefined) => {
+    const zones = { ...design.zones };
+    if (hex) zones[zone] = hex;
+    else delete zones[zone];
+    set('zones', Object.keys(zones).length > 0 ? zones : undefined);
+  };
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-(--rule) p-3">
+      <h3 className={HEADING}>{labels.productionDesign}</h3>
+      <p className="m-0 text-xs text-(--slate)">{labels.productionDesignIntro}</p>
+      <ColorField label={labels.productionDesignBackground} value={design.background} clearLabel={labels.productionDesignClear} onChange={(v) => set('background', v)} />
+      <label className="flex flex-col gap-1 text-xs">
+        {labels.productionDesignImage}
+        <Select
+          size="sm"
+          value={design.image?.resourceId ?? NONE}
+          onValueChange={(id) => set('image', id === NONE ? undefined : { resourceId: id, ...(design.image?.area ? { area: design.image.area } : {}) })}
+          options={[
+            { value: NONE, label: labels.productionDesignNoImage },
+            ...pictures.map((r) => ({ value: r.id, label: r.caption?.trim() || r.altText?.trim() || r.id })),
+          ]}
+          ariaLabel={labels.productionDesignImage}
+        />
+      </label>
+      {design.image && (
+        <SegmentedControl
+          size="sm"
+          value={design.image.area ?? 'sheet'}
+          onValueChange={(area) => set('image', { resourceId: design.image!.resourceId, ...(area === 'front' ? { area } : {}) })}
+          options={[{ value: 'sheet', label: labels.productionDesignImageSheet }, { value: 'front', label: labels.productionDesignImageFront }]}
+          ariaLabel={labels.productionDesignImage}
+        />
+      )}
+      <p className="m-0 mt-1 text-xs text-(--slate)">{labels.productionDesignZones}</p>
+      {DESIGN_ZONES.map((zone) => (
+        <ColorField
+          key={zone}
+          label={String(labels[DESIGN_ZONE_LABEL[zone]])}
+          value={design.zones?.[zone]}
+          clearLabel={labels.productionDesignClear}
+          onChange={(v) => setZone(zone, v)}
+        />
+      ))}
+      <ColorField label={labels.productionDesignTextColor} value={design.textColor} clearLabel={labels.productionDesignClear} onChange={(v) => set('textColor', v)} />
+    </section>
+  );
+}
+
 const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
   cover: 'productionSheetCover',
   jacket: 'productionSheetJacket',
@@ -490,10 +604,12 @@ const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
   endpaperBack: 'productionSheetEndpaperBack',
 };
 
-function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose, labels, fileTitle }: {
+function SheetPreview({ config, version, texts, design, bookResources, sheets, choices, shown, onChoose, labels, fileTitle }: {
   config: PostextConfig;
   version: ProductionVersion;
   texts: BookProduction['texts'];
+  design: CoverDesignSettings | undefined;
+  bookResources: readonly Resource[];
   sheets: VersionSheets;
   choices: SheetChoice[];
   shown: SheetChoice;
@@ -512,7 +628,10 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const sheet = pickSheet(sheets, shown);
-  const input = useMemo(() => coverDocumentInput(sheet, version, texts, config), [sheet, version, texts, config]);
+  const input = useMemo(
+    () => coverDocumentInput(sheet, version, texts, config, design, bookResources),
+    [sheet, version, texts, config, design, bookResources],
+  );
   const isCaseCover = sheet.kind === 'case';
 
   useEffect(() => {
@@ -523,7 +642,8 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
         try {
           await ensureConfigFontsLoaded(input.config, input.markdown);
           await registerCoverImages(input.cover.files);
-          const laid = await build({ markdown: input.markdown, resources: input.cover.resources }, input.config);
+          await ensureResourceImages(input.resources.filter((r) => r.id !== 'isbn-barcode'));
+          const laid = await build({ markdown: input.markdown, resources: input.resources }, input.config);
           if (alive) setBuilt({ doc: laid, input, sheet: shown });
         } catch {
           if (alive) setFailed(true);
@@ -554,7 +674,8 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
       const outputProfile = print.standard !== 'none'
         ? await loadPrintProfile(print).then((p) => p.bytes, () => undefined)
         : undefined;
-      const resourceBytes = new Map(Object.entries(built.input.cover.files));
+      const resourceBytes = await buildPdfResourceBytes(built.input.resources.filter((r) => r.id !== 'isbn-barcode'), config);
+      for (const [fileId, bytes] of Object.entries(built.input.cover.files)) resourceBytes.set(fileId, bytes);
       const worker = createPdfWorker();
       try {
         const bytes = await worker.render([built.doc], {

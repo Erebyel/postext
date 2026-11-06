@@ -3,6 +3,7 @@ import type { PostextConfig } from 'postext';
 import {
   bookRuns,
   bookTrimMm,
+  coverDesignOf,
   coverDocumentInput,
   dimensionMm,
   metadataIsbn,
@@ -91,5 +92,37 @@ describe('book production', () => {
     expect(metadataTexts({ author: 'Sin título' })).toEqual({});
     expect(metadataIsbn({ isbn: ' 978-84-00000-00-4 ' })).toBe('978-84-00000-00-4');
     expect(metadataIsbn({})).toBeUndefined();
+  });
+
+  it('turns the panel design into the sheet design, the flaps sharing one ground', () => {
+    expect(coverDesignOf(undefined)).toBeUndefined();
+    expect(coverDesignOf({})).toBeUndefined();
+    expect(coverDesignOf({ background: '#112233', zones: { flaps: '#eeeeee' }, image: { resourceId: 'p' } })).toEqual({
+      background: { hex: '#112233', model: 'hex' },
+      image: { resourceId: 'p', area: 'sheet' },
+      zones: { flapFront: { hex: '#eeeeee', model: 'hex' }, flapBack: { hex: '#eeeeee', model: 'hex' } },
+    });
+  });
+
+  it('lays the design and the text colour on a cover, not on an endpaper', () => {
+    const version = newVersion('hardcover', 'Cartoné');
+    const sheets = sheetsOf(version, config, 242, []);
+    if (!('cover' in sheets)) throw new Error('no profile');
+    const photo = { id: 'photo', typeId: 'figure', kind: 'bitmap', createdAt: 0, updatedAt: 0, bitmap: { fileId: 'p.jpg', format: 'jpeg', width: 10, height: 10 } } as const;
+    const design = { background: '#112233', textColor: '#ffffff', image: { resourceId: 'photo' } };
+    const cover = coverDocumentInput(sheets.cover, version, { front: '# T' }, config, design, [photo]);
+    expect(cover.resources.map((r) => r.id)).toEqual(['photo']);
+    expect(cover.config.bodyText?.color).toEqual({ hex: '#ffffff', model: 'hex' });
+    expect(cover.config.headings?.color).toEqual({ hex: '#ffffff', model: 'hex' });
+    expect(cover.cover.template.decoration?.elements.map((e) => ('id' in e ? e.id : ''))).toEqual(['cover-ground', 'cover-image']);
+    const endpaper = coverDocumentInput(pickSheet(sheets, 'endpaperFront'), version, {}, config, design, [photo]);
+    expect(endpaper.resources).toEqual([]);
+    expect(endpaper.cover.template.decoration).toBeUndefined();
+    expect(endpaper.config.bodyText?.color).toBeUndefined();
+  });
+
+  it('keeps a stored design only as far as it reads', () => {
+    const read = readBookProduction({ projectId: 'p', versions: [], texts: {}, design: { background: 'red', textColor: '#ffffff', zones: { spine: '#000000', bogus: '#111111' }, image: { resourceId: 'x', area: 'front' } } });
+    expect(read?.design).toEqual({ textColor: '#ffffff', zones: { spine: '#000000' }, image: { resourceId: 'x', area: 'front' } });
   });
 });

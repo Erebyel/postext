@@ -5607,6 +5607,17 @@ export interface SandboxLabels {
   productionForBook: string;
   productionFromBook: string;
   productionFromBookConfirm: string;
+  productionDesign: string;
+  productionDesignIntro: string;
+  productionDesignBackground: string;
+  productionDesignImage: string;
+  productionDesignNoImage: string;
+  productionDesignImageSheet: string;
+  productionDesignImageFront: string;
+  productionDesignZones: string;
+  productionDesignFlaps: string;
+  productionDesignTextColor: string;
+  productionDesignClear: string;
   productionZoneFront: string;
   productionZoneSpine: string;
   productionZoneBack: string;
