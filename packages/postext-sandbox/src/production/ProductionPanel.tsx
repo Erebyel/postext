@@ -22,6 +22,7 @@ import {
 import { createPdfWorker } from 'postext-pdf/worker';
 import { useBookPlan, useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
 import { Button, ConfirmPopover, IconButton, PanelBody, PanelHeader, SegmentedControl, Select, Switch, announce, cn, type SelectOption } from '../ui/index.js';
+import { bookMetadata } from '../book/compose.js';
 import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
 import { downloadBytes } from '../storage/persistence.js';
 import { fill } from '../print/fillTokens.js';
@@ -33,6 +34,8 @@ import {
   WORKING_BOOK,
   coverDocumentInput,
   emptyProduction,
+  metadataIsbn,
+  metadataTexts,
   newVersion,
   pickSheet,
   planPageCount,
@@ -152,6 +155,11 @@ export function ProductionPanel() {
   const activeProjectId = useSandboxSelector((s) => s.activeProjectId);
   const projects = useSandboxSelector((s) => s.projects);
   const plan = useBookPlan();
+  const chapters = useSandboxSelector((s) => s.chapters);
+  // The book the cover belongs to: its title, subtitle, author and ISBN
+  // come from the first chapter's front matter.
+  const metadata = useMemo(() => bookMetadata(chapters) as Record<string, unknown>, [chapters]);
+  const fromBook = useMemo(() => metadataTexts(metadata), [metadata]);
   const projectId = activeProjectId ?? WORKING_BOOK;
   const [record, update] = useBookProduction(projectId);
   const stored = useProfiles();
@@ -180,7 +188,11 @@ export function ProductionPanel() {
   const addVersion = (kind: 'paperback' | 'hardcover') => {
     if (!record) return;
     const v = newVersion(kind, kind === 'paperback' ? labels.productionPaperbackName : labels.productionHardcoverName);
-    update({ ...record, versions: [...record.versions, v], activeVersionId: v.id });
+    // The first version starts from what the book says of itself.
+    const first = record.versions.length === 0;
+    const isbn = first ? metadataIsbn(metadata) : undefined;
+    const texts = first && Object.keys(record.texts).length === 0 ? fromBook : record.texts;
+    update({ ...record, texts, versions: [...record.versions, isbn ? { ...v, isbn } : v], activeVersionId: v.id });
   };
   const removeVersion = (id: string) => {
     if (!record) return;
@@ -216,7 +228,10 @@ export function ProductionPanel() {
     downloadBytes(JSON.stringify(exportProductionProfiles(papers, bindings), null, 2), 'profiles.postext-production.json', 'application/json');
   };
 
-  const title = projects.find((p) => p.id === activeProjectId)?.name ?? 'book';
+  const metaTitle = typeof metadata.title === 'string' ? metadata.title.trim() : '';
+  const title = projects.find((p) => p.id === activeProjectId)?.name ?? (metaTitle || 'book');
+  const fillFromBook = () => record && update({ ...record, texts: { ...record.texts, ...fromBook } });
+  const hasOwnText = !!(record?.texts.front?.trim() || record?.texts.spine?.trim());
 
   return (
     <div className="flex h-full flex-col">
@@ -231,6 +246,7 @@ export function ProductionPanel() {
       />
       <PanelBody padded>
         <div className="flex flex-col gap-4" style={{ fontSize: 13, lineHeight: '19px' }}>
+          <p className="m-0 text-xs font-semibold" style={{ overflowWrap: 'anywhere' }}>{fill(labels.productionForBook, { name: title })}</p>
           <p className="m-0 text-xs text-(--slate)">{labels.productionIntro}</p>
 
           <section className="flex flex-col gap-2">
@@ -283,12 +299,22 @@ export function ProductionPanel() {
             <section className="flex flex-col gap-2">
               <h3 className={HEADING}>{labels.productionTexts}</h3>
               <p className="m-0 text-xs text-(--slate)">{labels.productionTextsIntro}</p>
+              {fromBook.front && (
+                hasOwnText ? (
+                  <ConfirmPopover message={labels.productionFromBookConfirm} confirmLabel={labels.productionFromBook} onConfirm={fillFromBook}>
+                    {({ open }) => <Button variant="outline" size="sm" onClick={open}>{labels.productionFromBook}</Button>}
+                  </ConfirmPopover>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={fillFromBook}>{labels.productionFromBook}</Button>
+                )
+              )}
               {COVER_TEXT_ZONES.filter((zone) => !zone.startsWith('flap') || versions.some((v) => v.flaps)).map((zone) => (
                 <label key={zone} className="flex flex-col gap-1 text-xs">
                   {String(labels[ZONE_LABEL[zone]])}
                   <textarea
                     rows={zone === 'spine' ? 1 : 3}
                     value={record.texts[zone] ?? ''}
+                    placeholder={fromBook[zone] ?? ''}
                     onChange={(e) => update({ ...record, texts: { ...record.texts, [zone]: e.target.value } })}
                     className={cn(INPUT, 'font-mono')}
                   />

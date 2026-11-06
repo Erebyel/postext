@@ -57,6 +57,27 @@ export function newVersion(kind: 'paperback' | 'hardcover', name: string): Produ
     : { id: generateVersionId(), name, binding: 'case-flat', caseMaterial: 'printed' };
 }
 
+const text = (v: unknown): string => (typeof v === 'string' || typeof v === 'number' ? String(v).trim() : '');
+
+/** The cover texts the book's own metadata gives (the first chapter's
+ *  front matter): the title, subtitle and author on the front cover, the
+ *  author and title on the spine. Empty without a title. */
+export function metadataTexts(metadata: Record<string, unknown>): Partial<Record<CoverTextZone, string>> {
+  const title = text(metadata.title);
+  if (!title) return {};
+  const subtitle = text(metadata.subtitle);
+  const author = text(metadata.author);
+  return {
+    front: [`# ${title}`, subtitle, author].filter(Boolean).join('\n\n'),
+    spine: [author, title].filter(Boolean).join(' · '),
+  };
+}
+
+/** The ISBN the book's metadata names (`isbn:` in the front matter). */
+export function metadataIsbn(metadata: Record<string, unknown>): string | undefined {
+  return text(metadata.isbn) || undefined;
+}
+
 /** A length in millimetres; px at `dpi`. Relative units have no physical
  *  size and read as 0. */
 export function dimensionMm(d: Dimension, dpi: number): number {

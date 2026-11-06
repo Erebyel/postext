@@ -5,6 +5,8 @@ import {
   bookTrimMm,
   coverDocumentInput,
   dimensionMm,
+  metadataIsbn,
+  metadataTexts,
   newVersion,
   pickSheet,
   planPageCount,
@@ -78,5 +80,16 @@ describe('book production', () => {
       updatedAt: 5,
     });
     expect(read).toEqual({ projectId: 'p', versions: [{ id: 'a', name: 'A', binding: 'perfect' }], texts: { front: 'F' }, updatedAt: 5 });
+  });
+
+  it('takes the cover and spine texts and the ISBN from the book metadata', () => {
+    expect(metadataTexts({ title: 'El oficio', subtitle: 'Una guía', author: 'Reyes' })).toEqual({
+      front: '# El oficio\n\nUna guía\n\nReyes',
+      spine: 'Reyes · El oficio',
+    });
+    expect(metadataTexts({ title: 'Solo título' })).toEqual({ front: '# Solo título', spine: 'Solo título' });
+    expect(metadataTexts({ author: 'Sin título' })).toEqual({});
+    expect(metadataIsbn({ isbn: ' 978-84-00000-00-4 ' })).toBe('978-84-00000-00-4');
+    expect(metadataIsbn({})).toBeUndefined();
   });
 });

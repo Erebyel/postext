@@ -5604,6 +5604,9 @@ export interface SandboxLabels {
   productionSheetSize: string;
   productionTexts: string;
   productionTextsIntro: string;
+  productionForBook: string;
+  productionFromBook: string;
+  productionFromBookConfirm: string;
   productionZoneFront: string;
   productionZoneSpine: string;
   productionZoneBack: string;
