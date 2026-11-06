@@ -283,7 +283,7 @@ export function ProductionPanel() {
             <section className="flex flex-col gap-2">
               <h3 className={HEADING}>{labels.productionTexts}</h3>
               <p className="m-0 text-xs text-(--slate)">{labels.productionTextsIntro}</p>
-              {COVER_TEXT_ZONES.map((zone) => (
+              {COVER_TEXT_ZONES.filter((zone) => !zone.startsWith('flap') || versions.some((v) => v.flaps)).map((zone) => (
                 <label key={zone} className="flex flex-col gap-1 text-xs">
                   {String(labels[ZONE_LABEL[zone]])}
                   <textarea
@@ -478,7 +478,11 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
   const { build } = useLayoutWorker('preview');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [doc, setDoc] = useState<VDTDocument | null>(null);
+  // The layout and what it was laid out from: a sheet chosen since (or
+  // texts typed since) is not the one on show until it is built, and the
+  // PDF only ever writes the sheet the preview shows.
+  const [built, setBuilt] = useState<{ doc: VDTDocument; input: ReturnType<typeof coverDocumentInput>; sheet: SheetChoice } | null>(null);
+  const doc = built?.doc ?? null;
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const sheet = pickSheet(sheets, shown);
@@ -493,15 +497,15 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
         try {
           await ensureConfigFontsLoaded(input.config, input.markdown);
           await registerCoverImages(input.cover.files);
-          const built = await build({ markdown: input.markdown, resources: input.cover.resources }, input.config);
-          if (alive) setDoc(built);
+          const laid = await build({ markdown: input.markdown, resources: input.cover.resources }, input.config);
+          if (alive) setBuilt({ doc: laid, input, sheet: shown });
         } catch {
           if (alive) setFailed(true);
         }
       })();
     }, 250);
     return () => { alive = false; clearTimeout(t); };
-  }, [build, input]);
+  }, [build, input, shown]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -516,7 +520,7 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
   }, [doc]);
 
   const exportPdf = async () => {
-    if (!doc) return;
+    if (!built || built.input !== input) return;
     setBusy(true);
     announce(labels.productionExporting);
     try {
@@ -524,17 +528,17 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
       const outputProfile = print.standard !== 'none'
         ? await loadPrintProfile(print).then((p) => p.bytes, () => undefined)
         : undefined;
-      const resourceBytes = new Map(Object.entries(input.cover.files));
+      const resourceBytes = new Map(Object.entries(built.input.cover.files));
       const worker = createPdfWorker();
       try {
-        const bytes = await worker.render([doc], {
+        const bytes = await worker.render([built.doc], {
           fontProvider: createPdfFontProvider(),
           resourceBytes,
           ...(config.print ? { print: config.print } : {}),
           ...(outputProfile ? { outputProfile } : {}),
           profileBaseUrl: outputProfileBaseUrl(),
         });
-        const name = sheetFileName(fileTitle, version.name, shown);
+        const name = sheetFileName(fileTitle, version.name, built.sheet);
         downloadBytes(bytes, name, 'application/pdf');
         announce(fill(labels.productionExported, { name }));
       } finally {
@@ -567,7 +571,7 @@ function SheetPreview({ config, version, texts, sheets, choices, shown, onChoose
         {failed ? <p className="m-0 p-2 text-xs text-(--slate)">{labels.productionPreviewFailed}</p> : <canvas ref={canvasRef} className="block" />}
       </div>
       <div className="flex justify-end">
-        <Button variant="primary" size="sm" disabled={!doc || busy} onClick={() => void exportPdf()}>
+        <Button variant="primary" size="sm" disabled={!built || built.input !== input || busy} onClick={() => void exportPdf()}>
           {busy ? labels.productionExporting : labels.productionExportPdf}
         </Button>
       </div>
