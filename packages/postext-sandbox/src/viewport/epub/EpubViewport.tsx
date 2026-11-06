@@ -26,6 +26,7 @@ import type { EpubReaderHandle, EpubReaderPosition } from './EpubReader.js';
 import { EpubToolbar } from './EpubToolbar.js';
 import { useFloatingToolbarShell } from '../useFloatingToolbarShell.js';
 import { useViewerControls } from '../viewerControls.js';
+import { WORKING_BOOK } from '../../production/bookProduction.js';
 
 /** A warning of the last generation: the writer's, or a family the
  *  Sandbox left out of the file. */
@@ -158,7 +159,7 @@ export function EpubViewport() {
       };
       const [{ fonts, withheld, stoodIn }, cover] = await Promise.all([
         collectEpubFonts(snapshot.config, docs, snapshot.chapters.map((c) => c.markdown)),
-        epubCoverOf(docs[0]!, snapshot, metadata.title, { projectThumbnail: project?.thumbnail, presetThumbnailUrl: preset?.thumbnailUrl }),
+        epubCoverOf(docs[0]!, snapshot, metadata.title, { projectThumbnail: project?.thumbnail, presetThumbnailUrl: preset?.thumbnailUrl }, state.activeProjectId ?? WORKING_BOOK),
       ]);
       for (const family of withheld) onWithheld(family);
       for (const stood of stoodIn) note({ kind: 'fontStoodIn', ...stood });

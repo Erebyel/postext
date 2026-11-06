@@ -36,6 +36,7 @@ import { fill } from '../print/fillTokens.js';
 import { loadPrintProfile, outputProfileBaseUrl } from '../print/printSetup.js';
 import { createPdfFontProvider } from '../viewport/pdf/pdfFontProvider.js';
 import { useLayoutWorker } from '../worker/useLayoutWorker.js';
+import { promoImage } from './promoImage.js';
 import {
   COVER_TEXT_ZONES,
   bookTrimMm,
@@ -785,24 +786,6 @@ const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
   landscape: 'productionSheetLandscape',
 };
 
-/** A screen picture of a laid-out promo sheet: its page painted at the
- *  format's pixel width on white, as a JPEG. */
-async function promoImage(doc: VDTDocument, width: number, height: number): Promise<Uint8Array | null> {
-  const page = doc.pages[0];
-  if (!page) return null;
-  const painted = document.createElement('canvas');
-  renderPageToCanvas(page, doc, painted, { scale: width / page.width });
-  const out = document.createElement('canvas');
-  out.width = width;
-  out.height = height;
-  const ctx = out.getContext('2d');
-  if (!ctx) return null;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
-  ctx.drawImage(painted, 0, 0, width, height);
-  const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/jpeg', 0.92));
-  return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
-}
 
 function SheetPreview({ config, version, texts, design, bookResources, sheets, choices, shown, onChoose, labels, fileTitle }: {
   config: PostextConfig;

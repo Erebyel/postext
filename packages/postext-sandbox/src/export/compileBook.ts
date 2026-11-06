@@ -132,7 +132,7 @@ export async function compileBook(format: CompiledFormat, input: CompileBookInpu
     const meta = epubMetadataOf(metadata, effective, input.identity, input.locale);
     const [{ fonts }, cover] = await Promise.all([
       collectEpubFonts(effective, docs, markdowns),
-      epubCoverOf(docs[0]!, { config: effective, resources: input.resources }, meta.title, input.thumbnail ? { projectThumbnail: input.thumbnail } : {}),
+      epubCoverOf(docs[0]!, { config: effective, resources: input.resources }, meta.title, input.thumbnail ? { projectThumbnail: input.thumbnail } : {}, input.identity?.kind === 'project' ? input.identity.id : undefined),
     ]);
     const bytes = await renderToEpub(docs, {
       layout: input.epubLayout,
