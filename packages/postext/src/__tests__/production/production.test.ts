@@ -354,3 +354,14 @@ describe('cover design', () => {
     expect(coverPage(softcoverSheet(trim, 20, m, false)).template.decoration).toBeUndefined();
   });
 });
+
+describe('zone placement', () => {
+  it('sets a zone’s text at the top, middle or foot of it', () => {
+    const m = resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, trim);
+    const cover = coverPage(softcoverSheet(trim, 20, m, false), { verticalAlign: { front: 'bottom', back: 'top' } });
+    const frames = Object.fromEntries(cover.template.frames!.map((f) => [f.name, f]));
+    expect(frames.front!.verticalAlign).toBe('bottom');
+    expect(frames.back!.verticalAlign).toBeUndefined();
+    expect(frames.spine!.verticalAlign).toBe('middle');
+  });
+});

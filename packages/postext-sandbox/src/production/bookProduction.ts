@@ -10,6 +10,7 @@ import {
   coverMarkdown,
   coverPage,
   resolveFolioConfig,
+  resolveHeadingsConfig,
   resolvePageConfig,
   versionSheets,
   type BindingProfile,
@@ -19,6 +20,7 @@ import {
   type CoverZoneName,
   type Dimension,
   type PageRun,
+  type ParagraphStyleConfig,
   type PostextConfig,
   type ProductionSheet,
   type ProductionVersion,
@@ -37,6 +39,7 @@ export type DesignZone = (typeof DESIGN_ZONES)[number];
 
 /** The cover's look, shared by every version, colours as `#rrggbb`. */
 export interface CoverDesignSettings {
+  zoneStyles?: Partial<Record<DesignZone, ZoneStyle>>;
   background?: string;
   image?: { resourceId: string; area?: 'sheet' | 'front' };
   zones?: Partial<Record<DesignZone, string>>;
@@ -185,6 +188,88 @@ export function coverDesignOf(settings: CoverDesignSettings | undefined): CoverD
   return Object.keys(design).length > 0 ? design : undefined;
 }
 
+/** How a role of a zone's text is set; what is left out follows the book
+ *  (its level-1 heading for a title, its body for text). */
+export interface RoleStyle {
+  fontFamily?: string;
+  /** Points. */
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  align?: 'left' | 'center' | 'right' | 'justify';
+}
+
+/** A zone's type: its title (the lines that start with `#`), its text,
+ *  and where they sit in the zone. */
+export interface ZoneStyle {
+  title?: RoleStyle;
+  text?: RoleStyle;
+  vertical?: 'top' | 'middle' | 'bottom';
+}
+
+export type TextRole = 'title' | 'text';
+
+const designZoneOf = (zone: CoverTextZone): DesignZone => (zone === 'flapFront' || zone === 'flapBack' ? 'flaps' : zone);
+
+/** Id of the paragraph style of a zone's role on the cover. */
+export const coverStyleId = (zone: DesignZone, role: TextRole): string => `cover-${zone}-${role}`;
+
+/** A zone's Markdown with each run of blocks in the paragraph style of its
+ *  role: a block that starts with `#` is a title (the hashes go), any
+ *  other is text. */
+export function styledZoneText(text: string, zone: CoverTextZone): string {
+  const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  const runs: { role: TextRole; blocks: string[] }[] = [];
+  for (const block of blocks) {
+    const title = /^#{1,6}\s/.test(block);
+    const role: TextRole = title ? 'title' : 'text';
+    const body = title ? block.replace(/^#{1,6}\s+/, '') : block;
+    const last = runs[runs.length - 1];
+    if (last && last.role === role) last.blocks.push(body);
+    else runs.push({ role, blocks: [body] });
+  }
+  return runs
+    .map((r) => [`:::paragraphs{style="${coverStyleId(designZoneOf(zone), r.role)}"}`, ...r.blocks, ':::'].join('\n\n'))
+    .join('\n\n');
+}
+
+const pt = (value: number): Dimension => ({ value, unit: 'pt' });
+
+/** The cover's paragraph styles: per zone, a title set as the book's
+ *  level-1 heading and text set as its body, each with the zone's own
+ *  changes, in the design's text colour when it has one. */
+export function coverParagraphStyles(config: PostextConfig, settings: CoverDesignSettings | undefined): ParagraphStyleConfig[] {
+  const headings = resolveHeadingsConfig(config.headings);
+  const h1 = headings.levels.find((l) => l.level === 1);
+  const color = settings?.textColor ? ink(settings.textColor) : undefined;
+  const out: ParagraphStyleConfig[] = [];
+  for (const zone of DESIGN_ZONES) {
+    for (const role of ['title', 'text'] as const) {
+      const own = settings?.zoneStyles?.[zone]?.[role] ?? {};
+      const base: ParagraphStyleConfig = role === 'title' && h1
+        ? {
+            id: coverStyleId(zone, role),
+            fontFamily: h1.fontFamily,
+            fontSize: h1.fontSize,
+            lineHeight: h1.lineHeight,
+            fontWeight: h1.fontWeight,
+            ...(h1.italic ? { italic: true } : {}),
+            color: color ?? h1.color,
+          }
+        : { id: coverStyleId(zone, role), ...(color ? { color } : {}) };
+      out.push({
+        ...base,
+        ...(own.fontFamily ? { fontFamily: own.fontFamily } : {}),
+        ...(own.fontSize ? { fontSize: pt(own.fontSize), lineHeight: pt(Math.round(own.fontSize * 1.2 * 10) / 10) } : {}),
+        ...(own.bold !== undefined ? { fontWeight: own.bold ? 700 : 400 } : {}),
+        ...(own.italic !== undefined ? { italic: own.italic } : {}),
+        ...(own.align ? { textAlign: own.align } : {}),
+      });
+    }
+  }
+  return out;
+}
+
 export function coverDocumentInput(
   sheet: ProductionSheet,
   version: ProductionVersion,
@@ -195,38 +280,40 @@ export function coverDocumentInput(
 ): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
   const design = isCover ? coverDesignOf(settings) : undefined;
+  const styles = settings?.zoneStyles ?? {};
+  const vertical = (zone: DesignZone) => styles[zone]?.vertical;
+  const verticalAlign = Object.fromEntries(
+    (['front', 'back', 'flapFront', 'flapBack'] as const)
+      .map((z) => [z, vertical(designZoneOf(z))] as const)
+      .filter(([, v]) => v !== undefined),
+  );
   const cover = coverPage(sheet, {
     templateId: 'production-sheet',
     ...(isCover && version.isbn ? { isbn: version.isbn } : {}),
     ...(version.isbnAddOn ? { isbnAddOn: version.isbnAddOn } : {}),
     ...(version.spineText ? { spineText: version.spineText } : {}),
     ...(design ? { design } : {}),
+    ...(Object.keys(verticalAlign).length > 0 ? { verticalAlign } : {}),
   });
   const picture = design?.image ? bookResources.find((r) => r.id === design.image!.resourceId) : undefined;
   const textColor = isCover && settings?.textColor ? ink(settings.textColor) : undefined;
-  const content: Partial<Record<CoverZoneName, string>> = isCover ? texts : {};
-  // The cover's headings take the book's type, not its chapter openers:
-  // no designs, numbers or page breaks, and no heading styles.
+  const content: Partial<Record<CoverZoneName, string>> = {};
+  if (isCover) {
+    for (const zone of COVER_TEXT_ZONES) {
+      const t = texts[zone]?.trim();
+      if (t) content[zone] = styledZoneText(t, zone);
+    }
+  }
+  // The cover sets its own type: the book's heading styles (chapter
+  // openers) have nothing to do on it.
   const rest: PostextConfig = { ...config };
   delete rest.headingStyles;
-  const headings = config.headings?.levels
-    ? {
-        ...config.headings,
-        levels: config.headings.levels.map((l) => ({
-          ...l,
-          ...(textColor ? { color: textColor } : {}),
-          numberingTemplate: '',
-          breakBefore: { enabled: false },
-          ...(l.advancedDesign ? { advancedDesign: { ...l.advancedDesign, enabled: false } } : {}),
-        })),
-      }
-    : config.headings;
   return {
     cover,
     resources: [...cover.resources, ...(picture ? [picture] : [])],
     config: {
       ...rest,
-      ...(headings ? { headings: textColor ? { ...headings, color: textColor } : headings } : textColor ? { headings: { color: textColor } } : {}),
+      paragraphStyles: [...(config.paragraphStyles ?? []), ...coverParagraphStyles(config, isCover ? settings : undefined)],
       ...(textColor ? { bodyText: { ...config.bodyText, color: textColor } } : {}),
       page: { ...config.page, ...cover.page, ...(config.page?.dpi ? { dpi: config.page.dpi } : {}) },
       header: { elements: [] },
@@ -292,5 +379,39 @@ function readDesign(raw: unknown): CoverDesignSettings | undefined {
     }
     if (Object.keys(zones).length > 0) out.zones = zones;
   }
+  if (isRecord(raw.zoneStyles)) {
+    const styles: NonNullable<CoverDesignSettings['zoneStyles']> = {};
+    for (const z of DESIGN_ZONES) {
+      const st = readZoneStyle(raw.zoneStyles[z]);
+      if (st) styles[z] = st;
+    }
+    if (Object.keys(styles).length > 0) out.zoneStyles = styles;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+const ALIGNS: ReadonlySet<string> = new Set(['left', 'center', 'right', 'justify']);
+const VERTICALS: ReadonlySet<string> = new Set(['top', 'middle', 'bottom']);
+
+function readRole(raw: unknown): RoleStyle | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out: RoleStyle = {};
+  if (typeof raw.fontFamily === 'string' && raw.fontFamily.trim()) out.fontFamily = raw.fontFamily;
+  if (typeof raw.fontSize === 'number' && raw.fontSize > 0 && raw.fontSize < 400) out.fontSize = raw.fontSize;
+  if (typeof raw.bold === 'boolean') out.bold = raw.bold;
+  if (typeof raw.italic === 'boolean') out.italic = raw.italic;
+  if (typeof raw.align === 'string' && ALIGNS.has(raw.align)) out.align = raw.align as RoleStyle['align'];
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function readZoneStyle(raw: unknown): ZoneStyle | undefined {
+  if (!isRecord(raw)) return undefined;
+  const title = readRole(raw.title);
+  const text = readRole(raw.text);
+  const out: ZoneStyle = {
+    ...(title ? { title } : {}),
+    ...(text ? { text } : {}),
+    ...(typeof raw.vertical === 'string' && VERTICALS.has(raw.vertical) ? { vertical: raw.vertical as ZoneStyle['vertical'] } : {}),
+  };
   return Object.keys(out).length > 0 ? out : undefined;
 }

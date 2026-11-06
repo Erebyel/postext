@@ -4,6 +4,7 @@ import {
   bookRuns,
   bookTrimMm,
   coverDesignOf,
+  coverParagraphStyles,
   coverDocumentInput,
   dimensionMm,
   metadataIsbn,
@@ -15,6 +16,7 @@ import {
   sheetChoices,
   sheetFileName,
   sheetsOf,
+  styledZoneText,
 } from './bookProduction.js';
 
 const mm = (value: number) => ({ value, unit: 'mm' as const });
@@ -113,7 +115,7 @@ describe('book production', () => {
     const cover = coverDocumentInput(sheets.cover, version, { front: '# T' }, config, design, [photo]);
     expect(cover.resources.map((r) => r.id)).toEqual(['photo']);
     expect(cover.config.bodyText?.color).toEqual({ hex: '#ffffff', model: 'hex' });
-    expect(cover.config.headings?.color).toEqual({ hex: '#ffffff', model: 'hex' });
+    expect(cover.config.paragraphStyles?.find((p) => p.id === 'cover-front-title')?.color).toEqual({ hex: '#ffffff', model: 'hex' });
     expect(cover.cover.template.decoration?.elements.map((e) => ('id' in e ? e.id : ''))).toEqual(['cover-ground', 'cover-image']);
     const endpaper = coverDocumentInput(pickSheet(sheets, 'endpaperFront'), version, {}, config, design, [photo]);
     expect(endpaper.resources).toEqual([]);
@@ -124,5 +126,34 @@ describe('book production', () => {
   it('keeps a stored design only as far as it reads', () => {
     const read = readBookProduction({ projectId: 'p', versions: [], texts: {}, design: { background: 'red', textColor: '#ffffff', zones: { spine: '#000000', bogus: '#111111' }, image: { resourceId: 'x', area: 'front' } } });
     expect(read?.design).toEqual({ textColor: '#ffffff', zones: { spine: '#000000' }, image: { resourceId: 'x', area: 'front' } });
+  });
+
+  it('sets a zone’s titles and text in its own paragraph styles', () => {
+    expect(styledZoneText('# Título\n\nSubtítulo\n\nAutora', 'front')).toBe(
+      ':::paragraphs{style="cover-front-title"}\n\nTítulo\n\n:::\n\n:::paragraphs{style="cover-front-text"}\n\nSubtítulo\n\nAutora\n\n:::',
+    );
+    expect(styledZoneText('Bio', 'flapBack')).toBe(':::paragraphs{style="cover-flaps-text"}\n\nBio\n\n:::');
+  });
+
+  it('starts the title from the book’s level-1 heading and lays the zone’s changes over it', () => {
+    const styles = coverParagraphStyles(config, { zoneStyles: { front: { title: { fontSize: 36, align: 'center', bold: true }, text: { italic: true } } } });
+    const title = styles.find((p) => p.id === 'cover-front-title')!;
+    expect(title.fontSize).toEqual({ value: 36, unit: 'pt' });
+    expect(title.lineHeight).toEqual({ value: 43.2, unit: 'pt' });
+    expect(title.textAlign).toBe('center');
+    expect(title.fontWeight).toBe(700);
+    expect(styles.find((p) => p.id === 'cover-front-text')).toEqual({ id: 'cover-front-text', italic: true });
+    expect(styles.find((p) => p.id === 'cover-back-title')?.fontFamily).toBeTruthy();
+    expect(styles.length).toBe(8);
+  });
+
+  it('places a zone’s text and keeps a stored zone style only as far as it reads', () => {
+    const version = newVersion('paperback', 'Rústica');
+    const sheets = sheetsOf(version, config, 242, []);
+    if (!('cover' in sheets)) throw new Error('no profile');
+    const input = coverDocumentInput(sheets.cover, version, { front: '# T' }, config, { zoneStyles: { front: { vertical: 'bottom' } } });
+    expect(input.cover.template.frames?.find((f) => f.name === 'front')?.verticalAlign).toBe('bottom');
+    const read = readBookProduction({ projectId: 'p', versions: [], texts: {}, design: { zoneStyles: { front: { title: { fontSize: 30, align: 'middle' }, vertical: 'bottom' }, nowhere: {} } } });
+    expect(read?.design).toEqual({ zoneStyles: { front: { title: { fontSize: 30 }, vertical: 'bottom' } } });
   });
 });

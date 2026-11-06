@@ -11,6 +11,8 @@ import {
   renderPageToCanvas,
   resolveFolioConfig,
   resolvePageConfig,
+  resolveBodyTextConfig,
+  resolveHeadingsConfig,
   resolvePrintConfig,
   type BindingProfile,
   type PostextConfig,
@@ -50,6 +52,9 @@ import {
   type CoverDesignSettings,
   type CoverTextZone,
   type DesignZone,
+  type RoleStyle,
+  type TextRole,
+  type ZoneStyle,
   type SheetChoice,
 } from './bookProduction.js';
 import {
@@ -339,6 +344,16 @@ export function ProductionPanel() {
             />
           )}
 
+          {version && record && (
+            <ZoneStylesSection
+              design={record.design ?? {}}
+              config={config}
+              hasFlaps={versions.some((v) => v.flaps)}
+              labels={labels}
+              onChange={(design) => update({ ...record, design })}
+            />
+          )}
+
           {version && record && ready && complete && (
             <SheetPreview
               config={config}
@@ -593,6 +608,154 @@ function DesignSection({ design, resources, labels, onChange }: {
         />
       ))}
       <ColorField label={labels.productionDesignTextColor} value={design.textColor} clearLabel={labels.productionDesignClear} onChange={(v) => set('textColor', v)} />
+    </section>
+  );
+}
+
+/** The type families the book uses: its body, its headings and the fonts
+ *  it carries. */
+function bookFamilies(config: PostextConfig): string[] {
+  const out = new Set<string>();
+  out.add(resolveBodyTextConfig(config.bodyText, config.locale).fontFamily);
+  const headings = resolveHeadingsConfig(config.headings);
+  out.add(headings.fontFamily);
+  for (const l of headings.levels) out.add(l.fontFamily);
+  for (const f of config.customFonts ?? []) out.add(f.name);
+  return [...out].filter(Boolean).sort((a, b) => a.localeCompare(b));
+}
+
+function RoleFields({ role, style, families, labels, onChange }: {
+  role: TextRole;
+  style: RoleStyle;
+  families: string[];
+  labels: Labels;
+  onChange: (s: RoleStyle) => void;
+}) {
+  const BOOK = '__book__';
+  const set = <K extends keyof RoleStyle>(key: K, value: RoleStyle[K] | undefined) => {
+    const next = { ...style };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    onChange(next);
+  };
+  const legend = role === 'title' ? labels.productionStyleTitle : labels.productionStyleText;
+  return (
+    <fieldset className="m-0 flex flex-col gap-2 rounded border border-(--rule) p-2">
+      <legend className="px-1 text-xs font-semibold">{legend}</legend>
+      <label className="flex flex-col gap-1 text-xs">
+        {labels.productionStyleFont}
+        <Select
+          size="sm"
+          value={style.fontFamily ?? BOOK}
+          onValueChange={(f) => set('fontFamily', f === BOOK ? undefined : f)}
+          options={[{ value: BOOK, label: labels.productionStyleBookFont }, ...families.map((f) => ({ value: f, label: f }))]}
+          ariaLabel={`${legend}: ${labels.productionStyleFont}`}
+        />
+      </label>
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <label className="flex items-center gap-2">
+          {labels.productionStyleSize}
+          <input
+            type="number"
+            min={4}
+            max={300}
+            step={0.5}
+            value={style.fontSize ?? ''}
+            placeholder="—"
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              set('fontSize', e.target.value.trim() && Number.isFinite(n) && n > 0 ? n : undefined);
+            }}
+            className={cn(INPUT, 'w-16')}
+          />
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={!!style.bold} onChange={(e) => set('bold', e.target.checked || undefined)} />
+          {labels.productionStyleBold}
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={!!style.italic} onChange={(e) => set('italic', e.target.checked || undefined)} />
+          {labels.productionStyleItalic}
+        </label>
+      </div>
+      <SegmentedControl
+        size="sm"
+        value={style.align ?? 'left'}
+        onValueChange={(a) => set('align', a === 'left' ? undefined : a)}
+        options={[
+          { value: 'left', label: labels.productionAlignLeft },
+          { value: 'center', label: labels.productionAlignCenter },
+          { value: 'right', label: labels.productionAlignRight },
+          { value: 'justify', label: labels.productionAlignJustify },
+        ]}
+        ariaLabel={`${legend}: ${labels.productionStyleAlign}`}
+      />
+    </fieldset>
+  );
+}
+
+/** The type of each zone: its title and its text, and where they sit. */
+function ZoneStylesSection({ design, config, hasFlaps, labels, onChange }: {
+  design: CoverDesignSettings;
+  config: PostextConfig;
+  hasFlaps: boolean;
+  labels: Labels;
+  onChange: (d: CoverDesignSettings) => void;
+}) {
+  const zones = DESIGN_ZONES.filter((z) => z !== 'flaps' || hasFlaps);
+  const [zone, setZone] = useState<DesignZone>('front');
+  const shown = zones.includes(zone) ? zone : 'front';
+  const families = useMemo(() => bookFamilies(config), [config]);
+  const current: ZoneStyle = design.zoneStyles?.[shown] ?? {};
+  const setStyle = (next: ZoneStyle) => {
+    const all = { ...design.zoneStyles };
+    if (Object.keys(next).length > 0) all[shown] = next;
+    else delete all[shown];
+    const d = { ...design };
+    if (Object.keys(all).length > 0) d.zoneStyles = all;
+    else delete d.zoneStyles;
+    onChange(d);
+  };
+  const setRole = (role: TextRole, s: RoleStyle) => {
+    const next = { ...current };
+    if (Object.keys(s).length > 0) next[role] = s;
+    else delete next[role];
+    setStyle(next);
+  };
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-(--rule) p-3">
+      <h3 className={HEADING}>{labels.productionStyles}</h3>
+      <p className="m-0 text-xs text-(--slate)">{labels.productionStylesIntro}</p>
+      <SegmentedControl
+        size="sm"
+        value={shown}
+        onValueChange={setZone}
+        options={zones.map((z) => ({ value: z, label: String(labels[DESIGN_ZONE_LABEL[z]]) }))}
+        ariaLabel={labels.productionStyles}
+      />
+      <RoleFields role="title" style={current.title ?? {}} families={families} labels={labels} onChange={(s) => setRole('title', s)} />
+      <RoleFields role="text" style={current.text ?? {}} families={families} labels={labels} onChange={(s) => setRole('text', s)} />
+      {shown !== 'spine' && (
+        <div className="flex flex-col gap-1 text-xs">
+          {labels.productionStyleVertical}
+          <SegmentedControl
+            size="sm"
+            value={current.vertical ?? 'top'}
+            onValueChange={(v) => {
+              const next = { ...current };
+              if (v === 'top') delete next.vertical;
+              else next.vertical = v;
+              setStyle(next);
+            }}
+            options={[
+              { value: 'top', label: labels.productionVerticalTop },
+              { value: 'middle', label: labels.productionVerticalMiddle },
+              { value: 'bottom', label: labels.productionVerticalBottom },
+            ]}
+            ariaLabel={labels.productionStyleVertical}
+          />
+        </div>
+      )}
     </section>
   );
 }

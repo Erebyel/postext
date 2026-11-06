@@ -48,6 +48,9 @@ export interface CoverPageOptions {
   /** Barcode size against nominal (0.8 … 2). Default 1. */
   barcodeMagnification?: number;
   design?: CoverDesign;
+  /** Where each zone's text sits in it, top to bottom. Default `'top'`;
+   *  the spine's text is always centred across it. */
+  verticalAlign?: Partial<Record<CoverZoneName, 'top' | 'middle' | 'bottom'>>;
 }
 
 /** A zone's rectangle run out into the bleed at the sheet's edges. */
@@ -110,11 +113,23 @@ export interface CoverPage {
   slots: CoverZoneName[];
 }
 
-function frameFor(zone: SheetZone, sheet: ProductionSheet, spineText: Required<NonNullable<ProductionVersion['spineText']>>): FrameConfig | undefined {
+function frameFor(
+  zone: SheetZone,
+  sheet: ProductionSheet,
+  spineText: Required<NonNullable<ProductionVersion['spineText']>>,
+  vertical?: 'top' | 'middle' | 'bottom',
+): FrameConfig | undefined {
   const s = zone.safe;
   const at = (x: number, y: number) => ({ anchor: { to: 'container' as const, edge: 'top-left' as const }, offset: { x: mm(x - sheet.trim.x), y: mm(y - sheet.trim.y) } });
   if (zone.name !== 'spine') {
-    return { name: zone.name, width: mm(s.width), height: mm(s.height), placement: at(s.x, s.y), optional: true };
+    return {
+      name: zone.name,
+      width: mm(s.width),
+      height: mm(s.height),
+      placement: at(s.x, s.y),
+      optional: true,
+      ...(vertical && vertical !== 'top' ? { verticalAlign: vertical } : {}),
+    };
   }
   if (zone.rect.width < spineText.minSpine) return undefined;
   // Laid out along the spine, then turned about its centre to read up
@@ -145,7 +160,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
   const frames: FrameConfig[] = [];
   for (const zone of sheet.zones) {
     if (!SLOT_ZONES.has(zone.name)) continue;
-    const frame = frameFor(zone, sheet, spineText);
+    const frame = frameFor(zone, sheet, spineText, options.verticalAlign?.[zone.name]);
     if (frame) frames.push(frame);
   }
   // Fold marks inside the trim only: a case's turn-in folds are its trim.
