@@ -291,6 +291,8 @@ export function titleFor(payload: WarningPayload, labels: SandboxLabels): string
       return labels.warningsHyphenLadderTitle;
     case 'lastWordDivided':
       return labels.warningsLastWordDividedTitle;
+    case 'hyphenSpacing':
+      return labels.warningsHyphenSpacingTitle;
     case 'openerFloat':
       return labels.warningsOpenerFloatTitle;
     case 'tocGroupSplit':

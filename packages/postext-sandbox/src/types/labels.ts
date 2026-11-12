@@ -1686,6 +1686,12 @@ export interface SandboxLabels {
   bodyHyphenationLastWordTooltip: string;
   bodyHyphenLastWordPenalty: string;
   bodyHyphenLastWordPenaltyTooltip: string;
+  bodyHyphenSpacing: string;
+  bodyHyphenSpacingTooltip: string;
+  bodyHyphenSpacingLines: string;
+  bodyHyphenSpacingLinesTooltip: string;
+  bodyHyphenSpacingPenalty: string;
+  bodyHyphenSpacingPenaltyTooltip: string;
   bodyAvoidRuntsInLists: string;
   bodyAvoidRuntsInListsTooltip: string;
   bodyAvoidOrphansInLists: string;
@@ -2603,6 +2609,8 @@ export interface SandboxLabels {
   warningsHyphenLadderDetail: string;
   warningsLastWordDividedTitle: string;
   warningsLastWordDividedDetail: string;
+  warningsHyphenSpacingTitle: string;
+  warningsHyphenSpacingDetail: string;
   warningsTocGroupSplitTitle: string;
   warningsTocGroupSplitDetail: string;
   warningsOpenerFloatTitle: string;

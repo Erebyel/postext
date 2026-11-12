@@ -366,8 +366,12 @@ bodyText
                       Port the source's "hyphen limit" (consecutive hyphens) as maxConsecutive with 'avoid'
                       lastWord 'allow'|'warn'|'avoid' ('allow'), lastWordPenalty 30000 (≥ 1.74): the last line holds only the rest of
                       a word divided on the line before; 'warn' = `lastWordDivided` warning; 'avoid' = lastWordPenalty demerits.
-                      Port "hyphenate last word" off as 'avoid'. All three: soft (demerits, never a hard limit), body text, lists
-                      and quotations only (not captions or cells), need optimalLineBreaking
+                      Port "hyphenate last word" off as 'avoid'
+                      spacing 'allow'|'warn'|'avoid' ('allow'), spacingLines 2 (1–10), spacingPenalty 10000 (≥ 1.78): a hyphenated
+                      line with another hyphen among the spacingLines lines before it (a yes-no-yes rhythm; two in a row count
+                      too); 'warn' = `hyphenSpacing` warning per run; 'avoid' = spacingPenalty demerits per such hyphen. Port a
+                      source's "lines between hyphens" or hyphen-spacing setting here. All four: soft (demerits, never a hard
+                      limit), body text, lists and quotations only (not captions or cells), need optimalLineBreaking
 ```
 H&J / Knuth–Plass
 ```

@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Uso programmatico',
   description: 'Chiamare Postext dal codice: buildDocument e i suoi avvisi, i valori predefiniti, i font, le cache e il Web Worker',
   lang: 'it',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '31 min',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>L’ultima riga di un paragrafo porta solo il resto di una parola divisa nella riga prima: <code>word</code> è la parola come la stampano le due righe, trattino compreso. Con <code>bodyText.hyphenation.lastWord: 'warn'</code> si segnalano tutte; con <code>'avoid'</code>, quelle che la divisione in righe ha tenuto. Punta alle ultime due righe, con la loro pagina. Da postext 1.74.</td>
+      <td>Le righe si compongono come sono.</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td><code>hyphens</code> righe di un paragrafo finiscono con un trattino, ciascuna entro <code>max</code> righe (<code>bodyText.hyphenation.spacingLines</code>) dalla precedente: <code>lines</code> è quante righe ci sono dalla prima all’ultima, <code>text</code> quelle righe. Con <code>bodyText.hyphenation.spacing: 'warn'</code> si segnalano tutte le serie; con <code>'avoid'</code>, quelle che la divisione in righe ha tenuto. Uno per serie; punta alle sue righe, con la pagina della prima. Da postext 1.78.</td>
       <td>Le righe si compongono come sono.</td>
     </tr>
     <tr>

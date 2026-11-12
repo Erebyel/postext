@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Ús programàtic',
   description: 'Com es fa servir Postext des del codi: buildDocument i els avisos que retorna, els valors per defecte, la càrrega de fonts, les memòries cau i el Web Worker',
   lang: 'ca',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '32 min',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`El document té ${vdt.pages.length} pàgines`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>L'última línia d'un paràgraf només porta la resta d'una paraula partida a la línia anterior: <code>word</code> és la paraula tal com la imprimeixen les dues línies, amb el guionet. Amb <code>bodyText.hyphenation.lastWord: 'warn'</code> s'informa de totes; amb <code>'avoid'</code>, de les que va mantenir el tall de línies. Apunta a les dues últimes línies, amb la seva pàgina. Des de postext 1.74.</td>
+      <td>Les línies es componen tal com són.</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td><code>hyphens</code> línies d'un paràgraf acaben en guionet, cadascuna a <code>max</code> línies o menys (<code>bodyText.hyphenation.spacingLines</code>) de l'anterior: <code>lines</code> és quantes línies hi ha de la primera a l'última i <code>text</code>, aquestes línies. Amb <code>bodyText.hyphenation.spacing: 'warn'</code> s'informa de totes les ratxes; amb <code>'avoid'</code>, de les que va mantenir el tall de línies. Un per ratxa; apunta a les seves línies, amb la pàgina de la primera. Des de postext 1.78.</td>
       <td>Les línies es componen tal com són.</td>
     </tr>
     <tr>

@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Pannelli Grafica e Verifiche',
   description: 'Il pannello Grafica, con i gruppi di impostazioni, le loro pagine, la ricerca e la panoramica; il pannello Verifiche, con gli avvisi che si aggiornano mentre lavori, raggruppati per tipo',
   lang: 'it',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '43 min',
   order: 42,
   parent: 'sandbox',
@@ -289,6 +289,7 @@ Una diagnostica in tempo reale, ricalcolata a partire dal testo, dalla grafica, 
   - *Ripetizione*: due righe di seguito che finiscono o cominciano con la stessa parola o gli stessi caratteri; compare, segnata sulla pagina, quando **Testo corrente → Ripetizioni** è su *Avvisa*, e su *Evita* per le ripetizioni che la divisione in righe ha tenuto (`stack`);
   - *Scala di trattini*: più righe di seguito che finiscono con un trattino di quante ne permetta **Trattini di seguito**; compare quando **Testo corrente → Scale di trattini** è su *Avvisa*, e su *Evita* per le scale che la divisione in righe ha tenuto (`hyphenLadder`);
   - *Ultima parola divisa*: un paragrafo la cui ultima riga porta solo il resto di una parola divisa in quella prima; compare quando **Testo corrente → Ultima parola divisa** è su *Avvisa*, e su *Evita* per le parole che la divisione in righe ha lasciato divise (`lastWordDivided`);
+  - *Trattini vicini*: trattini ciascuno entro **Righe tra i trattini** dal precedente; compare quando **Testo corrente → Trattini vicini** è su *Avvisa*, e su *Evita* per le serie che la divisione in righe ha tenuto (`hyphenSpacing`);
   - *Blocco dell’indice diviso tra colonne*: un blocco dell’indice da tenere unito che occupa due o più colonne, perché è più alto di una colonna o la sua colonna è corta; un clic sulla voce apre la pagina dell’indice e seleziona la riga `:::toc` (`tocGroupSplit`);
   - *Elemento flottante su una pagina di apertura*: una figura, una tabella o un riquadro flottante nella pagina in cui si apre un capitolo o una parte; compare quando **Colonne → Flottanti nelle pagine di apertura** è impostato su *Avvisa* (`openerFloat`);
   - *Nessun pattern di sillabazione per questa lingua*: la lingua del documento (la sua lingua di sillabazione, altrimenti `locale`) non ha pattern di sillabazione inclusi, quindi il testo si sillaba con quelli dell’inglese americano. L’avviso sparisce quando disattivi la sillabazione.

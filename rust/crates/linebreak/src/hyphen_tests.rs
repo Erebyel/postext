@@ -1,6 +1,6 @@
 //! Unit tests of the hyphen rules (#1466): hyphen ladders, the last word
-//! divided and the cost of every hyphen, over random paragraphs of
-//! hyphenated words.
+//! divided, hyphen spacing and the cost of every hyphen, over random
+//! paragraphs of hyphenated words.
 
 use crate::items::flag;
 use crate::{Breaker, ItemKind, Items, Options};
@@ -73,6 +73,23 @@ fn last_word_divided(items: &Items, breaks: &[u32]) -> bool {
     !(from..items.len()).any(|k| items.kind[k] == ItemKind::Glue && items.flags[k] & flag::WORD_SPACE != 0)
 }
 
+/// Hyphens with another one among the `lines` lines before them.
+fn close_hyphens(items: &Items, breaks: &[u32], lines: u32) -> u32 {
+    let mut since = u32::MAX;
+    let mut close = 0;
+    for &b in breaks {
+        if hyphen_at(items, b) {
+            if since < lines {
+                close += 1;
+            }
+            since = 0;
+        } else {
+            since = since.saturating_add(1);
+        }
+    }
+    close
+}
+
 fn hyphens(items: &Items, breaks: &[u32]) -> usize {
     breaks.iter().filter(|&&b| hyphen_at(items, b)).count()
 }
@@ -88,6 +105,8 @@ fn rules_that_cost_nothing_set_the_lines_as_without_them() {
         off.rules.ladder_demerits = 0.0;
         off.rules.last_word_demerits = 0.0;
         off.rules.extra_hyphen_penalty = 0.0;
+        off.rules.spacing_lines = 2;
+        off.rules.spacing_demerits = 0.0;
         assert_eq!(breaker.breakpoints(&items, &off), plain.as_slice(), "seed {seed}");
     }
 }
@@ -149,4 +168,32 @@ fn a_dearer_hyphen_takes_fewer_hyphens() {
         }
     }
     assert!(counts[1] < counts[0] && counts[2] <= counts[1], "{counts:?}");
+}
+
+#[test]
+fn hyphens_too_close_together_give_way_where_the_spacing_allows() {
+    let mut breaker = Breaker::new();
+    for lines in [1, 2, 3] {
+        let (mut before, mut after) = (0, 0);
+        for seed in 1..300 {
+            let (items, o) = paragraph(seed);
+            let plain = breaker.breakpoints(&items, &o).to_vec();
+            let mut ruled = o.clone();
+            ruled.rules.spacing_lines = lines;
+            ruled.rules.spacing_demerits = 1e6;
+            let kept = breaker.breakpoints(&items, &ruled).to_vec();
+            assert!(
+                close_hyphens(&items, &kept, lines) <= close_hyphens(&items, &plain, lines),
+                "seed {seed}, lines {lines}"
+            );
+            // A paragraph with no hyphens that close is set as before.
+            if close_hyphens(&items, &plain, lines) == 0 {
+                assert_eq!(kept, plain, "seed {seed}, lines {lines}");
+            }
+            before += close_hyphens(&items, &plain, lines);
+            after += close_hyphens(&items, &kept, lines);
+        }
+        assert!(before > 0, "the paragraphs have hyphens within {lines} lines");
+        assert!(after < before, "lines {lines}: {before} close, {after} kept");
+    }
 }

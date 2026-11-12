@@ -6,9 +6,9 @@ import { warningCategory } from './categories.js';
 import { detailFor, titleFor } from '../sidebar/WarningsPanel.js';
 import { DEFAULT_LABELS } from '../types/defaultLabels.js';
 
-// #1466: under `hyphenation.ladders` and `hyphenation.lastWord` on 'warn'
-// each hyphen ladder and each divided last word is a row of the Review
-// panel, by its page.
+// #1466: under `hyphenation.ladders`, `lastWord` and `spacing` on 'warn'
+// each hyphen ladder, each divided last word and each run of hyphens too
+// close together is a row of the Review panel, by its page.
 
 class StubCtx {
   font = '';
@@ -55,10 +55,23 @@ describe('hyphen rules in the warnings panel (#1466)', () => {
     expect(lastWords).toBeGreaterThan(0);
   });
 
+  it('lists every run of hyphens too close together, by page', () => {
+    let runs = 0;
+    for (let w = 100; w <= 300; w += 4) {
+      const c = config(w, { spacing: 'warn' });
+      const doc = buildDocument({ markdown }, c);
+      const rows = computeWarnings({ markdown, config: c, doc }).filter((r) => r.payload.kind === 'hyphenSpacing');
+      expect(rows.length, `${w}`).toBe(findHyphenFaults(doc).filter((f) => f.kind === 'spacing').length);
+      for (const r of rows) expect(r.payload).toMatchObject({ page: 1, max: 2 });
+      runs += rows.length;
+    }
+    expect(runs).toBeGreaterThan(0);
+  });
+
   it('lists nothing while the rules allow them', () => {
     const c = config(150, {});
     const doc = buildDocument({ markdown }, c);
-    expect(computeWarnings({ markdown, config: c, doc }).filter((r) => r.payload.kind === 'hyphenLadder' || r.payload.kind === 'lastWordDivided')).toEqual([]);
+    expect(computeWarnings({ markdown, config: c, doc }).filter((r) => r.payload.kind === 'hyphenLadder' || r.payload.kind === 'lastWordDivided' || r.payload.kind === 'hyphenSpacing')).toEqual([]);
   });
 
   it('files them with the typesetting rules and prints their titles and details', () => {
@@ -70,5 +83,9 @@ describe('hyphen rules in the warnings panel (#1466)', () => {
     const last = { kind: 'lastWordDivided' as const, page: 2, word: 'analgé-sicos' };
     expect(titleFor(last, DEFAULT_LABELS)).toBe('Last word divided');
     expect(detailFor(last, DEFAULT_LABELS)).toContain('page 2 · the paragraph ends on “analgé-sicos”');
+    expect(warningCategory('hyphenSpacing')).toBe(warningCategory('stack'));
+    const spacing = { kind: 'hyphenSpacing' as const, page: 4, hyphens: 3, lines: 5, max: 2 };
+    expect(titleFor(spacing, DEFAULT_LABELS)).toBe('Hyphens close together');
+    expect(detailFor(spacing, DEFAULT_LABELS)).toContain('page 4 · 3 hyphens in 5 lines, each within 2 lines of the one before');
   });
 });

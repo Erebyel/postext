@@ -100,6 +100,11 @@ export interface KPOptions {
    *  holds no word space, only the rest of that word. Costs these demerits.
    *  Absent or 0: off. */
   lastWordDemerits?: number;
+  /** Hyphen spacing (`hyphenation.spacing: 'avoid'`): a line that ends on
+   *  a hyphen when one of the `lines` lines before it ends on one too costs
+   *  `demerits`, added as `consecutiveHyphenDemerit` is, so hyphens do not
+   *  fall into a rhythm. Absent: off. */
+  hyphenSpacing?: { lines: number; demerits: number };
   /** Added to the penalty of every break that ends a line on a hyphen
    *  (#1466, `hyphenation.fewerHyphens`), the dictionary's or a word's own:
    *  the higher, the fewer hyphens, at the price of word spacing. Absent:

@@ -6,7 +6,7 @@ export const metadata = {
   description: 'I pattern e le eccezioni della sillabazione; il testo in bandiera; la lingua del documento, da cui dipendono le cifre e la direzione del testo; le scritture che Postext sa comporre',
   lang: 'it',
   lastUpdated: '2026-11-12',
-  readingTime: '24 min',
+  readingTime: '25 min',
   order: 8,
   parent: 'configuration',
   plainSummary: "Questa pagina spiega come si dividono le parole a fine riga e come Postext capisce in che lingua è scritto un libro. Attivi o disattivi la sillabazione ed elenchi le parole che non vanno mai divise. Puoi lasciare irregolare il margine destro del testo invece che dritto. La lingua del documento decide le regole di sillabazione, i nomi delle figure e delle tabelle, le cifre e la direzione del testo. Le ultime sezioni spiegano quali sistemi di scrittura Postext sa comporre e come tratta il testo arabo.",
@@ -130,6 +130,24 @@ Quando l’allineamento del testo è impostato a `'justify'`, la sillabazione ev
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>Quanto costa alla divisione in righe un’ultima parola divisa con <code>lastWord: 'avoid'</code>, in demeriti sommati a quelli del paragrafo. Con <code>0</code> restano tutte.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Trattini vicini: una riga di un paragrafo che finisce con un trattino quando anche una delle <code>spacingLines</code> righe precedenti finisce con un trattino, così che i trattini cadono a ritmo (una riga sì, una no). <code>'allow'</code> compone le righe come le trova la divisione in righe. <code>'warn'</code> le compone allo stesso modo e segnala ogni serie di questi trattini con un avviso di contenuto <code>hyphenSpacing</code>, che il Sandbox elenca in Revisione. <code>'avoid'</code> aggiunge <code>spacingPenalty</code> ai demeriti di ciascuno di questi trattini, così la divisione in righe distanzia i trattini dove la spaziatura lo permette, e segnala le serie che restano. Contano anche due trattini di seguito (sono anche una scala). Testo corrente, elenchi e citazioni. Solo con la divisione ottimale in righe.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>Righe prima di una riga con trattino che <code>spacing</code> vuole senza trattini, da <code>1</code> a <code>10</code>. Con <code>2</code> conta un trattino ogni due righe; con <code>1</code>, solo due di seguito.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>Quanto costa alla divisione in righe ogni trattino a meno di <code>spacingLines</code> righe dal precedente con <code>spacing: 'avoid'</code>, in demeriti sommati a quelli del paragrafo, oltre a <code>consecutiveHyphenDemerit</code> per due di seguito. Il predefinito pesa un ritmo meno di una scala (<code>ladderPenalty</code>); con <code>0</code> restano tutti.</td>
     </tr>
   </tbody>
 </table>

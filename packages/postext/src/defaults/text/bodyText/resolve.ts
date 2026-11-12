@@ -66,6 +66,9 @@ function resolveHyphenation(partial: HyphenationConfig | undefined, documentLoca
     ladderPenalty: Math.max(0, finite(partial?.ladderPenalty) ?? D.ladderPenalty),
     lastWord: compositionRuleOf(partial?.lastWord) ?? D.lastWord,
     lastWordPenalty: Math.max(0, finite(partial?.lastWordPenalty) ?? D.lastWordPenalty),
+    spacing: compositionRuleOf(partial?.spacing) ?? D.spacing,
+    spacingLines: Math.min(10, Math.max(1, Math.round(finite(partial?.spacingLines) ?? D.spacingLines))),
+    spacingPenalty: Math.max(0, finite(partial?.spacingPenalty) ?? D.spacingPenalty),
   };
 }
 

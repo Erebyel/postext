@@ -20,6 +20,9 @@ export const DEFAULT_HYPHENATION_CONFIG: ResolvedBodyTextConfig['hyphenation'] =
   ladderPenalty: 30000,
   lastWord: 'allow',
   lastWordPenalty: 30000,
+  spacing: 'allow',
+  spacingLines: 2,
+  spacingPenalty: 10000,
 };
 
 /**
@@ -147,6 +150,9 @@ export function hyphenationEqual(a: HyphenationConfig | undefined, b: Hyphenatio
     && (a.ladderPenalty ?? D.ladderPenalty) === (b.ladderPenalty ?? D.ladderPenalty)
     && (a.lastWord ?? D.lastWord) === (b.lastWord ?? D.lastWord)
     && (a.lastWordPenalty ?? D.lastWordPenalty) === (b.lastWordPenalty ?? D.lastWordPenalty)
+    && (a.spacing ?? D.spacing) === (b.spacing ?? D.spacing)
+    && (a.spacingLines ?? D.spacingLines) === (b.spacingLines ?? D.spacingLines)
+    && (a.spacingPenalty ?? D.spacingPenalty) === (b.spacingPenalty ?? D.spacingPenalty)
     // A list that names no valid word is no list.
     && (normalizeHyphenationExceptions(a.exceptions) ?? []).join('\x00') === (normalizeHyphenationExceptions(b.exceptions) ?? []).join('\x00')
     && JSON.stringify(byLanguageOf(a.exceptionsByLanguage) ?? {}) === JSON.stringify(byLanguageOf(b.exceptionsByLanguage) ?? {});

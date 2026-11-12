@@ -461,6 +461,10 @@ export type WarningPayload =
    *  line before (`hyphenation.lastWord: 'warn' | 'avoid'`, #1466); `word`
    *  as printed, hyphen included. */
   | { kind: 'lastWordDivided'; page: number; word: string }
+  /** `hyphens` lines ending on a hyphen over `lines` lines, each within
+   *  `max` lines of the one before (`hyphenation.spacing: 'warn' |
+   *  'avoid'`), by book page. */
+  | { kind: 'hyphenSpacing'; page: number; hyphens: number; lines: number; max: number }
   /** A figure, a table (`resourceId`) or a floated box set on an opener
    *  page, book page `page` (`layout.openerFloats: 'warn'`, #749). */
   | { kind: 'openerFloat'; page: number; resourceId?: string }

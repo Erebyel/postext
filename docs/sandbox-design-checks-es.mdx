@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Paneles de diseño y de revisión',
   description: 'Qué hay en el panel Diseño (el resumen, los grupos con sus páginas y la búsqueda) y en el panel Revisión, con sus avisos en vivo agrupados por tipo',
   lang: 'es',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '45 min',
   order: 42,
   parent: 'sandbox',
@@ -289,6 +289,7 @@ Diagnósticos en vivo, recalculados a partir del texto, el diseño, las figuras 
   - *Repetición*: dos líneas seguidas que terminan o empiezan con la misma palabra o los mismos caracteres; aparece, marcada en la página, cuando **Texto base → Repeticiones** está en *Aviso*, y en *Evitar* para las repeticiones que mantuvo el corte de líneas (`stack`);
   - *Escalera de guiones*: más líneas seguidas terminadas en guion de las que permite **Guiones seguidos**; aparece cuando **Texto base → Escaleras de guiones** está en *Aviso*, y en *Evitar* para las escaleras que mantuvo el corte de líneas (`hyphenLadder`);
   - *Última palabra dividida*: un párrafo cuya última línea solo lleva el resto de una palabra dividida en la anterior; aparece cuando **Texto base → Última palabra dividida** está en *Aviso*, y en *Evitar* para las palabras que el corte de líneas mantuvo divididas (`lastWordDivided`);
+  - *Guiones cercanos*: guiones a **Líneas entre guiones** o menos del anterior; aparece cuando **Texto base → Guiones cercanos** está en *Aviso*, y en *Evitar* para las rachas que el corte de líneas mantuvo (`hyphenSpacing`);
   - *Bloque del índice partido entre columnas*: un bloque del índice que debía ir unido y ocupa dos columnas o más, porque es más alto que una columna o su columna es corta; la fila abre la página del índice y selecciona la línea `:::toc` (`tocGroupSplit`);
   - *Flotante en una página de apertura*: una figura, una tabla o un recuadro flotante en la página que abre un capítulo o una parte; aparece cuando **Columnas → Flotantes en páginas de apertura** está en *Aviso* (`openerFloat`);
   - *Idioma sin patrones de separación silábica*: el idioma del documento (su idioma de separación silábica o, si no, `locale`) no tiene patrones incluidos, así que su texto se divide con los del inglés de EE. UU. Desaparece al desactivar la separación silábica.

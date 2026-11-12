@@ -447,10 +447,9 @@ export function detailFor(payload: WarningPayload, labels: SandboxLabels, locale
         .replace('__page__', String(payload.page))
         .replace('__text__', payload.text);
     case 'hyphenLadder':
-      return labels.warningsHyphenLadderDetail
-        .replace('__page__', String(payload.page))
-        .replace('__lines__', String(payload.lines))
-        .replace('__max__', String(payload.max));
+    case 'hyphenSpacing':
+      return (payload.kind === 'hyphenLadder' ? labels.warningsHyphenLadderDetail : labels.warningsHyphenSpacingDetail.replace('__hyphens__', String(payload.hyphens)))
+        .replace('__page__', String(payload.page)).replace('__lines__', String(payload.lines)).replace('__max__', String(payload.max));
     case 'lastWordDivided':
       return labels.warningsLastWordDividedDetail.replace('__page__', String(payload.page)).replace('__text__', payload.word);
     case 'shortListSplit':

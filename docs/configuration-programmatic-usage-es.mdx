@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Uso programático',
   description: 'Cómo usar Postext desde el código: buildDocument y sus avisos, los valores por defecto, las fuentes, las cachés y el Web Worker.',
   lang: 'es',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '32 min',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`El documento tiene ${vdt.pages.length} páginas`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>La última línea de un párrafo solo lleva el resto de una palabra dividida en la línea anterior: <code>word</code> es la palabra tal como la imprimen las dos líneas, con el guion. Con <code>bodyText.hyphenation.lastWord: 'warn'</code> se informa de todas; con <code>'avoid'</code>, de las que mantuvo el corte de líneas. Apunta a las dos últimas líneas, con su página. Desde postext 1.74.</td>
+      <td>Las líneas se componen como están.</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td><code>hyphens</code> líneas de un párrafo terminan en guion, cada una a <code>max</code> líneas o menos (<code>bodyText.hyphenation.spacingLines</code>) de la anterior: <code>lines</code> es cuántas líneas hay de la primera a la última y <code>text</code>, esas líneas. Con <code>bodyText.hyphenation.spacing: 'warn'</code> se informa de todas las rachas; con <code>'avoid'</code>, de las que mantuvo el corte de líneas. Uno por racha; apunta a sus líneas, con la página de la primera. Desde postext 1.78.</td>
       <td>Las líneas se componen como están.</td>
     </tr>
     <tr>

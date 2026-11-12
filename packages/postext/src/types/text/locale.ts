@@ -195,6 +195,27 @@ export interface HyphenationConfig {
   /** Cost of the last word divided under `lastWord: 'avoid'`, in demerits.
    *  Default 30000. 0 weighs none. */
   lastWordPenalty?: number;
+  /** Hyphen spacing: a line ending on a hyphen when one of the
+   *  {@link spacingLines} lines before it, in the same paragraph, ends on
+   *  one too, so hyphens fall into a rhythm (one line yes, one line no).
+   *  `'allow'` (the default) leaves the lines as the breaker sets them and
+   *  reports nothing. `'warn'` leaves them too and reports each run of
+   *  hyphens that close together (a `hyphenSpacing` content warning).
+   *  `'avoid'` makes each such hyphen cost {@link spacingPenalty} in the
+   *  line breaker, which spaces the hyphens out where the word spacing
+   *  allows, and reports the runs it kept. Two hyphens in a row count too
+   *  (they are also a ladder, see {@link ladders}). Knuth–Plass line
+   *  breaking only. */
+  spacing?: CompositionRule;
+  /** Lines before a hyphenated line, from 1 to 10, that `spacing` wants
+   *  free of hyphens: 2 (the default) catches a hyphen every other line;
+   *  1 only two in a row. */
+  spacingLines?: number;
+  /** Cost of each hyphen closer than {@link spacingLines} to the one
+   *  before under `spacing: 'avoid'`, in demerits added to the paragraph's
+   *  (the scale of {@link ladderPenalty}). Default 10000: a rhythm weighs
+   *  less than a ladder. 0 weighs none. */
+  spacingPenalty?: number;
 }
 
 /** The limits of {@link HyphenationConfig} the dictionary applies (see
@@ -236,6 +257,9 @@ export interface ResolvedHyphenationConfig {
   ladderPenalty: number;
   lastWord: CompositionRule;
   lastWordPenalty: number;
+  spacing: CompositionRule;
+  spacingLines: number;
+  spacingPenalty: number;
 }
 
 /** `BodyTextConfig.kashida`. */

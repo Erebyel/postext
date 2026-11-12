@@ -6,7 +6,7 @@ export const metadata = {
   description: 'Les motifs de césure et les exceptions, le texte en drapeau, la langue du document avec ses chiffres et son sens d’écriture, et les écritures que compose Postext',
   lang: 'fr',
   lastUpdated: '2026-11-12',
-  readingTime: '24 min',
+  readingTime: '25 min',
   order: 8,
   parent: 'configuration',
   plainSummary: "Cette page explique comment les mots sont coupés en fin de ligne et comment Postext connaît la langue d’un livre. Vous activez ou désactivez la césure, et vous listez les mots qui ne doivent jamais être coupés. Vous pouvez laisser le bord droit du texte irrégulier au lieu de l’aligner. La langue du document décide des règles de césure, du nom des figures et des tableaux, des chiffres et du sens du texte. Les dernières sections indiquent les systèmes d’écriture que Postext sait composer et la façon dont il traite l’arabe.",
@@ -130,6 +130,24 @@ Quand l’alignement du texte vaut `'justify'`, la césure évite un espacement 
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>Ce que coûte à la coupure des lignes un dernier mot coupé avec <code>lastWord: 'avoid'</code>, en démérites ajoutés à ceux du paragraphe. À <code>0</code>, tous restent.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Césures rapprochées : une ligne d’un paragraphe qui finit sur un trait d’union quand l’une des <code>spacingLines</code> lignes précédentes finit aussi sur un trait d’union, si bien que les césures tombent en cadence (une ligne oui, une ligne non). <code>'allow'</code> compose les lignes comme la coupure les trouve. <code>'warn'</code> les compose de même et signale chaque série de ces césures par un avertissement de contenu <code>hyphenSpacing</code>, que le Sandbox liste dans Révision. <code>'avoid'</code> ajoute <code>spacingPenalty</code> aux démérites de chacune de ces césures, si bien que la coupure espace les césures là où l’espacement le permet, et signale les séries qu’elle garde. Deux césures de suite comptent aussi (elles forment en plus une échelle). Texte courant, listes et citations. Avec la coupure optimale des lignes seulement.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>Lignes avant une ligne coupée que <code>spacing</code> veut sans trait d’union, de <code>1</code> à <code>10</code>. À <code>2</code>, une césure toutes les deux lignes compte ; à <code>1</code>, seulement deux de suite.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>Ce que coûte à la coupure des lignes chaque césure à moins de <code>spacingLines</code> lignes de la précédente avec <code>spacing: 'avoid'</code>, en démérites ajoutés à ceux du paragraphe, en plus de <code>consecutiveHyphenDemerit</code> pour deux de suite. La valeur par défaut pèse une cadence moins qu’une échelle (<code>ladderPenalty</code>) ; à <code>0</code>, toutes sont gardées.</td>
     </tr>
   </tbody>
 </table>

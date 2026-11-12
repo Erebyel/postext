@@ -1,6 +1,6 @@
 // The Knuth-Plass dynamic programme: active nodes, fitness classes, badness
 // and the search for a paragraph's breaks, under the document's composition
-// rules (stacks, hyphen ladders, the last word divided).
+// rules (stacks, hyphen ladders, the last word divided, hyphen spacing).
 import type { KPItem, KPOptions } from '../types.js';
 import { BADNESS_CAP, DEFAULT_CONSECUTIVE_HYPHEN_DEMERIT, DEFAULT_FITNESS_CLASS_DEMERIT, KP_INFINITY, OVER_STRETCH_BADNESS, COLUMN_END_HYPHEN_BADNESS, TRACKING_BADNESS, RAGGED_SPACE_RATIO, EXACT_MAX_ACTIVE } from '../constants.js';
 import { adjustLine } from './adjust.js';
@@ -51,6 +51,8 @@ interface ActiveNode {
   /** Lines in a row ending on a hyphen the chain ends on (0: the line
    *  ending here does not), counted up to {@link MAX_RUN}. */
   run: number;
+  /** Lines since the chain's last hyphen (0: this line's), up to MAX_RUN. */
+  since: number;
   /** Pointer for traceback. */
   previous: ActiveNode | null;
 }
@@ -205,10 +207,12 @@ export function search(items: KPItem[], options: KPOptions, edges: LineEdges | u
 
   const stackCost = options.stacks?.demerits ?? 0;
   // Hyphen rules (#1466), read once (`rules.ts`).
-  const { ladderCost, ladderRun, lastWordCost, extraHyphen, lastWordSpace } = hyphenRulesFor(items, options);
+  const { ladderCost, ladderRun, lastWordCost, spacingCost, spacingLines, extraHyphen, lastWordSpace } = hyphenRulesFor(items, options);
   // A ladder of more than one line depends on the chain, not on the node's
-  // break alone: the exact pass keys nodes by the run they end on too.
+  // break alone: the exact pass keys nodes by the run they end on too; and
+  // hyphen spacing past the line before, by the lines since the last hyphen.
   const keyRun = exactLimits && ladderRun > 1;
+  const keySince = exactLimits && spacingLines > 1;
 
   // Seed active node list with a "start of paragraph" sentinel
   let activeNodes: ActiveNode[] = [{
@@ -228,6 +232,7 @@ export function search(items: KPItem[], options: KPOptions, edges: LineEdges | u
     totalWordSpaceWidth: 0,
     faults: 0,
     run: 0,
+    since: MAX_RUN,
     previous: null,
   }];
 
@@ -417,6 +422,12 @@ export function search(items: KPItem[], options: KPOptions, edges: LineEdges | u
         d += lastWordCost;
         faults++;
       }
+      // Hyphen spacing: a hyphen among the `spacingLines` lines before.
+      if (spacingLines > 0 && isFlagged && a.since < spacingLines) {
+        d += spacingCost;
+        faults++;
+      }
+      const since = isFlagged ? 0 : Math.min(a.since + 1, MAX_RUN);
 
       // Fitness class demerit
       const fc = classifyFitness(r);
@@ -452,7 +463,7 @@ export function search(items: KPItem[], options: KPOptions, edges: LineEdges | u
       const baseKey = uniformFrom !== undefined && a.line + 1 >= uniformFrom ? fc : (a.line + 1) * 4 + fc;
       const key = !exactLimits
         ? baseKey
-        : `${baseKey}|${keyRun ? Math.min(run, ladderRun) : ''}|${lineStart && lineEnd ? `${lineStart.word}\u0001${lineStart.chars}\u0001${reachBits(lineEnd)}` : ''}`;
+        : `${baseKey}|${keyRun ? Math.min(run, ladderRun) : ''}|${keySince ? Math.min(since, spacingLines) : ''}|${lineStart && lineEnd ? `${lineStart.word}\u0001${lineStart.chars}\u0001${reachBits(lineEnd)}` : ''}`;
       const existing = bestNewNodeByKey.get(key);
       if (existing && existing.totalDemerits <= totalDemerits) {
         continue;
@@ -481,6 +492,7 @@ export function search(items: KPItem[], options: KPOptions, edges: LineEdges | u
         totalWordSpaceWidth: gateShort ? sumWordSpaceWidthAt[i + 1]! : 0,
         faults: a.faults + faults,
         run,
+        since,
         previous: a,
       });
     }
@@ -521,6 +533,7 @@ export function search(items: KPItem[], options: KPOptions, edges: LineEdges | u
         totalWordSpaceWidth: gateShort ? sumWordSpaceWidthAt[i + 1]! : 0,
         faults: 0,
         run: isFlagged ? 1 : 0,
+        since: isFlagged ? 0 : MAX_RUN,
         previous: null,
       });
     }

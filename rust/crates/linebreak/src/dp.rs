@@ -36,7 +36,8 @@ pub(crate) struct Search {
     keys: Vec<u32>,
     /// The exact pass's keys: base key, start word and start characters
     /// of the line, and the bits of its end edge it holds with the hyphen
-    /// run it ends on above them.
+    /// run it ends on above them, and the lines since its last hyphen
+    /// above that.
     slot_by_exact: HashMap<(u32, u32, u32, u32), u32>,
     avoid: Vec<bool>,
 }
@@ -68,10 +69,13 @@ impl Search {
         let ladder_run = if rules.ladder_demerits > 0.0 { rules.ladder_run.clamp(1, MAX_RUN - 1) } else { 0 };
         let last_word = rules.last_word_demerits.max(0.0);
         let extra_hyphen = rules.extra_hyphen_penalty.max(0.0);
+        let spacing_lines = if rules.spacing_demerits > 0.0 { rules.spacing_lines.clamp(1, MAX_RUN - 1) } else { 0 };
         // A ladder of more than one line depends on the chain: the exact
-        // pass keys nodes by the run they end on too.
+        // pass keys nodes by the run they end on too; and hyphen spacing
+        // past the line before, by the lines since the last hyphen.
         let key_run = pass.exact_limits && ladder_run > 1;
-        let exact = pass.exact_limits && (stacks.is_some() || key_run);
+        let key_since = pass.exact_limits && spacing_lines > 1;
+        let exact = pass.exact_limits && (stacks.is_some() || key_run || key_since);
         // The last word space: a last line that starts past it holds only
         // the end of a word.
         let last_word_space: i32 = if last_word > 0.0 {
@@ -213,6 +217,12 @@ impl Search {
                     d += last_word;
                     faults += 1;
                 }
+                // Hyphen spacing: a hyphen among the lines before.
+                if spacing_lines > 0 && is_flagged && a.since < spacing_lines {
+                    d += rules.spacing_demerits;
+                    faults += 1;
+                }
+                let since = if is_flagged { 0 } else { (a.since + 1).min(MAX_RUN) };
                 let fc = fitness_class(r);
                 if (fc as i32 - a.fitness as i32).abs() > 1 {
                     d += o.fitness_class_demerit;
@@ -258,6 +268,7 @@ impl Search {
                     total_word_space_width: if gate_short { p.word_space_width[i + 1] } else { 0.0 },
                     faults: a.faults + faults,
                     run,
+                    since,
                     previous: id,
                 };
                 if exact {
@@ -268,7 +279,9 @@ impl Search {
                             key,
                             line_start.word,
                             line_start.chars,
-                            line_end.bits() | (if key_run { run.min(ladder_run) << 2 } else { 0 }),
+                            line_end.bits()
+                                | (if key_run { run.min(ladder_run) << 2 } else { 0 })
+                                | (if key_since { since.min(spacing_lines) << 10 } else { 0 }),
                         ),
                         node,
                     );
@@ -307,6 +320,7 @@ impl Search {
                     total_word_spaces: if gate_short { p.word_spaces[i + 1] } else { 0.0 },
                     total_word_space_width: if gate_short { p.word_space_width[i + 1] } else { 0.0 },
                     run: u32::from(is_flagged),
+                    since: if is_flagged { 0 } else { MAX_RUN },
                     previous: NONE,
                     ..Node::default()
                 };
