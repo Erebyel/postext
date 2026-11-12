@@ -6,7 +6,7 @@ export const metadata = {
   description: 'Hyphenation patterns and exceptions, ragged text, the document language and its digits and direction, and the scripts Postext sets',
   lang: 'en',
   lastUpdated: '2026-11-12',
-  readingTime: '22 min',
+  readingTime: '23 min',
   order: 8,
   parent: 'configuration',
   plainSummary: "This page covers how words are split at the end of a line and how Postext knows the language of a book. You turn hyphenation on or off, and list the words that must never be split. You can leave the right edge of the text uneven instead of straight. The document language decides the hyphenation rules, the names of figures and tables, the digits and the direction of the text. The last sections say which writing systems Postext can set and how Arabic text is handled.",
@@ -130,6 +130,24 @@ When text alignment is set to `'justify'`, hyphenation prevents excessive word s
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>What a divided last word costs the line breaker under <code>lastWord: 'avoid'</code>, in demerits added to the paragraph's. <code>0</code> keeps every one.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Hyphens close together: a line of a paragraph that ends on a hyphen when one of the <code>spacingLines</code> lines before it ends on one too, so hyphens fall into a rhythm (one line yes, one line no). <code>'allow'</code> sets the lines as the breaker finds them. <code>'warn'</code> sets them the same and reports each run of such hyphens as a <code>hyphenSpacing</code> content warning, which the Sandbox lists in Review. <code>'avoid'</code> adds <code>spacingPenalty</code> to the demerits of every such hyphen, so the breaker spaces the hyphens out where the word spacing allows, and reports the runs it keeps. Two hyphens in a row count too (they are also a ladder). Body text, lists and quotations. Optimal line breaking only.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>Lines before a hyphenated line that <code>spacing</code> wants free of hyphens, from <code>1</code> to <code>10</code>. With <code>2</code> a hyphen every other line counts; with <code>1</code> only two in a row.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>What each hyphen closer than <code>spacingLines</code> to the one before costs the line breaker under <code>spacing: 'avoid'</code>, in demerits added to the paragraph's, on top of <code>consecutiveHyphenDemerit</code> for two in a row. The default weighs a rhythm less than a ladder (<code>ladderPenalty</code>); <code>0</code> keeps every one.</td>
     </tr>
   </tbody>
 </table>

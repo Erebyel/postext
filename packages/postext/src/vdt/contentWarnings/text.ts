@@ -41,6 +41,13 @@ export type TextSettingWarning =
    *  last line holds only the rest of that word. `word` is the word as the
    *  two lines print it, hyphen included. Found by the layout. */
   | { kind: 'lastWordDivided'; word: string }
+  /** Hyphens too close together (#1466, `bodyText.hyphenation.spacing:
+   *  'warn' | 'avoid'`): `hyphens` lines of a paragraph end on a hyphen,
+   *  each within `max` lines (`hyphenation.spacingLines`) of the one
+   *  before, over `lines` lines from the first to the last. `text` is
+   *  those lines. Under `'avoid'`, the runs the breaker kept. The source
+   *  range covers the run. Found by the layout. */
+  | { kind: 'hyphenSpacing'; hyphens: number; lines: number; max: number; text: string[] }
   /** A word of a joining script (Arabic, Syriac, N'Ko…) wider than its
    *  line: such a word is never divided (its letters connect, and a piece
    *  would lose its joining forms), so it runs past the measure

@@ -8,7 +8,7 @@ import type { VDTDocument, ContentWarning, VDTDesignSlot } from '../../vdt.js';
 import { composedFrameBlockIds } from '../../composed/paint.js';
 import { bitmapResolutionFor, bitmapLayoutSize } from '../../bitmapResolution.js';
 import { findStacks } from '../../checks/stacks.js';
-import { findHyphenFaults } from '../../checks/hyphenRules.js';
+import { findHyphenFaults, endsOnHyphen } from '../../checks/hyphenRules.js';
 
 /**
  * The page each content warning's construct was placed on: the first placed
@@ -126,13 +126,14 @@ export function stackWarnings(doc: VDTDocument): ContentWarning[] {
   });
 }
 
-/** A `hyphenLadder` or `lastWordDivided` warning for each fault of the
- *  hyphen rules in the running text (#1466, `findHyphenFaults`), on the
- *  page it starts on, under `hyphenation.ladders` / `lastWord` at `'warn'`
- *  or `'avoid'`; none under `'allow'`. */
+/** A `hyphenLadder`, `lastWordDivided` or `hyphenSpacing` warning for each
+ *  fault of the hyphen rules in the running text (#1466,
+ *  `findHyphenFaults`), on the page it starts on, under
+ *  `hyphenation.ladders` / `lastWord` / `spacing` at `'warn'` or
+ *  `'avoid'`; none under `'allow'`. */
 export function hyphenRuleWarnings(doc: VDTDocument): ContentWarning[] {
   const h = doc.config.bodyText.hyphenation;
-  if (h.ladders === 'allow' && h.lastWord === 'allow') return [];
+  if (h.ladders === 'allow' && h.lastWord === 'allow' && h.spacing === 'allow') return [];
   return findHyphenFaults(doc).map((f) => {
     const first = f.lines[0]!;
     const last = f.lines[f.lines.length - 1]!;
@@ -142,6 +143,10 @@ export function hyphenRuleWarnings(doc: VDTDocument): ContentWarning[] {
       ...(f.block.pageIndex >= 0 ? { pageIndex: f.block.pageIndex } : {}),
     };
     if (f.kind === 'ladder') return { kind: 'hyphenLadder', lines: f.lines.length, max: h.maxConsecutive, text: f.lines.map((l) => l.text), ...where };
+    if (f.kind === 'spacing') {
+      const hyphens = f.lines.filter(endsOnHyphen).length;
+      return { kind: 'hyphenSpacing', hyphens, lines: f.lines.length, max: h.spacingLines, text: f.lines.map((l) => l.text), ...where };
+    }
     const head = first.text.trimEnd().split(/\s+/u).pop() ?? '';
     return { kind: 'lastWordDivided', word: `${head}${last.text.trim()}`, ...where };
   });

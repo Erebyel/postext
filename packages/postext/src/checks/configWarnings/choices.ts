@@ -59,6 +59,7 @@ export function collectChoiceWarnings(config: PostextConfig): ConfigWarning[] {
   rule('bodyText.stacks', config.bodyText?.stacks);
   rule('bodyText.hyphenation.ladders', config.bodyText?.hyphenation?.ladders);
   rule('bodyText.hyphenation.lastWord', config.bodyText?.hyphenation?.lastWord);
+  rule('bodyText.hyphenation.spacing', config.bodyText?.hyphenation?.spacing);
   rule('layout.openerFloats', config.layout?.openerFloats);
   // The figures of a style (#1237): read as unset, the family's own.
   const figures = (path: string, value: unknown) => {

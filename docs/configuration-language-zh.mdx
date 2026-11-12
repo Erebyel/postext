@@ -6,7 +6,7 @@ export const metadata = {
   description: '断词模式与例外词、非两端对齐文字的断词、文档语言及其数字和文字方向，以及Postext能排哪些文字',
   lang: 'zh',
   lastUpdated: '2026-11-12',
-  readingTime: '17分钟',
+  readingTime: '18分钟',
   order: 8,
   parent: 'configuration',
   plainSummary: "本页讲单词在行尾怎样拆开，以及Postext怎样知道一本书用的是什么语言。你可以打开或关闭断词，也可以列出绝不能拆开的词。你还可以让文字的右边参差不齐，不必排成一条直线。文档语言决定断词规则、图和表的名称、数字的写法和文字方向。最后几节说明Postext能排哪些文字，以及怎样处理阿拉伯文。",
@@ -130,6 +130,24 @@ export const metadata = {
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td><code>lastWord: 'avoid'</code> 时，末词断开给断行增加的缺陷值（计入段落）。为 <code>0</code> 时全部保留。</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>连字符过近：段落中某行以连字符结尾，而其前 <code>spacingLines</code> 行中也有一行以连字符结尾，连字符便落成节奏（一行有、一行无）。<code>'allow'</code> 按断行找到的样子排行。<code>'warn'</code> 照样排行，并为每串这样的连字符给出内容警告 <code>hyphenSpacing</code>，Sandbox 在“检查”中列出。<code>'avoid'</code> 给每个这样的连字符的缺陷值加上 <code>spacingPenalty</code>，让断行在词距允许的范围内拉开连字符，并报告保留下来的。连续两行的连字符也计入（它们同时也是连行）。适用于正文、列表和引文。仅在最优断行时有效。</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>以连字符结尾的行之前，<code>spacing</code> 希望不出现连字符的行数，从 <code>1</code> 到 <code>10</code>。为 <code>2</code> 时隔行出现的连字符也计入；为 <code>1</code> 时只计连续两行。</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td><code>spacing: 'avoid'</code> 时，每个与前一个相距不到 <code>spacingLines</code> 行的连字符给断行增加的缺陷值（计入段落），连续两行另加 <code>consecutiveHyphenDemerit</code>。默认值让节奏比连行（<code>ladderPenalty</code>）轻；为 <code>0</code> 时全部保留。</td>
     </tr>
   </tbody>
 </table>

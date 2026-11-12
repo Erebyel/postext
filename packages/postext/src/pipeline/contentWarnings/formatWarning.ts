@@ -347,6 +347,9 @@ export function formatWarning(w: LayoutWarning | ContentWarning | ConfigWarning 
     case 'hyphenLadder':
       text = `${w.lines} lines in a row end on a hyphen, more than ${w.max} — with bodyText.hyphenation.ladders: "avoid" the line breaker sets the paragraph otherwise where the word spacing allows`;
       break;
+    case 'hyphenSpacing':
+      text = `${w.hyphens} hyphens in ${w.lines} lines, each within ${w.max} ${w.max === 1 ? 'line' : 'lines'} of the one before — with bodyText.hyphenation.spacing: "avoid" the line breaker spaces them out where the word spacing allows`;
+      break;
     case 'lastWordDivided':
       text = `The last word of a paragraph is divided ("${w.word}") — with bodyText.hyphenation.lastWord: "avoid" the line breaker keeps it whole where the word spacing allows`;
       break;

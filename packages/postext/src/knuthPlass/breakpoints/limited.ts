@@ -5,7 +5,8 @@ import { LineEdges } from './edges.js';
 import { search } from './search.js';
 
 /** A search's breaks, how many faults of the composition rules they keep
- *  (stacks, lines past a hyphen ladder's limit, the last word divided) and
+ *  (stacks, lines past a hyphen ladder's limit, the last word divided,
+ *  hyphens too close together) and
  *  what they cost. */
 export interface SearchResult {
   breaks: number[];
@@ -16,9 +17,10 @@ export interface SearchResult {
 /**
  * {@link search} under the document's composition rules (#1463, #1466).
  * Merging nodes by line and fitness alone forgets what a stack's cost
- * depends on (the edge a node's line starts on) and what a hyphen ladder's
+ * depends on (the edge a node's line starts on), what a hyphen ladder's
  * does (the run of hyphenated lines a node ends on, when the ladder may be
- * longer than one line), so the chain kept may keep a fault another one
+ * longer than one line) and what hyphen spacing's does (the lines since
+ * the chain's last hyphen), so the chain kept may keep a fault another one
  * avoids for less. A paragraph whose setting keeps a fault is set again
  * with that state kept apart, which is exact but dearer: that search gives
  * up past `EXACT_MAX_ACTIVE` active nodes, and the first setting stands.
@@ -28,7 +30,7 @@ export interface SearchResult {
  */
 export function limited(items: KPItem[], options: KPOptions, edges: LineEdges | undefined, longerTo?: number, maxFaults = Infinity): SearchResult | null {
   const first = search(items, options, edges, false, longerTo, maxFaults);
-  if (first === null || first.faults === 0 || !(edges || longLadders(options))) return first;
+  if (first === null || first.faults === 0 || !(edges || longLadders(options) || longSpacing(options))) return first;
   const exact = search(items, options, edges, true, longerTo, maxFaults);
   return exact !== null && exact.breaks.length === first.breaks.length && exact.demerits < first.demerits ? exact : first;
 }
@@ -37,6 +39,12 @@ export function limited(items: KPItem[], options: KPOptions, edges: LineEdges | 
  *  depends on more than a node's own break. */
 function longLadders(options: KPOptions): boolean {
   return options.ladders !== undefined && options.ladders.demerits > 0 && Math.round(options.ladders.maxRun) > 1;
+}
+
+/** Whether hyphen spacing looks further back than the line before: its
+ *  cost then depends on more than a node's own break. */
+function longSpacing(options: KPOptions): boolean {
+  return options.hyphenSpacing !== undefined && options.hyphenSpacing.demerits > 0 && Math.round(options.hyphenSpacing.lines) > 1;
 }
 
 /** The edges stacks compare in a paragraph, when they are compared: not

@@ -6,7 +6,7 @@ export const metadata = {
   description: 'Trennmuster und Ausnahmen, Flattersatz, die Dokumentsprache mit ihren Ziffern und ihrer Schreibrichtung und die Schriftsysteme, die Postext setzt',
   lang: 'de',
   lastUpdated: '2026-11-12',
-  readingTime: '21 min',
+  readingTime: '22 min',
   order: 8,
   parent: 'configuration',
   plainSummary: "Diese Seite behandelt, wie Wörter am Zeilenende getrennt werden und woher Postext die Sprache eines Buchs kennt. Sie schalten die Silbentrennung ein oder aus und führen die Wörter auf, die nie getrennt werden dürfen. Sie können den rechten Rand des Texts ungleichmäßig lassen, statt ihn gerade auszurichten. Die Dokumentsprache bestimmt die Trennregeln, die Namen von Abbildungen und Tabellen, die Ziffern und die Schreibrichtung. Die letzten Abschnitte nennen die Schriftsysteme, die Postext setzen kann, und erklären, wie arabischer Text behandelt wird.",
@@ -130,6 +130,24 @@ Ist die Textausrichtung auf `'justify'` gesetzt, verhindert die Silbentrennung �
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>Was ein getrenntes letztes Wort den Zeilenumbruch bei <code>lastWord: 'avoid'</code> kostet, als Strafpunkte zu denen des Absatzes. Bei <code>0</code> bleiben alle.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Nahe Trennstriche: Eine Zeile eines Absatzes endet auf einen Trennstrich, während auch eine der <code>spacingLines</code> Zeilen davor auf einen endet, sodass die Trennungen in einen Rhythmus fallen (eine Zeile ja, eine nein). <code>'allow'</code> setzt die Zeilen, wie der Zeilenumbruch sie findet. <code>'warn'</code> setzt sie ebenso und meldet jede Folge solcher Trennstriche als Inhaltswarnung <code>hyphenSpacing</code>, die die Sandbox unter Prüfung auflistet. <code>'avoid'</code> addiert <code>spacingPenalty</code> zu den Strafpunkten jedes solchen Trennstrichs, sodass der Zeilenumbruch die Trennstriche auseinanderzieht, wo der Wortabstand es erlaubt, und meldet die Folgen, die bleiben. Zwei Trennstriche hintereinander zählen auch (sie sind zugleich eine Treppe). Grundtext, Listen und Zitate. Nur mit dem optimalen Zeilenumbruch.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>Zeilen vor einer getrennten Zeile, die <code>spacing</code> ohne Trennstrich haben will, von <code>1</code> bis <code>10</code>. Bei <code>2</code> zählt ein Trennstrich in jeder zweiten Zeile; bei <code>1</code> nur zwei hintereinander.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>Was jeder Trennstrich, der weniger als <code>spacingLines</code> Zeilen nach dem vorigen steht, den Zeilenumbruch bei <code>spacing: 'avoid'</code> kostet, als Strafpunkte, die zu denen des Absatzes addiert werden, zusätzlich zu <code>consecutiveHyphenDemerit</code> für zwei hintereinander. Der Standard wiegt einen Rhythmus leichter als eine Treppe (<code>ladderPenalty</code>); bei <code>0</code> bleiben alle.</td>
     </tr>
   </tbody>
 </table>

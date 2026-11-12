@@ -6,7 +6,7 @@ export const metadata = {
   description: 'Com es parteixen els mots (patrons i excepcions), com es compon el text en bandera, què fixa la llengua del document (les xifres i la direcció del text, entre altres coses) i quines escriptures sap compondre Postext',
   lang: 'ca',
   lastUpdated: '2026-11-12',
-  readingTime: '25 min',
+  readingTime: '26 min',
   order: 8,
   parent: 'configuration',
   plainSummary: "Aquesta pàgina explica com es parteixen els mots al final de la línia i com sap Postext en quina llengua està escrit el llibre. Pots activar o desactivar la partició de mots i fer una llista de les paraules que no s'han de partir mai. També pots deixar irregular la vora dreta del text en lloc de recta. La llengua del document fixa les regles per partir mots, els noms de les figures i de les taules, les xifres i la direcció del text. Les últimes seccions expliquen quines escriptures sap compondre Postext i com tracta el text àrab.",
@@ -130,6 +130,24 @@ Quan l'alineació del text és `'justify'`, la partició de mots evita que l'esp
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>El que costa al tall de línies una última paraula partida amb <code>lastWord: 'avoid'</code>, en demèrits que se sumen als del paràgraf. Amb <code>0</code> es mantenen totes.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Guionets propers: una línia d'un paràgraf que acaba en guionet quan alguna de les <code>spacingLines</code> línies anteriors també hi acaba, de manera que els guionets cauen amb ritme (una línia sí, una altra no). <code>'allow'</code> compon les línies tal com les troba el tall de línies. <code>'warn'</code> les compon igual i informa de cada ratxa d'aquests guionets amb un avís de contingut <code>hyphenSpacing</code>, que el Sandbox llista a Revisió. <code>'avoid'</code> suma <code>spacingPenalty</code> als demèrits de cadascun d'aquests guionets, de manera que el tall de línies separa els guionets on l'espaiat ho permet, i informa de les ratxes que manté. Dos guionets seguits també compten (són a més una escala). Text de cos, llistes i citacions. Només amb el tall de línies òptim.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>Línies anteriors a una línia amb guionet que <code>spacing</code> vol sense guionets, d'<code>1</code> a <code>10</code>. Amb <code>2</code> compta un guionet cada dues línies; amb <code>1</code>, només dos de seguits.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>El que costa al tall de línies cada guionet a menys de <code>spacingLines</code> línies de l'anterior amb <code>spacing: 'avoid'</code>, en demèrits que se sumen als del paràgraf, a més de <code>consecutiveHyphenDemerit</code> per a dos de seguits. El valor per defecte pesa un ritme menys que una escala (<code>ladderPenalty</code>); amb <code>0</code> es mantenen tots.</td>
     </tr>
   </tbody>
 </table>

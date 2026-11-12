@@ -13,6 +13,7 @@ export const FEWER_HYPHENS_STEP = 50;
 export interface HyphenBreaking {
   ladders?: { maxRun: number; demerits: number };
   lastWordDemerits?: number;
+  hyphenSpacing?: { lines: number; demerits: number };
   extraHyphenPenalty?: number;
 }
 
@@ -20,6 +21,7 @@ export function hyphenBreaking(h: ResolvedHyphenationConfig): HyphenBreaking {
   const out: HyphenBreaking = {};
   if (h.ladders === 'avoid' && h.ladderPenalty > 0) out.ladders = { maxRun: h.maxConsecutive, demerits: h.ladderPenalty };
   if (h.lastWord === 'avoid' && h.lastWordPenalty > 0) out.lastWordDemerits = h.lastWordPenalty;
+  if (h.spacing === 'avoid' && h.spacingPenalty > 0) out.hyphenSpacing = { lines: h.spacingLines, demerits: h.spacingPenalty };
   if (h.fewerHyphens > 0) out.extraHyphenPenalty = h.fewerHyphens * FEWER_HYPHENS_STEP;
   return out;
 }

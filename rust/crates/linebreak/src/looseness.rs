@@ -65,8 +65,8 @@ fn two_pass(search: &mut Search, items: &Items, o: &Options, out: &mut Vec<u32>)
 
 /// [`one`] under the document's composition rules (`limited` in
 /// TypeScript, #1463, #1466). Merging nodes by line and fitness alone
-/// forgets what a stack's cost depends on, and what a hyphen ladder longer
-/// than one line does, so the chain kept may keep a fault another one
+/// forgets what a stack's cost depends on, what a hyphen ladder longer
+/// than one line does, and what hyphen spacing past the line before does, so the chain kept may keep a fault another one
 /// avoids for less; a paragraph whose setting keeps a fault is set again
 /// with that state kept apart, which is exact but dearer, and gives up past
 /// `EXACT_MAX_ACTIVE` active nodes. The exact setting is taken when it has
@@ -82,7 +82,8 @@ fn limited(
 ) -> Option<Outcome> {
     let first = one(search, items, o, looseness, longer, false, out)?;
     let long_ladders = o.rules.ladder_demerits > 0.0 && o.rules.ladder_run > 1;
-    if first.faults == 0 || !(o.rules.stack_demerits.is_some() || long_ladders) {
+    let long_spacing = o.rules.spacing_demerits > 0.0 && o.rules.spacing_lines > 1;
+    if first.faults == 0 || !(o.rules.stack_demerits.is_some() || long_ladders || long_spacing) {
         return Some(first);
     }
     let mut exact_breaks = Vec::new();

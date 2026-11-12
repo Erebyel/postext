@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Utilisation programmatique',
   description: 'Appeler Postext depuis le code : buildDocument et ses avertissements, les valeurs par défaut, les polices, les caches et le Web Worker',
   lang: 'fr',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '33 min',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>La dernière ligne d’un paragraphe ne porte que la fin d’un mot coupé à la ligne précédente : <code>word</code> est le mot tel que les deux lignes l’impriment, trait d’union compris. Avec <code>bodyText.hyphenation.lastWord: 'warn'</code>, tous sont signalés ; avec <code>'avoid'</code>, ceux que la coupure a gardés. Pointe vers les deux dernières lignes, avec leur page. Depuis postext 1.74.</td>
+      <td>Les lignes sont composées telles quelles.</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td><code>hyphens</code> lignes d’un paragraphe finissent sur un trait d’union, chacune à <code>max</code> lignes au plus (<code>bodyText.hyphenation.spacingLines</code>) de la précédente : <code>lines</code> est le nombre de lignes de la première à la dernière, <code>text</code> ces lignes. Avec <code>bodyText.hyphenation.spacing: 'warn'</code>, toutes les séries sont signalées ; avec <code>'avoid'</code>, celles que la coupure a gardées. Un par série ; pointe vers ses lignes, avec la page de la première. Depuis postext 1.78.</td>
       <td>Les lignes sont composées telles quelles.</td>
     </tr>
     <tr>

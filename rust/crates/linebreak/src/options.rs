@@ -32,7 +32,7 @@ pub struct Options {
     pub ragged_stretch: f64,
     pub hyphenation_zone: Option<f64>,
     /// The composition rules (`KPOptions.stacks`, `ladders`,
-    /// `lastWordDemerits`, `extraHyphenPenalty`).
+    /// `lastWordDemerits`, `hyphenSpacing`, `extraHyphenPenalty`).
     pub rules: Rules,
 }
 
@@ -46,6 +46,11 @@ pub struct Rules {
     /// The paragraph's last word divided: the line before the last ends on
     /// a hyphen and the last line holds no word space (0: off).
     pub last_word_demerits: f64,
+    /// Hyphen spacing: a line ending on a hyphen when one of the
+    /// `spacing_lines` lines before it ends on one too costs
+    /// `spacing_demerits` (`spacing_lines` 0: off).
+    pub spacing_lines: u32,
+    pub spacing_demerits: f64,
     /// Added to the penalty of every break that ends a line on a hyphen
     /// (`hyphenation.fewerHyphens`).
     pub extra_hyphen_penalty: f64,

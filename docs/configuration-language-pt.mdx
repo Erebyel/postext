@@ -6,7 +6,7 @@ export const metadata = {
   description: 'Padrões e exceções de hifenização, texto em bandeira, o idioma do documento (com os algarismos e a direção que ele define) e os sistemas de escrita que o Postext compõe',
   lang: 'pt',
   lastUpdated: '2026-11-12',
-  readingTime: '23 min',
+  readingTime: '24 min',
   order: 8,
   parent: 'configuration',
   plainSummary: "Esta página trata de como as palavras são divididas no fim da linha e de como o Postext sabe o idioma de um livro. Você liga ou desliga a hifenização e lista as palavras que nunca devem ser divididas. Pode deixar a margem direita do texto irregular em vez de reta. O idioma do documento define as regras de hifenização, os nomes das figuras e das tabelas, os algarismos e a direção do texto. As últimas seções mostram quais sistemas de escrita o Postext compõe e como ele trata o texto árabe.",
@@ -130,6 +130,24 @@ Quando o alinhamento do texto é `'justify'`, a hifenização evita o espaçamen
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>O que uma última palavra dividida custa à quebra de linha com <code>lastWord: 'avoid'</code>, em deméritos somados aos do parágrafo. Com <code>0</code> mantêm-se todas.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Hífenes próximos: uma linha de um parágrafo que termina em hífen quando uma das <code>spacingLines</code> linhas anteriores também termina em hífen, de modo que os hífenes caem com ritmo (uma linha sim, outra não). <code>'allow'</code> compõe as linhas como a quebra de linha as encontra. <code>'warn'</code> compõe-nas igual e informa cada série desses hífenes com um aviso de conteúdo <code>hyphenSpacing</code>, que o Sandbox lista em Revisão. <code>'avoid'</code> soma <code>spacingPenalty</code> aos deméritos de cada um desses hífenes, de modo que a quebra de linha afasta os hífenes onde o espaçamento permite, e informa as séries que mantém. Dois hífenes seguidos também contam (são também uma escada). Texto do corpo, listas e citações. Só com a quebra de linha ótima.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>Linhas antes de uma linha com hífen que <code>spacing</code> quer sem hífenes, de <code>1</code> a <code>10</code>. Com <code>2</code> conta um hífen a cada duas linhas; com <code>1</code>, só dois seguidos.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>O que cada hífen a menos de <code>spacingLines</code> linhas do anterior custa à quebra de linha com <code>spacing: 'avoid'</code>, em deméritos somados aos do parágrafo, além de <code>consecutiveHyphenDemerit</code> para dois seguidos. O padrão pesa um ritmo menos que uma escada (<code>ladderPenalty</code>); com <code>0</code> mantêm-se todos.</td>
     </tr>
   </tbody>
 </table>

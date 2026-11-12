@@ -6,7 +6,7 @@ export const metadata = {
   description: 'Cómo se configuran los patrones y las excepciones de la separación silábica y el texto en bandera; el idioma del documento, con sus cifras y su dirección, y qué escrituras compone Postext.',
   lang: 'es',
   lastUpdated: '2026-11-12',
-  readingTime: '25 min',
+  readingTime: '26 min',
   order: 8,
   parent: 'configuration',
   plainSummary: "Esta página explica cómo se parten las palabras al final de la línea y cómo sabe Postext en qué idioma está el libro. Activas o desactivas la separación silábica y anotas las palabras que nunca deben partirse. Puedes dejar desigual el borde derecho del texto en lugar de recto. El idioma del documento decide las reglas para partir palabras, los nombres de las figuras y las tablas, las cifras y la dirección del texto. Las últimas secciones dicen qué escrituras sabe componer Postext y cómo trata el texto árabe.",
@@ -130,6 +130,24 @@ Cuando el texto está justificado (`'justify'`), la separación silábica evita 
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>Lo que cuesta al corte de líneas una última palabra dividida con <code>lastWord: 'avoid'</code>, en deméritos que se suman a los del párrafo. Con <code>0</code> se mantienen todas.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Guiones cercanos: una línea de un párrafo que termina en guion cuando alguna de las <code>spacingLines</code> líneas anteriores también termina en guion, de modo que los guiones caen con ritmo (una línea sí, otra no). <code>'allow'</code> compone las líneas como las encuentra el corte de líneas. <code>'warn'</code> las compone igual e informa de cada racha de esos guiones con un aviso de contenido <code>hyphenSpacing</code>, que el Sandbox lista en Revisión. <code>'avoid'</code> suma <code>spacingPenalty</code> a los deméritos de cada uno de esos guiones, de modo que el corte de líneas separa los guiones donde el espaciado lo permite, e informa de las rachas que mantiene. Dos guiones seguidos también cuentan (son además una escalera). Texto base, listas y citas. Solo con el corte de líneas óptimo.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>Líneas anteriores a una línea con guion que <code>spacing</code> quiere sin guiones, de <code>1</code> a <code>10</code>. Con <code>2</code> cuenta un guion cada dos líneas; con <code>1</code>, solo dos seguidos.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>Lo que cuesta al corte de líneas cada guion a menos de <code>spacingLines</code> líneas del anterior con <code>spacing: 'avoid'</code>, en deméritos que se suman a los del párrafo, además de <code>consecutiveHyphenDemerit</code> para dos seguidos. El valor por defecto pesa un ritmo menos que una escalera (<code>ladderPenalty</code>); con <code>0</code> se mantienen todos.</td>
     </tr>
   </tbody>
 </table>

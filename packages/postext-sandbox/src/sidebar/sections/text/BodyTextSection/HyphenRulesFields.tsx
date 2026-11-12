@@ -64,7 +64,7 @@ export function HyphenationLimitsFields({ bodyText, raw, updateBodyText, updateH
 const PENALTY = { min: 0, max: 1000000, step: 1000, widthCh: 8 } as const;
 
 /** Where hyphens may fall (#1466, optimal line breaking only): how dear
- *  each one is, the ladders and the last word. Each rule has its level,
+ *  each one is, the ladders, the last word and how close together. Each rule has its level,
  *  then what it measures (under Warn and Avoid) and what a fault costs the
  *  line breaker (under Avoid). */
 export function HyphenDistributionFields({
@@ -145,6 +145,41 @@ export function HyphenDistributionFields({
             isDefault={h.lastWordPenalty === D.lastWordPenalty}
             onReset={() => reset('lastWordPenalty')}
           />
+        </NestedGroup>
+      )}
+      <SelectInput
+        label={labels.bodyHyphenSpacing}
+        value={h.spacing}
+        options={options}
+        onChange={(value) => updateHyphenation({ spacing: value as CompositionRule })}
+        tooltip={labels.bodyHyphenSpacingTooltip}
+        isDefault={h.spacing === D.spacing}
+        onReset={() => reset('spacing')}
+      />
+      {h.spacing !== 'allow' && (
+        <NestedGroup>
+          <NumberInput
+            label={labels.bodyHyphenSpacingLines}
+            value={h.spacingLines}
+            onChange={(spacingLines) => updateHyphenation({ spacingLines })}
+            min={1}
+            max={10}
+            step={1}
+            tooltip={labels.bodyHyphenSpacingLinesTooltip}
+            isDefault={h.spacingLines === D.spacingLines}
+            onReset={() => reset('spacingLines')}
+          />
+          {h.spacing === 'avoid' && (
+            <NumberInput
+              label={labels.bodyHyphenSpacingPenalty}
+              value={h.spacingPenalty}
+              onChange={(spacingPenalty) => updateHyphenation({ spacingPenalty })}
+              {...PENALTY}
+              tooltip={labels.bodyHyphenSpacingPenaltyTooltip}
+              isDefault={h.spacingPenalty === D.spacingPenalty}
+              onReset={() => reset('spacingPenalty')}
+            />
+          )}
         </NestedGroup>
       )}
     </>

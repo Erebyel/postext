@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'الاستخدام البرمجي',
   description: 'استعمال Postext من الشيفرة: buildDocument وتحذيراته، والقيم الافتراضية، والخطوط، والذاكرات المؤقتة، وWeb Worker',
   lang: 'ar',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '31 دقيقة',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>السطر الأخير من فقرة لا يحمل إلا بقية كلمة قُسمت في السطر الذي قبله: <code>word</code> الكلمة كما يطبعها السطران، بالشرطة. مع <code>bodyText.hyphenation.lastWord: 'warn'</code> يُبلَغ عن كل حالة؛ ومع <code>'avoid'</code> عمّا أبقاه كسر الأسطر. يشير إلى السطرين الأخيرين، مع صفحتهما. منذ postext 1.74.</td>
+      <td>تُنضّد الأسطر كما هي.</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td><code>hyphens</code> أسطر من فقرة تنتهي بشرطة، كل منها على بُعد <code>max</code> أسطر أو أقل (<code>bodyText.hyphenation.spacingLines</code>) من سابقه: <code>lines</code> عدد الأسطر من الأول إلى الأخير، و<code>text</code> تلك الأسطر. مع <code>bodyText.hyphenation.spacing: 'warn'</code> يُبلَغ عن كل سلسلة؛ ومع <code>'avoid'</code> عمّا أبقاه كسر الأسطر. واحد لكل سلسلة؛ يشير إلى أسطرها، مع صفحة أولها. منذ postext 1.78.</td>
       <td>تُنضّد الأسطر كما هي.</td>
     </tr>
     <tr>

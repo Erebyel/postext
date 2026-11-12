@@ -126,8 +126,9 @@ pub extern "C" fn lb_set_stacks(ptr: *mut LineBreakContext, on: u32, demerits: f
 
 /// The hyphen rules (#1466): a ladder longer than `ladder_run` lines costs
 /// `ladder_demerits` a line (`ladder_run` 0: off), the last word divided
-/// `last_word_demerits`, and every hyphen's penalty grows by
-/// `extra_hyphen_penalty`.
+/// `last_word_demerits`, every hyphen's penalty grows by
+/// `extra_hyphen_penalty`, and a hyphen with another one among the
+/// `spacing_lines` lines before it costs `spacing_demerits` (0: off).
 #[unsafe(no_mangle)]
 pub extern "C" fn lb_set_hyphen_rules(
     ptr: *mut LineBreakContext,
@@ -135,12 +136,16 @@ pub extern "C" fn lb_set_hyphen_rules(
     ladder_demerits: f64,
     last_word_demerits: f64,
     extra_hyphen_penalty: f64,
+    spacing_lines: u32,
+    spacing_demerits: f64,
 ) {
     let r = &mut ctx(ptr).options.rules;
     r.ladder_run = ladder_run;
     r.ladder_demerits = if ladder_run > 0 { ladder_demerits } else { 0.0 };
     r.last_word_demerits = last_word_demerits;
     r.extra_hyphen_penalty = extra_hyphen_penalty;
+    r.spacing_lines = spacing_lines;
+    r.spacing_demerits = if spacing_lines > 0 { spacing_demerits } else { 0.0 };
 }
 
 /// Rows of `count + 1` the line edges take (see `Rules`).

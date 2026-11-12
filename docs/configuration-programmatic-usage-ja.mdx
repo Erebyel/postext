@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'プログラムからの利用',
   description: 'コードからPostextを呼び出す方法。buildDocumentとその警告、既定値、フォント、キャッシュ、そしてWeb Worker',
   lang: 'ja',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '32分',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>段落の最終行が、前の行で分割された語の残りだけになっています。<code>word</code> は2行に印刷されたとおりの語で、ハイフンを含みます。<code>bodyText.hyphenation.lastWord: 'warn'</code> ではすべてを、<code>'avoid'</code> では改行処理が残したものを報告します。最後の2行を指し、そのページを示します。postext 1.74 から。</td>
+      <td>行はそのまま組まれます。</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td>段落の <code>hyphens</code> 行がハイフンで終わり、それぞれ前の行から <code>max</code> 行（<code>bodyText.hyphenation.spacingLines</code>）以内にあります。<code>lines</code> は最初から最後までの行数、<code>text</code> はその行です。<code>bodyText.hyphenation.spacing: 'warn'</code> ではすべての並びを、<code>'avoid'</code> では改行処理が残したものを報告します。並び1つにつき1件で、その行を指し、最初の行のページを示します。postext 1.78 から。</td>
       <td>行はそのまま組まれます。</td>
     </tr>
     <tr>

@@ -6,7 +6,7 @@ export const metadata = {
   description: 'أنماط تقسيم الكلمات بالواصلة واستثناءاتها، والنص غير المضبوط، ولغة المستند وأرقامها واتجاهها، وأنظمة الكتابة التي ينضّدها Postext',
   lang: 'ar',
   lastUpdated: '2026-11-12',
-  readingTime: '23 دقيقة',
+  readingTime: '24 دقيقة',
   order: 8,
   parent: 'configuration',
   plainSummary: "تتناول هذه الصفحة طريقة تقسيم الكلمات في آخر السطر، وكيف يعرف Postext لغة الكتاب. تشغّل تقسيم الكلمات أو توقفه، وتسرد الكلمات التي لا يجوز تقسيمها أبدًا. ويمكنك أن تترك نهايات الأسطر غير متساوية بدلًا من حافة مستقيمة. وتحدد لغة المستند قواعد التقسيم، وأسماء الأشكال والجداول، والأرقام، واتجاه النص. وتبيّن الأقسام الأخيرة أنظمة الكتابة التي يستطيع Postext تنضيدها، وطريقة معالجة النص العربي.",
@@ -130,6 +130,24 @@ export const metadata = {
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td>كلفة الكلمة الأخيرة المقسومة على كسر الأسطر مع <code>lastWord: 'avoid'</code>، نقاطَ عيب تُضاف إلى نقاط الفقرة. وعند <code>0</code> تبقى كلها.</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>شرطات متقاربة: سطر من فقرة ينتهي بشرطة بينما ينتهي بشرطة أيضًا أحد الأسطر الـ<code>spacingLines</code> التي تسبقه، فتقع الشرطات على إيقاع (سطر نعم وسطر لا). <code>'allow'</code> تنضّد الأسطر كما يجدها كسر الأسطر. <code>'warn'</code> تنضّدها كذلك وتُبلغ عن كل سلسلة من هذه الشرطات بتحذير محتوى <code>hyphenSpacing</code>، يُدرجه الـSandbox في «المراجعة». <code>'avoid'</code> تضيف <code>spacingPenalty</code> إلى نقاط عيب كل شرطة من هذه، فيباعد كسر الأسطر بين الشرطات حيث يسمح التباعد، ويُبلغ عن السلاسل التي تبقى. وتُحسب أيضًا شرطتان متتاليتان (وهما سلّم كذلك). نص المتن والقوائم والاقتباسات. مع الكسر الأمثل للأسطر فقط.</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>الأسطر التي تسبق سطرًا ينتهي بشرطة ويريدها <code>spacing</code> بلا شرطات، من <code>1</code> إلى <code>10</code>. عند <code>2</code> تُحسب شرطة كل سطرين؛ وعند <code>1</code> شرطتان متتاليتان فقط.</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>كلفة كل شرطة تبعد عن سابقتها أقل من <code>spacingLines</code> أسطر على كسر الأسطر مع <code>spacing: 'avoid'</code>، نقاطَ عيب تُضاف إلى نقاط الفقرة، فوق <code>consecutiveHyphenDemerit</code> لشرطتين متتاليتين. القيمة الافتراضية تجعل الإيقاع أخف من السلّم (<code>ladderPenalty</code>)؛ وعند <code>0</code> تبقى كلها.</td>
     </tr>
   </tbody>
 </table>

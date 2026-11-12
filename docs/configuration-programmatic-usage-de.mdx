@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Programmatische Nutzung',
   description: 'Postext aus Code aufrufen: buildDocument und seine Warnungen, Standardwerte, Schriften, Caches und der Web Worker',
   lang: 'de',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '28 min',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>Die letzte Zeile eines Absatzes trägt nur den Rest eines in der Zeile davor getrennten Wortes: <code>word</code> ist das Wort, wie die beiden Zeilen es drucken, mit Trennstrich. Bei <code>bodyText.hyphenation.lastWord: 'warn'</code> wird jeder Fall gemeldet; bei <code>'avoid'</code> die, die der Zeilenumbruch behielt. Zeigt auf die letzten zwei Zeilen, mit ihrer Seite. Seit postext 1.74.</td>
+      <td>Die Zeilen werden gesetzt, wie sie sind.</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td><code>hyphens</code> Zeilen eines Absatzes enden auf einen Trennstrich, jede höchstens <code>max</code> Zeilen (<code>bodyText.hyphenation.spacingLines</code>) nach der vorigen: <code>lines</code> ist die Zahl der Zeilen von der ersten bis zur letzten, <code>text</code> diese Zeilen. Bei <code>bodyText.hyphenation.spacing: 'warn'</code> wird jede Folge gemeldet; bei <code>'avoid'</code> die, die der Zeilenumbruch behielt. Eine pro Folge; zeigt auf ihre Zeilen, mit der Seite der ersten. Seit postext 1.78.</td>
       <td>Die Zeilen werden gesetzt, wie sie sind.</td>
     </tr>
     <tr>

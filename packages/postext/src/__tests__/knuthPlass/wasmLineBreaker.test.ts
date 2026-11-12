@@ -88,6 +88,7 @@ function paragraph(seed: number): { items: KPItem[]; options: KPOptions } {
     ...(h() < 0.4 ? { ladders: { maxRun: 1 + Math.floor(h() * 3), demerits: [0, 3000, 30000, 1e6][Math.floor(h() * 4)]! } } : {}),
     ...(h() < 0.3 ? { lastWordDemerits: [0, 5000, 30000, 1e6][Math.floor(h() * 4)]! } : {}),
     ...(h() < 0.3 ? { extraHyphenPenalty: 50 * (1 + Math.floor(h() * 10)) } : {}),
+    ...(h() < 0.4 ? { hyphenSpacing: { lines: 1 + Math.floor(h() * 3), demerits: [0, 3000, 10000, 1e6][Math.floor(h() * 4)]! } } : {}),
   };
   return { items, options };
 }
@@ -128,6 +129,9 @@ describe('the WebAssembly line breaker', () => {
       // A hyphen ladder longer than one line keys the exact search too.
       const ladders: KPOptions = { ...options, ladders: { maxRun: 2, demerits: 30000 } };
       expect(computeBreakpoints(items, ladders), `${looseness} ladders`).toEqual(computeBreakpointsTs(items, ladders));
+      // So does hyphen spacing past the line before.
+      const spacing: KPOptions = { ...options, hyphenSpacing: { lines: 3, demerits: 10000 } };
+      expect(computeBreakpoints(items, spacing), `${looseness} spacing`).toEqual(computeBreakpointsTs(items, spacing));
     }
   }, 60_000);
 

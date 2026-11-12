@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Uso programático',
   description: 'Como chamar o Postext a partir do código: o buildDocument e os avisos dele, os valores padrão, as fontes, os caches e o Web Worker',
   lang: 'pt',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '31 min',
   order: 21,
   parent: 'configuration',
@@ -401,6 +401,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
     <tr>
       <td><code>lastWordDivided</code></td>
       <td>A última linha de um parágrafo só leva o resto de uma palavra dividida na linha anterior: <code>word</code> é a palavra como as duas linhas a imprimem, com o hífen. Com <code>bodyText.hyphenation.lastWord: 'warn'</code> todas são informadas; com <code>'avoid'</code>, as que a quebra de linha manteve. Aponta para as duas últimas linhas, com a sua página. Desde o postext 1.74.</td>
+      <td>As linhas são compostas como estão.</td>
+    </tr>
+    <tr>
+      <td><code>hyphenSpacing</code></td>
+      <td><code>hyphens</code> linhas de um parágrafo terminam em hífen, cada uma a <code>max</code> linhas ou menos (<code>bodyText.hyphenation.spacingLines</code>) da anterior: <code>lines</code> é quantas linhas há da primeira à última e <code>text</code>, essas linhas. Com <code>bodyText.hyphenation.spacing: 'warn'</code> todas as séries são informadas; com <code>'avoid'</code>, as que a quebra de linha manteve. Um por série; aponta para as suas linhas, com a página da primeira. Desde o postext 1.78.</td>
       <td>As linhas são compostas como estão.</td>
     </tr>
     <tr>

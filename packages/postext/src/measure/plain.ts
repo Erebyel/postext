@@ -197,6 +197,7 @@ export function measureBlock(
       ...(options.stacks ? { stacks: options.stacks } : {}),
       ...(options.ladders ? { ladders: options.ladders } : {}),
       ...(options.lastWordDemerits ? { lastWordDemerits: options.lastWordDemerits } : {}),
+      ...(options.hyphenSpacing ? { hyphenSpacing: options.hyphenSpacing } : {}),
       ...(options.extraHyphenPenalty ? { extraHyphenPenalty: options.extraHyphenPenalty } : {}),
       ...(options.avoidHyphenAtLines ? { avoidHyphenAtLines: options.avoidHyphenAtLines } : {}),
       ...(options.keepBreaks?.path === 'plain' ? { fixedBreaks: options.keepBreaks.at } : {}),

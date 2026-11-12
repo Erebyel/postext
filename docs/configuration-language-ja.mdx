@@ -6,7 +6,7 @@ export const metadata = {
   description: 'ハイフネーションのパターンと例外、行末不ぞろいのテキスト、文書の言語とその数字と方向、Postextが組める文字体系',
   lang: 'ja',
   lastUpdated: '2026-11-12',
-  readingTime: '23分',
+  readingTime: '24分',
   order: 8,
   parent: 'configuration',
   plainSummary: "このページでは、行の終わりで単語をどう分けるかと、Postextが本の言語をどう知るかを説明します。ハイフネーションを使うかどうかを選び、決して分けてはいけない語を挙げます。行の終わりをそろえず、不ぞろいのままにすることもできます。文書の言語によって、ハイフネーションの規則、図や表の呼び名、数字、文字の方向が決まります。最後の節では、Postextが組める文字の種類と、アラビア文字の扱いを説明します。",
@@ -130,6 +130,24 @@ export const metadata = {
       <td><code>number</code></td>
       <td><code>30000</code></td>
       <td><code>lastWord: 'avoid'</code> のとき、最後の単語の分割が改行処理に加えるデメリット（段落に加算）です。<code>0</code> ではすべて残ります。</td>
+    </tr>
+    <tr>
+      <td><code>spacing</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>近接するハイフン：段落の行がハイフンで終わり、その前の <code>spacingLines</code> 行のどれかもハイフンで終わっていて、ハイフンが一定のリズム（1行おきなど）で並ぶことです。<code>'allow'</code> は改行処理が見つけたとおりに行を組みます。<code>'warn'</code> は同じように組み、そうしたハイフンの並びを1つずつ内容の警告 <code>hyphenSpacing</code> として報告し、Sandbox は「確認」に挙げます。<code>'avoid'</code> はそうしたハイフン1つごとにデメリットに <code>spacingPenalty</code> を加え、語間が許す範囲でハイフンの間隔を空けさせ、残った並びを報告します。2行連続のハイフンも数えます（ハイフンの連続でもあります）。本文、リスト、引用が対象です。最適改行のときだけ働きます。</td>
+    </tr>
+    <tr>
+      <td><code>spacingLines</code></td>
+      <td><code>number</code></td>
+      <td><code>2</code></td>
+      <td>ハイフンで終わる行の前で、<code>spacing</code> がハイフンなしにしたい行数で、<code>1</code> から <code>10</code> まで。<code>2</code> では1行おきのハイフンも数え、<code>1</code> では2行連続だけを数えます。</td>
+    </tr>
+    <tr>
+      <td><code>spacingPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td><code>spacing: 'avoid'</code> のとき、前のハイフンから <code>spacingLines</code> 行以内にあるハイフン1つごとに改行処理に加えるデメリット（段落に加算）で、2行連続には <code>consecutiveHyphenDemerit</code> も加わります。既定値ではリズムは連続（<code>ladderPenalty</code>）より軽く扱われます。<code>0</code> ではすべて残ります。</td>
     </tr>
   </tbody>
 </table>

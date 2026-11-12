@@ -5,7 +5,7 @@ export const metadata = {
   sidebarTitle: 'Programmatic usage',
   description: 'Calling Postext from code: buildDocument and its warnings, defaults, fonts, caches and the Web Worker',
   lang: 'en',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '28 min',
   order: 21,
   parent: 'configuration',
@@ -394,8 +394,8 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>The lines are set as they are.</td>
     </tr>
     <tr>
-      <td><code>hyphenLadder</code></td>
-      <td>More than <code>max</code> lines in a row of a paragraph ending on a hyphen (<code>bodyText.hyphenation.maxConsecutive</code>): <code>lines</code> is how many, <code>text</code> the lines. Under <code>bodyText.hyphenation.ladders: 'warn'</code> every ladder is reported; under <code>'avoid'</code>, the ones the line breaker kept. One per ladder; points at its lines, with the page of the first. Since postext 1.74.</td>
+      <td><code>hyphenLadder</code>, <code>hyphenSpacing</code></td>
+      <td>More than <code>max</code> (<code>maxConsecutive</code>) lines in a row end on a hyphen: <code>lines</code> is how many, <code>text</code> the lines. <code>hyphenSpacing</code>: <code>hyphens</code> hyphens over <code>lines</code> lines, each within <code>max</code> (<code>spacingLines</code>) of the one before. All reported under <code>'warn'</code> (<code>hyphenation.ladders</code>, <code>spacing</code>); under <code>'avoid'</code>, those the breaker kept. Points at the lines and their page. Since postext 1.74 (<code>hyphenSpacing</code> 1.78).</td>
       <td>The lines are set as they are.</td>
     </tr>
     <tr>

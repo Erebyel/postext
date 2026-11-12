@@ -6,6 +6,7 @@
 pub(crate) const NONE: u32 = u32::MAX;
 
 /// Hyphenated lines in a row a node counts up to: past any ladder limit.
+/// Also the most lines since the last hyphen a node counts (none yet).
 pub(crate) const MAX_RUN: u32 = 255;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -35,12 +36,15 @@ pub(crate) struct Node {
     /// Lines in a row ending on a hyphen the chain ends on (0: the line
     /// ending here does not), up to [`MAX_RUN`].
     pub run: u32,
+    /// Lines since the chain's last hyphen (0: the line ending here ends on
+    /// one), up to [`MAX_RUN`] (none yet).
+    pub since: u32,
     pub previous: u32,
 }
 
 impl Node {
     pub fn start() -> Self {
-        Self { position: -1, fitness: 1, previous: NONE, ..Self::default() }
+        Self { position: -1, fitness: 1, since: MAX_RUN, previous: NONE, ..Self::default() }
     }
 }
 

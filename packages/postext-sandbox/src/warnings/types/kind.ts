@@ -138,6 +138,7 @@ export type WarningKind =
   | 'stack'
   | 'hyphenLadder'
   | 'lastWordDivided'
+  | 'hyphenSpacing'
   | 'openerFloat'
   | 'tocGroupSplit'
   | 'codeOverflow'

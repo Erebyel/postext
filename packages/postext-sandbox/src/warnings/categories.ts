@@ -116,6 +116,7 @@ export function warningCategory(kind: WarningPayload['kind']): WarningCategory {
     case 'stack':
     case 'hyphenLadder':
     case 'lastWordDivided':
+    case 'hyphenSpacing':
     case 'openerFloat':
     case 'tocGroupSplit':
     case 'parityCascade':
