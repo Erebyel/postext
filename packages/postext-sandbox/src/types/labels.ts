@@ -3536,6 +3536,10 @@ export interface SandboxLabels {
   // --- Caption styling section ---
   captionStyleSection: string;
   captionGap: string;
+  captionLineHeight: string;
+  captionLineHeightTooltip: string;
+  captionBodyBreaking: string;
+  captionBodyBreakingTooltip: string;
   captionLabelGroup: string;
   captionLabelNumberGap: string;
   captionLabelNumberGapTooltip: string;
