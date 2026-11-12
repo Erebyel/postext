@@ -7,3 +7,4 @@ export * from './version.js';
 export * from './exchange.js';
 export { DEFAULT_BINDING_MEASURES, BUILT_IN_BINDING_PROFILES, DEFAULT_SPINE_TEXT } from '../defaults/output/production.js';
 export * from './compose.js';
+export type * from '../types/output/production.js';

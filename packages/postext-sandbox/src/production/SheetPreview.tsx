@@ -1,0 +1,201 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  PROMO_FORMATS,
+  registerResourceImage,
+  renderPageToCanvas,
+  resolvePrintConfig,
+  type PostextConfig,
+  type ProductionVersion,
+  type Resource,
+  type VDTDocument,
+  type VersionSheets,
+} from 'postext';
+import { createPdfWorker } from 'postext-pdf/worker';
+import { Button, Select, announce } from '../ui/index.js';
+import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
+import { ensureResourceImages } from '../controls/media/resourceImages.js';
+import { buildPdfResourceBytes } from '../viewport/pdf/pdfResourceBytes.js';
+import { downloadBytes } from '../storage/persistence.js';
+import { fill } from '../print/fillTokens.js';
+import { loadPrintProfile, outputProfileBaseUrl } from '../print/printSetup.js';
+import { createPdfFontProvider } from '../viewport/pdf/pdfFontProvider.js';
+import { useLayoutWorker } from '../worker/useLayoutWorker.js';
+import { promoImage } from './promoImage.js';
+import {
+  bookTrimMm,
+  isPromo,
+  coverDocumentInput,
+  pickSheet,
+  sheetFileName,
+  type BookProduction,
+  type CoverDesignSettings,
+  type SheetChoice,
+} from './bookProduction.js';
+import { HEADING, mm1, type Labels } from './productionUi.js';
+
+/** Decode the sheet's own pictures (the barcode) for the canvas. */
+async function registerCoverImages(files: Record<string, Uint8Array>): Promise<void> {
+  await Promise.all(Object.entries(files).map(async ([fileId, bytes]) => {
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new TextDecoder().decode(bytes))}`;
+    await img.decode().catch(() => undefined);
+    registerResourceImage(fileId, img, { vector: true, singleInk: false });
+  }));
+}
+
+const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
+  cover: 'productionSheetCover',
+  jacket: 'productionSheetJacket',
+  endpaperFront: 'productionSheetEndpaperFront',
+  endpaperBack: 'productionSheetEndpaperBack',
+  epub: 'productionSheetEpub',
+  square: 'productionSheetSquare',
+  story: 'productionSheetStory',
+  landscape: 'productionSheetLandscape',
+};
+
+
+export function SheetPreview({ config, version, texts, design, bookResources, sheets, choices, shown, onChoose, labels, fileTitle }: {
+  config: PostextConfig;
+  version: ProductionVersion;
+  texts: BookProduction['texts'];
+  design: CoverDesignSettings | undefined;
+  bookResources: readonly Resource[];
+  sheets: VersionSheets;
+  choices: SheetChoice[];
+  shown: SheetChoice;
+  onChoose: (c: SheetChoice) => void;
+  labels: Labels;
+  fileTitle: string;
+}) {
+  const { build } = useLayoutWorker('preview');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // The layout and what it was laid out from: a sheet chosen since (or
+  // texts typed since) is not the one on show until it is built, and the
+  // PDF only ever writes the sheet the preview shows.
+  const [built, setBuilt] = useState<{ doc: VDTDocument; input: ReturnType<typeof coverDocumentInput>; sheet: SheetChoice } | null>(null);
+  const doc = built?.doc ?? null;
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const sheet = pickSheet(sheets, shown, bookTrimMm(config));
+  const input = useMemo(
+    () => coverDocumentInput(sheet, version, texts, config, design, bookResources),
+    [sheet, version, texts, config, design, bookResources],
+  );
+  const isCaseCover = sheet.kind === 'case';
+
+  useEffect(() => {
+    let alive = true;
+    setFailed(false);
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          await ensureConfigFontsLoaded(input.config, input.markdown);
+          await registerCoverImages(input.cover.files);
+          await ensureResourceImages(input.resources.filter((r) => r.id !== 'isbn-barcode'));
+          const laid = await build({ markdown: input.markdown, resources: input.resources }, input.config);
+          if (alive) setBuilt({ doc: laid, input, sheet: shown });
+        } catch {
+          if (alive) setFailed(true);
+        }
+      })();
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [build, input, shown]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const wrap = wrapRef.current;
+    const page = doc?.pages[0];
+    if (!canvas || !wrap || !doc || !page) return;
+    const width = wrap.clientWidth || 280;
+    const dpr = window.devicePixelRatio || 1;
+    renderPageToCanvas(page, doc, canvas, { scale: (width * dpr) / page.width });
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${(width * page.height) / page.width}px`;
+  }, [doc]);
+
+  const exportImage = async () => {
+    if (!built || built.input !== input || !isPromo(built.sheet)) return;
+    setBusy(true);
+    try {
+      const px = PROMO_FORMATS[built.sheet];
+      const bytes = await promoImage(built.doc, px.width, px.height);
+      if (!bytes) return;
+      const name = sheetFileName(fileTitle, version.name, built.sheet);
+      downloadBytes(bytes, name, 'image/jpeg');
+      announce(fill(labels.productionExported, { name }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    if (!built || built.input !== input) return;
+    if (isPromo(built.sheet)) return exportImage();
+    setBusy(true);
+    announce(labels.productionExporting);
+    try {
+      const print = resolvePrintConfig(config.print);
+      const outputProfile = print.standard !== 'none'
+        ? await loadPrintProfile(print).then((p) => p.bytes, () => undefined)
+        : undefined;
+      const { bytes: resourceBytes, previews: previewBytes } = await buildPdfResourceBytes(built.input.resources.filter((r) => r.id !== 'isbn-barcode'), config);
+      for (const [fileId, bytes] of Object.entries(built.input.cover.files)) resourceBytes.set(fileId, bytes);
+      const worker = createPdfWorker();
+      try {
+        const bytes = await worker.render([built.doc], {
+          fontProvider: createPdfFontProvider(),
+          resourceBytes,
+          ...(previewBytes.size > 0 ? { previewBytes } : {}),
+          ...(config.print ? { print: config.print } : {}),
+          ...(outputProfile ? { outputProfile } : {}),
+          profileBaseUrl: outputProfileBaseUrl(),
+        });
+        const name = sheetFileName(fileTitle, version.name, built.sheet);
+        downloadBytes(bytes, name, 'application/pdf');
+        announce(fill(labels.productionExported, { name }));
+      } finally {
+        worker.dispose();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className={HEADING}>{labels.productionSheet}</h3>
+      {choices.length > 1 && (
+        <Select
+          size="sm"
+          value={shown}
+          onValueChange={onChoose}
+          options={choices.map((c) => ({
+            value: c,
+            label: String(labels[c === 'cover' && isCaseCoverOf(sheets) ? 'productionSheetCase' : SHEET_LABEL[c]]),
+          }))}
+          ariaLabel={labels.productionSheet}
+        />
+      )}
+      <p className="m-0 text-xs text-(--slate)">
+        {(isCaseCover ? labels.productionSheetCase : String(labels[SHEET_LABEL[shown]]))} · {isPromo(shown)
+          ? fill(labels.productionSheetPixels, { width: String(PROMO_FORMATS[shown].width), height: String(PROMO_FORMATS[shown].height) })
+          : fill(labels.productionSheetSize, { width: mm1(sheet.width), height: mm1(sheet.height) })}
+      </p>
+      <div ref={wrapRef} className="w-full overflow-hidden rounded border border-(--rule) bg-white">
+        {failed ? <p className="m-0 p-2 text-xs text-(--slate)">{labels.productionPreviewFailed}</p> : <canvas ref={canvasRef} className="block" />}
+      </div>
+      <div className="flex justify-end">
+        <Button variant="primary" size="sm" disabled={!built || built.input !== input || busy} onClick={() => void exportPdf()}>
+          {busy ? labels.productionExporting : isPromo(shown) ? labels.productionExportImage : labels.productionExportPdf}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+const isCaseCoverOf = (sheets: VersionSheets) => sheets.cover.kind === 'case';

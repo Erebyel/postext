@@ -16,8 +16,7 @@ export type { ComicHtmlPaint, ComicPanelSvgOptions } from './html-backend/htmlCo
 export type { RenderHtmlOptions, HtmlRenderIndex, HtmlRenderIndexPage } from './html-backend/html-backend.js';
 export { dimensionToPx } from './units.js';
 export { computePageTextExtent } from './vdt.js';
-export { columnRuleSegments, footnoteRuleSegments, pageColumnRule } from './paint/columnRule.js';
-export type { FootnoteRuleSegment, ColumnRuleSegment } from './paint/columnRule.js';
+export { columnRuleSegments, footnoteRuleSegments, pageColumnRule, type FootnoteRuleSegment, type ColumnRuleSegment } from './paint/columnRule.js';
 export { cropMarkSegments } from './paint/cropMarks.js';
 export * from './color/index.js';
 export * from './production/index.js';
@@ -503,16 +502,6 @@ export type {
   FolioSurfaceConfig,
   FolioLightingConfig,
   ResolvedFolioConfig,
-  ProductionLength,
-  ProductionLengthStep,
-  TrimMm,
-  PaperProfile,
-  BindingStyle,
-  BindingMeasures,
-  BindingAccepts,
-  BindingProfile,
-  ProductionVersion,
-  ProductionCollection,
   FolioPaperType,
   FolioPaperFinish,
   FolioPaperTexture,
