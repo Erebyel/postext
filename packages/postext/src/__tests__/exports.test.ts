@@ -1116,8 +1116,12 @@ describe("package exports", () => {
       "exportProductionProfiles",
       "importProductionProfiles",
       "BARCODE_RESOURCE_ID",
+      "BARCODE_PDF_FILE_ID",
+      "coverElementRect",
+      "placeCoverElement",
       "coverPage",
       "coverMarkdown",
+      "sheetGuides",
     ]);
   });
 });

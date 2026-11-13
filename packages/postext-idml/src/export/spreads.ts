@@ -222,6 +222,21 @@ export interface SpreadPage {
   left: boolean;
   margins?: { top: number; bottom: number; inside: number; outside: number };
   items: string;
+  /** Ruler guides on the page, pt from its trim's left or top edge. */
+  guides?: { self: string; layer: string; orientation: 'vertical' | 'horizontal'; at: number; color?: string }[];
+}
+
+/** A page's ruler guides, in the spread's frame: a vertical guide at its
+ *  x, a horizontal one at its y (the page stands from −height/2). */
+function guidesXml(p: SpreadPage, index: number): string {
+  return (p.guides ?? []).map((g) => {
+    const location = g.orientation === 'vertical' ? (p.left ? -p.width : 0) + g.at : -p.height / 2 + g.at;
+    return (
+      `<Guide${attr('Self', g.self)} OverriddenPageItemProps=""${attr('Orientation', g.orientation === 'vertical' ? 'Vertical' : 'Horizontal')}${attr('Location', location)} FitToPage="true" ViewThreshold="0" Locked="false"${attr('ItemLayer', g.layer)}${attr('PageIndex', index)} GuideType="Ruler" GuideZone="0">` +
+      (g.color ? `<Properties><GuideColor type="enumeration">${g.color}</GuideColor></Properties>` : '') +
+      '</Guide>'
+    );
+  }).join('');
 }
 
 /** A spread: its pages about the spine (x = 0), then their items. */
@@ -243,6 +258,7 @@ export function spreadXml(id: string, pages: SpreadPage[], index: number, gap: n
     `<Spread${attr('Self', id)} PageTransitionType="None" ShowMasterItems="true"${attr('PageCount', pages.length)}${attr('BindingLocation', binding)} AllowPageShuffle="false"${attr('ItemTransform', `1 0 0 1 0 ${num(index * (height + gap))}`)} FlattenerOverride="Default">` +
     pages.map(pageXml).join('') +
     pages.map((p) => p.items).join('') +
+    pages.map(guidesXml).join('') +
     '</Spread></idPkg:Spread>'
   );
 }

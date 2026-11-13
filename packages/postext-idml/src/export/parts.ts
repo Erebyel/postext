@@ -23,6 +23,8 @@ export interface DesignMapInput {
   /** Sections, hyperlinks and their destinations, written as they are. */
   sections?: string;
   links?: string;
+  /** A second layer, over the first, that holds the ruler guides. */
+  guideLayerId?: string;
 }
 
 export function designMapXml(d: DesignMapInput): string {
@@ -35,6 +37,7 @@ export function designMapXml(d: DesignMapInput): string {
     '<idPkg:Styles src="Resources/Styles.xml"/>' +
     '<idPkg:Preferences src="Resources/Preferences.xml"/>' +
     `<Layer${attr('Self', d.layerId)} Name="Postext" Visible="true" Locked="false" IgnoreWrap="false" ShowGuides="true" LockGuides="false" UI="true" Expendable="true" Printable="true"><Properties><LayerColor type="enumeration">LightBlue</LayerColor></Properties></Layer>` +
+    (d.guideLayerId ? `<Layer${attr('Self', d.guideLayerId)} Name="Guides" Visible="true" Locked="false" IgnoreWrap="false" ShowGuides="true" LockGuides="true" UI="true" Expendable="true" Printable="false"><Properties><LayerColor type="enumeration">Magenta</LayerColor></Properties></Layer>` : '') +
     `<idPkg:MasterSpread src="MasterSpreads/MasterSpread_${d.masterId}.xml"/>` +
     d.spreads.map((id) => `<idPkg:Spread src="Spreads/Spread_${id}.xml"/>`).join('') +
     (d.sections ?? '') +

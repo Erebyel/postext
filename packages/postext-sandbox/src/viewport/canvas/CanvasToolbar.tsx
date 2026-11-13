@@ -1,20 +1,8 @@
 'use client';
 
 import { useEffect, useState, type FocusEventHandler, type ReactNode } from 'react';
-import {
-  ZoomIn,
-  ZoomOut,
-  MoveHorizontal,
-  MoveVertical,
-  File,
-  BookOpen,
-  RefreshCw,
-  ChevronUp,
-  ChevronDown,
-  Pin,
-  PinOff,
-  Search,
-} from 'lucide-react';
+import { BookCopy, BookOpen, ChevronDown, ChevronUp, File, MoveHorizontal, MoveVertical, Pin, PinOff, RefreshCw, Search, ZoomIn, ZoomOut } from 'lucide-react';
+import { openCoverDesigner } from '../../production/coverDesignerStore.js';
 import { useSandbox } from '../../context/SandboxContext.js';
 import { groupPagesIntoRows } from './CanvasPreview/layoutUtils.js';
 import { Tooltip, useUiRtl } from '../../ui/index.js';
@@ -417,6 +405,11 @@ export function CanvasToolbar({
       />
       <ToolbarSeparator />
       <FindToolbarButton />
+      <ToolbarButton
+        icon={<BookCopy size={16} aria-hidden="true" />}
+        label={labels.coverDesignerOpen}
+        onClick={openCoverDesigner}
+      />
       <ToolbarSeparator />
       <ToolbarButton
         icon={<ZoomIn size={16} aria-hidden="true" />}

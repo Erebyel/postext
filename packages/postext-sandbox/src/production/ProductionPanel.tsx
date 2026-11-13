@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Download, Trash2, Upload } from 'lucide-react';
 import {
   BUILT_IN_BINDING_PROFILES,
@@ -25,7 +25,6 @@ import { fill } from '../print/fillTokens.js';
 import {
   COVER_TEXT_ZONES,
   WORKING_BOOK,
-  emptyProduction,
   metadataIsbn,
   metadataTexts,
   newVersion,
@@ -36,18 +35,12 @@ import {
   type CoverTextZone,
   type SheetChoice,
 } from './bookProduction.js';
-import {
-  deleteProfile,
-  getBookProduction,
-  listProfiles,
-  onProductionChange,
-  putBookProduction,
-  putProfiles,
-  type StoredProfile,
-} from './productionStore.js';
+import { deleteProfile, putProfiles } from './productionStore.js';
 import { HEADING, INPUT, mm1, type Labels } from './productionUi.js';
 import { DesignSection, ZoneStylesSection } from './CoverDesignSections.js';
 import { SheetPreview } from './SheetPreview.js';
+import { useBookProduction, useProfiles } from './useProduction.js';
+import { openCoverDesigner } from './coverDesignerStore.js';
 
 const BUILT_IN_LABEL: Record<string, keyof Labels> = {
   perfect: 'productionProfilePerfect',
@@ -69,41 +62,6 @@ const MEASURE_LABEL = {
   trimHeight: 'productionMeasureTrimHeight',
   spine: 'productionMeasureSpine',
 } as const satisfies Record<string, keyof Labels>;
-
-/** The book's production record, kept current and saved on change. */
-function useBookProduction(projectId: string): [BookProduction | null, (next: BookProduction) => void] {
-  const [record, setRecord] = useState<BookProduction | null>(null);
-  useEffect(() => {
-    let alive = true;
-    setRecord(null);
-    getBookProduction(projectId).then(
-      (r) => { if (alive) setRecord(r ?? emptyProduction(projectId)); },
-      () => { if (alive) setRecord(emptyProduction(projectId)); },
-    );
-    return () => { alive = false; };
-  }, [projectId]);
-  // Texts are saved a moment after typing stops; the rest at once.
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const update = useCallback((next: BookProduction) => {
-    setRecord(next);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => { void putBookProduction(next).catch(() => undefined); }, 400);
-  }, []);
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  return [record, update];
-}
-
-function useProfiles(): StoredProfile[] {
-  const [list, setList] = useState<StoredProfile[]>([]);
-  useEffect(() => {
-    let alive = true;
-    const load = () => { listProfiles().then((l) => { if (alive) setList(l); }, () => undefined); };
-    load();
-    const off = onProductionChange(load);
-    return () => { alive = false; off(); };
-  }, []);
-  return list;
-}
 
 function warningText(w: ProductionWarning, labels: Labels): string {
   switch (w.kind) {
@@ -322,6 +280,10 @@ export function ProductionPanel() {
               labels={labels}
               onChange={(design) => update({ ...record, design })}
             />
+          )}
+
+          {version && record && ready && complete && (
+            <Button variant="primary" size="sm" onClick={openCoverDesigner}>{labels.coverDesignerOpen}</Button>
           )}
 
           {version && record && ready && complete && (

@@ -31,6 +31,7 @@ import {
   type TrimMm,
   type VersionSheets,
 } from 'postext';
+import { designShowing, readCoverElements, type CoverElementSetting, type CoverLayer } from './coverLayers.js';
 
 /** The zones whose text the panel edits. */
 export const COVER_TEXT_ZONES = ['front', 'spine', 'back', 'flapFront', 'flapBack'] as const;
@@ -47,6 +48,8 @@ export interface CoverDesignSettings {
   image?: { resourceId: string; area?: 'sheet' | 'front' };
   zones?: Partial<Record<DesignZone, string>>;
   textColor?: string;
+  /** The movable elements, back to front (./coverLayers.ts). */
+  elements?: CoverElementSetting[];
 }
 
 /** A book's production, kept per project. */
@@ -195,7 +198,9 @@ export function coverDesignOf(settings: CoverDesignSettings | undefined): CoverD
     zones.flapFront = ink(z.flaps);
     zones.flapBack = ink(z.flaps);
   }
+  const elements = (settings.elements ?? []).map(({ color, ...e }): NonNullable<CoverDesign['elements']>[number] => ({ ...e, ...(color ? { color: ink(color) } : {}) }));
   const design: CoverDesign = {
+    ...(elements.length > 0 ? { elements } : {}),
     ...(settings.background ? { background: ink(settings.background) } : {}),
     ...(settings.image?.resourceId ? { image: { resourceId: settings.image.resourceId, area: settings.image.area ?? 'sheet' } } : {}),
     ...(Object.keys(zones).length > 0 ? { zones } : {}),
@@ -292,9 +297,11 @@ export function coverDocumentInput(
   config: PostextConfig,
   settings?: CoverDesignSettings,
   bookResources: readonly Resource[] = [],
+  options: { barcodePdf?: boolean; hidden?: ReadonlySet<CoverLayer> } = {},
 ): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
-  const design = isCover ? coverDesignOf(settings) : undefined;
+  const hidden = options.hidden ?? new Set<CoverLayer>();
+  const design = isCover ? coverDesignOf(designShowing(settings, hidden)) : undefined;
   const styles = settings?.zoneStyles ?? {};
   const vertical = (zone: DesignZone) => styles[zone]?.vertical;
   const verticalAlign = Object.fromEntries(
@@ -309,11 +316,13 @@ export function coverDocumentInput(
     ...(version.spineText ? { spineText: version.spineText } : {}),
     ...(design ? { design } : {}),
     ...(Object.keys(verticalAlign).length > 0 ? { verticalAlign } : {}),
+    ...(options.barcodePdf ? { barcodePdf: true } : {}),
   });
-  const picture = design?.image ? bookResources.find((r) => r.id === design.image!.resourceId) : undefined;
+  const pictures = [design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId)]
+    .flatMap((id) => bookResources.filter((r) => r.id === id));
   const textColor = isCover && settings?.textColor ? ink(settings.textColor) : undefined;
   const content: Partial<Record<CoverZoneName, string>> = {};
-  if (isCover) {
+  if (isCover && !hidden.has('texts')) {
     for (const zone of COVER_TEXT_ZONES) {
       const t = texts[zone]?.trim();
       if (t) content[zone] = styledZoneText(t, zone);
@@ -325,7 +334,7 @@ export function coverDocumentInput(
   delete rest.headingStyles;
   return {
     cover,
-    resources: [...cover.resources, ...(picture ? [picture] : [])],
+    resources: [...cover.resources, ...new Set(pictures)],
     config: {
       ...rest,
       paragraphStyles: [...(config.paragraphStyles ?? []), ...coverParagraphStyles(config, isCover ? settings : undefined)],
@@ -340,9 +349,9 @@ export function coverDocumentInput(
 }
 
 /** A file name for a sheet: the book's title, the version and the sheet. */
-export function sheetFileName(title: string, version: string, sheet: SheetChoice): string {
+export function sheetFileName(title: string, version: string, sheet: SheetChoice, ext: string = isPromo(sheet) ? 'jpg' : 'pdf'): string {
   const base = `${title}-${version}-${sheet}`.trim().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '');
-  return `${base || 'cover'}.${isPromo(sheet) ? 'jpg' : 'pdf'}`;
+  return `${base || 'cover'}.${ext}`;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -402,6 +411,8 @@ function readDesign(raw: unknown): CoverDesignSettings | undefined {
     }
     if (Object.keys(styles).length > 0) out.zoneStyles = styles;
   }
+  const elements = readCoverElements(raw.elements);
+  if (elements.length > 0) out.elements = elements;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 

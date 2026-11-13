@@ -73,6 +73,7 @@ describe('book production', () => {
   it('names the file after the book, the version and the sheet', () => {
     expect(sheetFileName('El título', 'Cartoné', 'jacket')).toBe('El-título-Cartoné-jacket.pdf');
     expect(sheetFileName('El título', 'Rústica', 'epub')).toBe('El-título-Rústica-epub.jpg');
+    expect(sheetFileName('El título', 'Rústica', 'cover', 'idml')).toBe('El-título-Rústica-cover.idml');
   });
 
   it('reads a stored record, leaving out what does not read', () => {

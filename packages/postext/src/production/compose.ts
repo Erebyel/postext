@@ -14,7 +14,7 @@ import type { ColorValue, Dimension, PageConfig } from '../types/page.js';
 import type { Resource } from '../types/resources/resources.js';
 import type { ProductionVersion } from '../types/output/production.js';
 import { isbnBarcodeSvg } from './barcodeSvg.js';
-import type { CoverZoneName, ProductionSheet, SheetRect, SheetZone } from './geometry.js';
+import type { CoverZoneName, ProductionSheet, SheetLine, SheetRect, SheetZone } from './geometry.js';
 
 const mm = (value: number): Dimension => ({ value: Math.round(value * 1000) / 1000, unit: 'mm' });
 
@@ -23,6 +23,8 @@ const mm = (value: number): Dimension => ({ value: Math.round(value * 1000) / 10
 const SLOT_ZONES: ReadonlySet<CoverZoneName> = new Set(['flapBack', 'back', 'spine', 'front', 'flapFront', 'pastedown', 'flyleaf']);
 
 export const BARCODE_RESOURCE_ID = 'isbn-barcode';
+/** The file id of the barcode's PDF companion (`barcodePdf`). */
+export const BARCODE_PDF_FILE_ID = `${BARCODE_RESOURCE_ID}.pdf`;
 
 /** The look of a sheet, shared by every version: a ground for the whole
  *  sheet, a picture over it and a ground for each zone. Grounds and pictures that reach an edge of the sheet run into
@@ -35,6 +37,58 @@ export interface CoverDesign {
   /** A ground per zone, over the sheet's and its picture. Endpapers take
    *  their `pastedown` and `flyleaf`. */
   zones?: Partial<Record<CoverZoneName, ColorValue>>;
+  /** The movable elements, back to front, over the grounds and under the
+   *  text. */
+  elements?: CoverElement[];
+}
+
+/** A movable element of a cover's design: one of the book's pictures, or
+ *  a box of colour. Placed by the zone it stands in, so it moves with that
+ *  zone when the spine grows or the binding changes. */
+export interface CoverElement {
+  id: string;
+  kind: 'image' | 'box';
+  /** An image's picture: a bitmap or SVG resource of the book. */
+  resourceId?: string;
+  /** A box's colour. */
+  color?: ColorValue;
+  zone: CoverZoneName;
+  /** Its box, mm from the zone's top-left corner; it may run out of the
+   *  zone, onto the sheet's other zones or into the bleed. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** The zone an element is placed by on a sheet that lacks its own: a flap
+ *  or a joint stands next to its board. */
+const ZONE_STAND_IN: Partial<Record<CoverZoneName, CoverZoneName>> = {
+  flapFront: 'front',
+  flapBack: 'back',
+  jointFront: 'front',
+  jointBack: 'back',
+};
+
+/** Where an element stands on the sheet (mm from the sheet's corner, bleed
+ *  included), or undefined when the sheet has neither its zone nor the one
+ *  that stands in for it. */
+export function coverElementRect(sheet: ProductionSheet, el: CoverElement): SheetRect | undefined {
+  const zone = sheet.zones.find((z) => z.name === el.zone)
+    ?? sheet.zones.find((z) => z.name === ZONE_STAND_IN[el.zone]);
+  if (!zone) return undefined;
+  return { x: zone.rect.x + el.x, y: zone.rect.y + el.y, width: el.width, height: el.height };
+}
+
+/** The element at `rect` (sheet mm) placed by the zone its centre falls in
+ *  (the nearest zone when it is off them all). */
+export function placeCoverElement(sheet: ProductionSheet, el: CoverElement, rect: SheetRect): CoverElement {
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const distance = (r: SheetRect) => Math.hypot(Math.max(r.x - cx, 0, cx - r.x - r.width), Math.max(r.y - cy, 0, cy - r.y - r.height));
+  const zone = sheet.zones.reduce((best, z) => (distance(z.rect) < distance(best.rect) ? z : best), sheet.zones[0]!);
+  const round = (v: number) => Math.round(v * 100) / 100;
+  return { ...el, zone: zone.name, x: round(rect.x - zone.rect.x), y: round(rect.y - zone.rect.y), width: round(rect.width), height: round(rect.height) };
 }
 
 export interface CoverPageOptions {
@@ -51,6 +105,10 @@ export interface CoverPageOptions {
   /** Where each zone's text sits in it, top to bottom. Default `'top'`;
    *  the spine's text is always centred across it. */
   verticalAlign?: Partial<Record<CoverZoneName, 'top' | 'middle' | 'bottom'>>;
+  /** The barcode names a PDF companion ({@link BARCODE_PDF_FILE_ID}),
+   *  whose bytes the host gives: for an output that places a PDF better
+   *  than an SVG (IDML). */
+  barcodePdf?: boolean;
 }
 
 /** A zone's rectangle run out into the bleed at the sheet's edges. */
@@ -72,7 +130,7 @@ const onSheet = (r: SheetRect) => ({
 });
 
 /** The decoration a design draws under the frames: the sheet's ground, its
- *  picture, then each zone's ground. */
+ *  picture, each zone's ground, then the movable elements. */
 function designElements(sheet: ProductionSheet, design: CoverDesign | undefined): DesignElement[] {
   if (!design) return [];
   const out: DesignElement[] = [];
@@ -97,6 +155,16 @@ function designElements(sheet: ProductionSheet, design: CoverDesign | undefined)
     const color = design.zones?.[zone.name];
     if (!color) continue;
     out.push({ kind: 'box', id: `cover-zone-${zone.name}`, placement: onSheet(toBleed(zone.rect, sheet)), style: { backgroundColor: color } } as DesignBoxElement);
+  }
+  for (const el of design.elements ?? []) {
+    const rect = coverElementRect(sheet, el);
+    if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+    const id = `cover-el-${el.id}`;
+    if (el.kind === 'image' && el.resourceId) {
+      out.push({ kind: 'image', id, resourceId: el.resourceId, decorative: true, fit: 'contain', placement: onSheet(rect) });
+    } else if (el.kind === 'box' && el.color) {
+      out.push({ kind: 'box', id, placement: onSheet(rect), style: { backgroundColor: el.color } } as DesignBoxElement);
+    }
   }
   return out;
 }
@@ -202,7 +270,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
       altText: `ISBN ${options.isbn}`,
       createdAt: 0,
       updatedAt: 0,
-      svg: { fileId, width: px(barcode.width), height: px(barcode.height) },
+      svg: { fileId, width: px(barcode.width), height: px(barcode.height), ...(options.barcodePdf ? { pdfFileId: BARCODE_PDF_FILE_ID } : {}) },
     } as Resource);
     files[fileId] = new TextEncoder().encode(barcode.svg);
     // In the back cover's corner by the spine and the foot (Spanish ISBN
@@ -234,4 +302,41 @@ export function coverMarkdown(templateId: string, content: Partial<Record<CoverZ
   }
   parts.push('::::');
   return parts.join('\n\n');
+}
+
+/** A guide across a sheet for whoever finishes it by hand: a fold, score,
+ *  joint or glue line, the edge of a zone, or the edge of a zone's safe
+ *  area. `at` is mm from the left (vertical) or top (horizontal) edge of
+ *  the trim, as the cover page stands. */
+export interface SheetGuide {
+  orientation: 'vertical' | 'horizontal';
+  at: number;
+  kind: SheetLine['kind'] | 'zone' | 'safe';
+}
+
+/** The guides of a sheet, each place once (a line before the zone edge it
+ *  falls on, a zone edge before a safe edge), none on the trim's edges. */
+export function sheetGuides(sheet: ProductionSheet): SheetGuide[] {
+  const eps = 0.01;
+  const t = sheet.trim;
+  const out: SheetGuide[] = [];
+  const add = (orientation: SheetGuide['orientation'], sheetAt: number, kind: SheetGuide['kind']) => {
+    const at = sheetAt - (orientation === 'vertical' ? t.x : t.y);
+    const edge = orientation === 'vertical' ? t.width : t.height;
+    if (at <= eps || at >= edge - eps) return;
+    if (out.some((g) => g.orientation === orientation && Math.abs(g.at - at) < eps)) return;
+    out.push({ orientation, at: Math.round(at * 1000) / 1000, kind });
+  };
+  for (const l of sheet.lines) add('vertical', l.x, l.kind);
+  for (const z of sheet.zones) {
+    add('vertical', z.rect.x, 'zone');
+    add('vertical', z.rect.x + z.rect.width, 'zone');
+  }
+  for (const z of sheet.zones) {
+    add('vertical', z.safe.x, 'safe');
+    add('vertical', z.safe.x + z.safe.width, 'safe');
+    add('horizontal', z.safe.y, 'safe');
+    add('horizontal', z.safe.y + z.safe.height, 'safe');
+  }
+  return out;
 }

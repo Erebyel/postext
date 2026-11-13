@@ -104,6 +104,40 @@ describe('idmlDocument', () => {
     expect(text(f, 'MasterSpreads/MasterSpread_umaster.xml')).toContain('Name="A-Master"');
   });
 
+  it('gives the document the bleed alone, not the room the cut marks stand in', () => {
+    const cut = { enabled: true, bleed: mm(5), markOffset: mm(3), markLength: mm(5) };
+    const f = idml(MD, config({ ...TITLE_BODY, page: { ...TITLE_BODY.page, cutLines: cut } } as Partial<PostextConfig>));
+    const pref = descendants(xml(f, 'Resources/Preferences.xml'), 'DocumentPreference')[0]!;
+    expect(Number(attr(pref, 'DocumentBleedTopOffset'))).toBeCloseTo((5 * 72) / 25.4, 1);
+  });
+
+  it('writes ruler guides on a layer of their own, where the page stands in its spread', () => {
+    const f = idml(MD, TITLE_BODY, {
+      guides: [
+        { page: 0, orientation: 'vertical', at: 25.4, color: 'Magenta' },
+        { page: 0, orientation: 'horizontal', at: 10 },
+        { page: 5, orientation: 'vertical', at: 1 },
+      ],
+    });
+    const layers = descendants(xml(f, 'designmap.xml'), 'Layer');
+    expect(layers.map((l) => attr(l, 'Name'))).toEqual(['Postext', 'Guides']);
+    const spread = xml(f, spreads(f)[0]!);
+    const page = descendants(spread, 'Page')[0]!;
+    const height = Number(attr(page, 'GeometricBounds')!.split(' ')[2]);
+    const guides = descendants(spread, 'Guide');
+    expect(guides).toHaveLength(2);
+    expect(guides.map((g) => attr(g, 'ItemLayer'))).toEqual([attr(layers[1]!, 'Self'), attr(layers[1]!, 'Self')]);
+    expect(attr(guides[0]!, 'Orientation')).toBe('Vertical');
+    expect(Number(attr(guides[0]!, 'Location'))).toBeCloseTo(72, 2);
+    expect(text(f, spreads(f)[0]!)).toContain('<GuideColor type="enumeration">Magenta</GuideColor>');
+    expect(Number(attr(guides[1]!, 'Location'))).toBeCloseTo(-height / 2 + (10 * 72) / 25.4, 2);
+  });
+
+  it('writes no guide layer without guides', () => {
+    const f = idml(MD, TITLE_BODY);
+    expect(descendants(xml(f, 'designmap.xml'), 'Layer')).toHaveLength(1);
+  });
+
   it('declares one page per document in the preferences, as InDesign does, however many spreads follow', () => {
     // With the page count there InDesign adds that many pages less one, empty, before the spreads.
     const f = idml(`${MD}\n# A flow page\n\nSome text.\n`, TITLE_BODY);

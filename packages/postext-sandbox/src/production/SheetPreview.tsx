@@ -23,6 +23,7 @@ import { loadPrintProfile, outputProfileBaseUrl } from '../print/printSetup.js';
 import { createPdfFontProvider } from '../viewport/pdf/pdfFontProvider.js';
 import { useLayoutWorker } from '../worker/useLayoutWorker.js';
 import { promoImage } from './promoImage.js';
+import { buildCoverIdml } from './coverIdml.js';
 import {
   bookTrimMm,
   isPromo,
@@ -36,7 +37,7 @@ import {
 import { HEADING, mm1, type Labels } from './productionUi.js';
 
 /** Decode the sheet's own pictures (the barcode) for the canvas. */
-async function registerCoverImages(files: Record<string, Uint8Array>): Promise<void> {
+export async function registerCoverImages(files: Record<string, Uint8Array>): Promise<void> {
   await Promise.all(Object.entries(files).map(async ([fileId, bytes]) => {
     const img = new Image();
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new TextDecoder().decode(bytes))}`;
@@ -166,6 +167,25 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
     }
   };
 
+  const exportIdml = async () => {
+    if (!built || built.input !== input || isPromo(built.sheet)) return;
+    setBusy(true);
+    announce(labels.productionExporting);
+    try {
+      const file = await buildCoverIdml({
+        sheet,
+        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true }),
+        title: sheetFileName(fileTitle, version.name, built.sheet, 'idml').replace(/\.idml$/, ''),
+      });
+      downloadBytes(file.bytes, file.name, file.mime);
+      announce(fill(labels.productionExported, { name: file.name }));
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) console.error(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="flex flex-col gap-2">
       <h3 className={HEADING}>{labels.productionSheet}</h3>
@@ -189,7 +209,12 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
       <div ref={wrapRef} className="w-full overflow-hidden rounded border border-(--rule) bg-white">
         {failed ? <p className="m-0 p-2 text-xs text-(--slate)">{labels.productionPreviewFailed}</p> : <canvas ref={canvasRef} className="block" />}
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {!isPromo(shown) && (
+          <Button variant="outline" size="sm" disabled={!built || built.input !== input || busy} onClick={() => void exportIdml()}>
+            {labels.productionExportIdml}
+          </Button>
+        )}
         <Button variant="primary" size="sm" disabled={!built || built.input !== input || busy} onClick={() => void exportPdf()}>
           {busy ? labels.productionExporting : isPromo(shown) ? labels.productionExportImage : labels.productionExportPdf}
         </Button>

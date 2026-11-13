@@ -52,7 +52,22 @@ export interface IdmlOptions {
    *  first). With it a face is named as the file names it, which is how
    *  InDesign finds it, and the files come back in `fonts`. */
   fontFile?: (family: string, weight: number, italic: boolean) => Uint8Array | undefined;
+  /** Ruler guides, written on a layer of their own (`Guides`): a cover's
+   *  folds, scores and safe areas, for whoever finishes it in InDesign. */
+  guides?: readonly IdmlRulerGuide[];
   onWarning?: (w: IdmlWarning) => void;
+}
+
+/** A ruler guide across one page, at `at` mm from the left (vertical) or
+ *  the top (horizontal) edge of the page's trim. */
+export interface IdmlRulerGuide {
+  /** The page, from 0, in the order the documents lay them out. */
+  page: number;
+  orientation: 'vertical' | 'horizontal';
+  at: number;
+  /** One of InDesign's UI colours (`Cyan`, `Magenta`, `Red`, `Green`…);
+   *  InDesign's default when unset. */
+  color?: string;
 }
 
 export interface IdmlResult {

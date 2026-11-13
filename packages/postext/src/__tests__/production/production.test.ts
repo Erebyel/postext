@@ -4,6 +4,8 @@ import {
   caseSpineWidth,
   checkProfileAccepts,
   coverMarkdown,
+  BARCODE_PDF_FILE_ID,
+  coverElementRect,
   coverPage,
   ean13CheckDigit,
   ean13Symbol,
@@ -15,10 +17,12 @@ import {
   jacketSheet,
   PROMO_FORMATS,
   pageRunsOf,
+  placeCoverElement,
   promoSheet,
   parseIsbn,
   resolveBindingMeasures,
   resolveLength,
+  sheetGuides,
   signaturePages,
   softcoverSheet,
   spineFromRuns,
@@ -293,6 +297,12 @@ describe('coverPage', () => {
     expect(coverPage(cs).page.cutLines!.foldMarks!.length).toBe(4);
   });
 
+  it('names a PDF companion of the barcode only when asked', () => {
+    const sheet = softcoverSheet(trim, 20, m, false);
+    expect(coverPage(sheet, { isbn: '978-0-306-40615-7' }).resources[0]!.svg!.pdfFileId).toBeUndefined();
+    expect(coverPage(sheet, { isbn: '978-0-306-40615-7', barcodePdf: true }).resources[0]!.svg!.pdfFileId).toBe(BARCODE_PDF_FILE_ID);
+  });
+
   it('draws the barcode in the back cover by the spine and the foot', () => {
     const sheet = softcoverSheet(trim, 20, m, false);
     const cover = coverPage(sheet, { isbn: '978-0-306-40615-7' });
@@ -381,5 +391,75 @@ describe('promoSheet', () => {
     expect(cover.resources).toEqual([]);
     expect((cover.template.decoration!.elements[0] as { placement: { size: { height: { value: number } } } }).placement.size.height.value).toBeCloseTo(240, 3);
     expect(PROMO_FORMATS.story).toEqual({ width: 1080, height: 1920 });
+  });
+});
+
+describe('sheetGuides', () => {
+  const m = resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, trim);
+
+  it('puts a guide on every fold and score, measured from the trim, and none on its edges', () => {
+    const sheet = softcoverSheet(trim, 20, m, true);
+    const guides = sheetGuides(sheet);
+    for (const l of sheet.lines) {
+      expect(guides).toContainEqual(expect.objectContaining({ orientation: 'vertical', at: expect.closeTo(l.x - sheet.trim.x, 3), kind: l.kind }));
+    }
+    expect(guides.every((g) => g.at > 0 && g.at < (g.orientation === 'vertical' ? sheet.trim.width : sheet.trim.height))).toBe(true);
+  });
+
+  it('marks each safe area once, the spine’s included', () => {
+    const sheet = softcoverSheet(trim, 20, m, false);
+    const guides = sheetGuides(sheet);
+    const spine = zone(sheet, 'spine').safe;
+    expect(guides).toContainEqual({ orientation: 'vertical', at: expect.closeTo(spine.x - sheet.trim.x, 3), kind: 'safe' });
+    const top = guides.filter((g) => g.orientation === 'horizontal');
+    expect(top.map((g) => g.at)).toEqual([...new Set(top.map((g) => g.at))]);
+    expect(top).toContainEqual({ orientation: 'horizontal', at: expect.closeTo(zone(sheet, 'front').safe.y - sheet.trim.y, 3), kind: 'safe' });
+  });
+
+  it('marks a case’s joints', () => {
+    const c = resolveBindingMeasures({ id: 'y', name: 'Y', style: 'caseFlat' }, trim);
+    expect(sheetGuides(caseSheet(trim, 26, c)).filter((g) => g.kind === 'joint').length).toBeGreaterThan(0);
+  });
+});
+
+describe('cover elements', () => {
+  const m = resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, trim);
+
+  it('stand by their zone, so they move with it when the spine grows', () => {
+    const el = { id: 'a', kind: 'box' as const, color: { hex: '#ff0000', model: 'hex' as const }, zone: 'front' as const, x: 10, y: 20, width: 30, height: 40 };
+    const thin = coverElementRect(softcoverSheet(trim, 10, m, false), el)!;
+    const thick = coverElementRect(softcoverSheet(trim, 30, m, false), el)!;
+    expect(thick.x - thin.x).toBeCloseTo(20, 3);
+    expect(thick.y).toBe(thin.y);
+  });
+
+  it('fall back to the board when the sheet has no flap', () => {
+    const el = { id: 'a', kind: 'box' as const, zone: 'flapFront' as const, x: 0, y: 0, width: 5, height: 5 };
+    expect(coverElementRect(softcoverSheet(trim, 10, m, false), el)!.x).toBeCloseTo(zone(softcoverSheet(trim, 10, m, false), 'front').rect.x, 3);
+  });
+
+  it('are placed by the zone their centre falls in when moved', () => {
+    const sheet = softcoverSheet(trim, 20, m, false);
+    const back = zone(sheet, 'back').rect;
+    const el = { id: 'a', kind: 'box' as const, zone: 'front' as const, x: 0, y: 0, width: 10, height: 10 };
+    const moved = placeCoverElement(sheet, el, { x: back.x + 5, y: back.y + 5, width: 10, height: 10 });
+    expect(moved).toMatchObject({ zone: 'back', x: 5, y: 5 });
+    expect(coverElementRect(sheet, moved)).toEqual({ x: back.x + 5, y: back.y + 5, width: 10, height: 10 });
+  });
+
+  it('are drawn over the grounds, in order, and a box without a colour is left out', () => {
+    const sheet = softcoverSheet(trim, 20, m, false);
+    const red = { hex: '#ff0000', model: 'hex' as const };
+    const cover = coverPage(sheet, {
+      design: {
+        background: red,
+        elements: [
+          { id: 'pic', kind: 'image', resourceId: 'logo', zone: 'front', x: 1, y: 1, width: 10, height: 10 },
+          { id: 'none', kind: 'box', zone: 'front', x: 1, y: 1, width: 10, height: 10 },
+          { id: 'band', kind: 'box', color: red, zone: 'back', x: 0, y: 0, width: 10, height: 10 },
+        ],
+      },
+    });
+    expect(cover.template.decoration!.elements.map((e) => e.id)).toEqual(['cover-ground', 'cover-el-pic', 'cover-el-band']);
   });
 });

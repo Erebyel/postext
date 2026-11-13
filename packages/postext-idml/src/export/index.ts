@@ -19,7 +19,7 @@
 // `spreads.ts`, and `parts.ts` for the package's fixed parts.
 
 import { strToU8, zipSync, type Zippable } from 'fflate';
-import { flowRectToPage, pageDisplayList, pageIsVertical } from 'postext';
+import { dimensionToPx, flowRectToPage, pageDisplayList, pageIsVertical } from 'postext';
 import { authoredCmykColors } from 'postext/writer';
 import { RESERVED_SWATCH_NAMES } from './colours.js';
 import {
@@ -38,7 +38,9 @@ import { linksXml, sectionsXml } from './document.js';
 import { pageItemsXml, spreadXml, type SpreadPage } from './spreads.js';
 import { keepsLines, type IdmlOptions, type IdmlResult, type Writer } from './writer.js';
 
-export type { IdmlOptions, IdmlResult, IdmlWarning } from './writer.js';
+export type { IdmlOptions, IdmlResult, IdmlRulerGuide, IdmlWarning } from './writer.js';
+
+const GUIDE_LAYER = 'uguides';
 
 /** Write the laid-out documents as an IDML package. */
 export function idmlDocument(options: IdmlOptions): IdmlResult {
@@ -115,11 +117,18 @@ export function idmlDocument(options: IdmlOptions): IdmlResult {
       const margins = area
         ? { top: Math.max(0, (area.y - trim.y) * w.k), bottom: Math.max(0, (trim.y + trim.height - area.y - area.height) * w.k), inside: left ? r : l, outside: left ? l : r }
         : undefined;
-      if (!n) geometry = { width, height: w.pageH, bleed: trim.x * w.k, pages: 0, facing, rightBound, ...(margins ? { margins } : {}) };
+      // The bleed, not the room the trim stands in (the bleed and the cut
+      // marks past it).
+      const cut = doc.config.page.cutLines;
+      const bleed = page.trim && cut.enabled ? Math.min(trim.x, dimensionToPx(cut.bleed, doc.config.page.dpi)) : trim.x;
+      if (!n) geometry = { width, height: w.pageH, bleed: bleed * w.k, pages: 0, facing, rightBound, ...(margins ? { margins } : {}) };
       else if (Math.abs(width - geometry.width) > 0.5 || Math.abs(w.pageH - geometry.height) > 0.5) w.warn('page.size', `Page ${n + 1} has its own size; IDML pages keep it, the document setup shows the first page's`);
       const frames = new Map((vdt.composed?.frames ?? []).map((f) => [f.id, f] as const));
       const items = pageItemsXml(w, page, frames);
-      laid.push({ self: `pg${n}`, name: page.label ?? String(n + 1), ...(page.label !== undefined ? { label: page.label } : {}), width, height: w.pageH, left, ...(margins ? { margins } : {}), items, recto });
+      const guides = (options.guides ?? [])
+        .filter((g) => g.page === n)
+        .map((g) => ({ self: w.next(), layer: GUIDE_LAYER, orientation: g.orientation, at: (g.at * 72) / 25.4, ...(g.color ? { color: g.color } : {}) }));
+      laid.push({ self: `pg${n}`, name: page.label ?? String(n + 1), ...(page.label !== undefined ? { label: page.label } : {}), width, height: w.pageH, left, ...(margins ? { margins } : {}), items, recto, ...(guides.length ? { guides } : {}) });
     }
   }
   // A verso and the recto after it share a spread; a page a spread otherwise.
@@ -137,7 +146,7 @@ export function idmlDocument(options: IdmlOptions): IdmlResult {
   const g = { ...geometry, pages: laid.length };
   const parts = new Map<string, Uint8Array>();
   parts.set('mimetype', strToU8(IDML_MIMETYPE));
-  parts.set('designmap.xml', strToU8(designMapXml({ title: options.title ?? 'Postext', layerId: 'ulayer', masterId: 'umaster', spreads: spreads.map((s) => s.id), stories: w.stories.map((s) => s.id), sections: sectionsXml(w, laid), links: linksXml(w, laid.map((p) => p.self)) })));
+  parts.set('designmap.xml', strToU8(designMapXml({ title: options.title ?? 'Postext', layerId: 'ulayer', masterId: 'umaster', spreads: spreads.map((s) => s.id), stories: w.stories.map((s) => s.id), sections: sectionsXml(w, laid), links: linksXml(w, laid.map((p) => p.self)), ...(laid.some((p) => p.guides) ? { guideLayerId: GUIDE_LAYER } : {}) })));
   parts.set('META-INF/container.xml', strToU8(CONTAINER_XML));
   parts.set('Resources/Graphic.xml', strToU8(graphicXml([...w.swatches.values()])));
   parts.set('Resources/Fonts.xml', strToU8(fontsXml(w.fonts)));

@@ -26,6 +26,7 @@ import { ChapterPaginator } from './viewport/ChapterPaginator.js';
 import { useChapterHashSync } from './viewport/useChapterHashSync.js';
 import { useContourTraces } from './panels/resources/marks/contourTraces.js';
 import { ProductionPanel } from './production/ProductionPanel.js';
+import { CoverDesignerHost } from './production/CoverDesigner.js';
 import { DirectionProvider } from '@base-ui/react/direction-provider';
 import { SandboxGlobalStyles, TooltipProvider, PortalProvider, PortalHost, uiDirectionOf, useUiRtl } from './ui/index.js';
 import { BundleReplaceDialog } from './BundleReplaceDialog.js';
@@ -305,6 +306,7 @@ function SandboxLayout({
           <PortalHost />
           <BundleReplaceDialog />
           <TextMigrationDialog />
+          <CoverDesignerHost />
         </main>
         {activePanel !== null && (
           <section aria-label={panelLabel} className="absolute inset-0 z-30 flex flex-col" style={{ backgroundColor: 'var(--background)' }}>
@@ -351,6 +353,7 @@ function SandboxLayout({
         <PortalHost />
         <BundleReplaceDialog />
         <TextMigrationDialog />
+        <CoverDesignerHost />
       </main>
     </div>
   );
