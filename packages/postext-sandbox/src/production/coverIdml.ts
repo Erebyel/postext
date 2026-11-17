@@ -7,6 +7,7 @@
 import {
   BARCODE_PDF_FILE_ID,
   BARCODE_RESOURCE_ID,
+  MIRROR_RESOURCE_ID,
   buildDocument,
   resolvePrintConfig,
   sheetGuides,
@@ -16,7 +17,7 @@ import {
   type SheetGuide,
   type VDTDocument,
 } from 'postext';
-import type { IdmlRulerGuide, IdmlWarning } from 'postext-idml';
+import type { IdmlExportLayer, IdmlRulerGuide, IdmlWarning } from 'postext-idml';
 import { createPdfWorker } from 'postext-pdf/worker';
 import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
 import { ensureResourceImages } from '../controls/media/resourceImages.js';
@@ -28,6 +29,36 @@ import { buildPdfResourceBytes } from '../viewport/pdf/pdfResourceBytes.js';
 import type { coverDocumentInput } from './bookProduction.js';
 
 type CoverInput = ReturnType<typeof coverDocumentInput>;
+
+/** The names of a cover's InDesign layers (the designer's, in the
+ *  interface's language). */
+export interface CoverLayerNames {
+  background: string;
+  elements: string;
+  mirror: string;
+  texts: string;
+  effects: string;
+  logos: string;
+  finishes: string;
+}
+
+/** A cover's InDesign layers, bottom to top, each holding its designer
+ *  layer's items by their decoration ids (./compose in `postext`): the
+ *  background, the movable elements, the mirror bleed (locked: generated,
+ *  for the printer to see, not to move), the text and the barcode, the
+ *  effects, the logos and the finishes. */
+export function coverIdmlLayers(names: CoverLayerNames): IdmlExportLayer[] {
+  const by = (...prefixes: string[]) => (item: { element?: string }) => !!item.element && prefixes.some((p) => item.element === p || item.element!.startsWith(`${p}-`));
+  return [
+    { name: names.background, color: 'Gray', takes: by('cover-ground', 'cover-image', 'cover-zone') },
+    { name: names.elements, color: 'LightBlue', takes: by('cover-el') },
+    { name: names.mirror, color: 'Orange', locked: true, takes: by(MIRROR_RESOURCE_ID) },
+    { name: names.texts, color: 'Green', default: true, takes: (item) => item.text || by(BARCODE_RESOURCE_ID)(item) },
+    { name: names.effects, color: 'Violet', takes: by('cover-fx') },
+    { name: names.logos, color: 'Red', takes: by('cover-logo') },
+    { name: names.finishes, color: 'Gold', takes: by('cover-finish') },
+  ];
+}
 
 /** The colour InDesign draws each guide in: the lines the sheet is folded
  *  or scored on in magenta, the safe areas in cyan. */
@@ -91,10 +122,12 @@ async function barcodePdf(barcode: Resource, svgBytes: Uint8Array, config: Poste
  *  out here, not on the layout worker: the worker keys resources without
  *  their files' ids, so it would set the barcode the preview holds, with
  *  no PDF beside it. One sheet is quick to lay out. */
-export async function buildCoverIdml({ sheet, input, title, onWarning }: {
+export async function buildCoverIdml({ sheet, input, title, layers, onWarning }: {
   sheet: ProductionSheet;
   input: CoverInput;
   title: string;
+  /** The designer's layers' names: a layer each in the package. */
+  layers?: CoverLayerNames;
   onWarning?: (w: IdmlWarning) => void;
 }): Promise<IdmlExport> {
   const files: Record<string, Uint8Array> = { ...input.cover.files };
@@ -120,6 +153,7 @@ export async function buildCoverIdml({ sheet, input, title, onWarning }: {
     withheld: idmlFontWithheld,
     files,
     guides: coverIdmlGuides(sheet),
+    ...(layers ? { layers: coverIdmlLayers(layers) } : {}),
     ...(onWarning ? { onWarning } : {}),
   });
 }

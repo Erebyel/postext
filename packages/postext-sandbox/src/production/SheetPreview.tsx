@@ -182,6 +182,15 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
         sheet,
         input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true, logos: library, press: true, ...(mirror ? { mirror } : {}) }),
         title: sheetFileName(fileTitle, version.name, built.sheet, 'idml').replace(/\.idml$/, ''),
+        layers: {
+          background: labels.coverLayerBackground,
+          elements: labels.coverLayerElements,
+          mirror: labels.coverLayerMirror,
+          texts: labels.coverLayerTexts,
+          effects: labels.coverLayerEffects,
+          logos: labels.coverLayerLogos,
+          finishes: labels.coverLayerFinishes,
+        },
       });
       downloadBytes(file.bytes, file.name, file.mime);
       announce(fill(labels.productionExported, { name: file.name }));

@@ -55,7 +55,25 @@ export interface IdmlOptions {
   /** Ruler guides, written on a layer of their own (`Guides`): a cover's
    *  folds, scores and safe areas, for whoever finishes it in InDesign. */
   guides?: readonly IdmlRulerGuide[];
+  /** The layers to sort the page items into, bottom to top, instead of
+   *  the one `Postext` layer: each takes the items its `takes` says yes to
+   *  (a design element by its id, a text frame); an item no layer takes
+   *  goes into the one marked `default`, else the first. */
+  layers?: readonly IdmlExportLayer[];
   onWarning?: (w: IdmlWarning) => void;
+}
+
+/** A layer of the IDML document (see `IdmlOptions.layers`). */
+export interface IdmlExportLayer {
+  name: string;
+  /** InDesign's layer colour (`LightBlue`, `Red`, `Green`, `Orange`…).
+   *  Default `LightBlue`. */
+  color?: string;
+  locked?: boolean;
+  /** Default true. */
+  printable?: boolean;
+  default?: boolean;
+  takes?: (item: { element?: string; text: boolean }) => boolean;
 }
 
 /** A ruler guide across one page, at `at` mm from the left (vertical) or
@@ -90,6 +108,12 @@ export interface Writer {
    *  the right of the spine (or alone), minus its width at the left. */
   px: number;
   swatches: Map<string, Swatch>;
+  /** Spot inks by `#rrggbb` (the configuration's spot colours). */
+  spots: Map<string, { name: string; cmyk: { c: number; m: number; y: number; k: number }; overprint: boolean }>;
+  /** The layer the item being written stands on (`ItemLayer`). */
+  layer: string;
+  /** The layer an item goes to (see `IdmlOptions.layers`). */
+  layerOf?: (item: { element?: string; text: boolean }) => string;
   /** Swatch names taken, lower-cased: InDesign's own and those written. */
   swatchNames: Set<string>;
   cmyk: Map<string, { c: number; m: number; y: number; k: number }>;

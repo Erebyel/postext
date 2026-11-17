@@ -144,50 +144,57 @@ function textBlockItems(block: VDTDesignTextBlock, ctx: SlotContext): DisplayIte
 export function slotItems(slot: VDTDesignSlot, ctx: SlotContext): DisplayItem[] {
   const items: DisplayItem[] = [];
   for (const block of slot.blocks) {
-    switch (block.kind) {
-      case 'text':
-        items.push(...textBlockItems(block, ctx));
-        break;
-      case 'rule': {
-        const { x, y, width, height } = block.bbox;
-        const t = block.thicknessPx;
-        const rule = block.direction === 'vertical'
-          ? { x1: x + t / 2, y1: y, x2: x + t / 2, y2: y + height }
-          : { x1: x, y1: y + t / 2, x2: x + width, y2: y + t / 2 };
-        items.push(placeShape(ctx.frame, { kind: 'rule', ...rule, color: block.color, widthPx: t }));
-        break;
-      }
-      case 'box': {
-        const b = block.box;
-        items.push(placeShape(ctx.frame, {
-          kind: 'rect', rect: { ...block.bbox },
-          ...(b.backgroundColor ? { fill: b.backgroundColor } : {}),
-          ...(b.borderColor && b.borderWidthPx > 0 ? { stroke: b.borderColor, strokeWidthPx: b.borderWidthPx } : {}),
-          ...(b.borderRadiusPx ? { radius: b.borderRadiusPx } : {}),
-          box: b,
-        }));
-        break;
-      }
-      case 'image': {
-        const image: Extract<DisplayItem, { kind: 'image' }> = { kind: 'image', rect: { ...block.bbox }, fileId: block.fileId };
-        if (block.imageKind) image.imageKind = block.imageKind;
-        if (block.pdfFileId) image.pdfFileId = block.pdfFileId;
-        if (block.crop) image.crop = { ...block.crop };
-        if (block.tint) image.tint = block.tint;
-        if (block.altText) image.alt = block.altText;
-        // Down a vertical page a picture stands upright on the sheet.
-        items.push(ctx.uprightPictures ? { ...image, rect: mapRect(ctx.frame, image.rect) } : placeImage(ctx.frame, image));
-        break;
-      }
-      case 'path': {
-        const path: Extract<DisplayItem, { kind: 'path' }> = { kind: 'path', bbox: { ...block.bbox }, subpaths: block.subpaths };
-        if (block.fill) path.fill = block.fill;
-        if (block.fillRule === 'evenodd') path.fillRule = 'evenodd';
-        if (block.stroke) path.stroke = block.stroke;
-        items.push(placeShape(ctx.frame, path));
-        break;
-      }
-    }
+    const from = items.length;
+    paintBlock(block, ctx, items);
+    if (block.elementId) for (let i = from; i < items.length; i++) items[i] = { ...items[i]!, element: block.elementId };
   }
   return items;
+}
+
+/** One block's items, pushed onto `items`. */
+function paintBlock(block: VDTDesignSlot['blocks'][number], ctx: SlotContext, items: DisplayItem[]): void {
+  switch (block.kind) {
+    case 'text':
+      items.push(...textBlockItems(block, ctx));
+      break;
+    case 'rule': {
+      const { x, y, width, height } = block.bbox;
+      const t = block.thicknessPx;
+      const rule = block.direction === 'vertical'
+        ? { x1: x + t / 2, y1: y, x2: x + t / 2, y2: y + height }
+        : { x1: x, y1: y + t / 2, x2: x + width, y2: y + t / 2 };
+      items.push(placeShape(ctx.frame, { kind: 'rule', ...rule, color: block.color, widthPx: t }));
+      break;
+    }
+    case 'box': {
+      const b = block.box;
+      items.push(placeShape(ctx.frame, {
+        kind: 'rect', rect: { ...block.bbox },
+        ...(b.backgroundColor ? { fill: b.backgroundColor } : {}),
+        ...(b.borderColor && b.borderWidthPx > 0 ? { stroke: b.borderColor, strokeWidthPx: b.borderWidthPx } : {}),
+        ...(b.borderRadiusPx ? { radius: b.borderRadiusPx } : {}),
+        box: b,
+      }));
+      break;
+    }
+    case 'image': {
+      const image: Extract<DisplayItem, { kind: 'image' }> = { kind: 'image', rect: { ...block.bbox }, fileId: block.fileId };
+      if (block.imageKind) image.imageKind = block.imageKind;
+      if (block.pdfFileId) image.pdfFileId = block.pdfFileId;
+      if (block.crop) image.crop = { ...block.crop };
+      if (block.tint) image.tint = block.tint;
+      if (block.altText) image.alt = block.altText;
+      // Down a vertical page a picture stands upright on the sheet.
+      items.push(ctx.uprightPictures ? { ...image, rect: mapRect(ctx.frame, image.rect) } : placeImage(ctx.frame, image));
+      break;
+    }
+    case 'path': {
+      const path: Extract<DisplayItem, { kind: 'path' }> = { kind: 'path', bbox: { ...block.bbox }, subpaths: block.subpaths };
+      if (block.fill) path.fill = block.fill;
+      if (block.fillRule === 'evenodd') path.fillRule = 'evenodd';
+      if (block.stroke) path.stroke = block.stroke;
+      items.push(placeShape(ctx.frame, path));
+      break;
+    }
+  }
 }

@@ -347,7 +347,19 @@ function pictureOutline(resource: Resource | undefined): { x: number; y: number 
 function finishColor(finish: CoverFinish, mode: 'screen' | 'press'): ColorValue {
   const ink = COVER_FINISH_INKS[finish.kind];
   if (mode === 'screen') return { hex: `${ink.screen}73`, model: 'hex' };
-  return { hex: ink.screen, model: 'spot', spot: { name: finish.ink || ink.ink, cmyk: ink.cmyk, tint: 100, overprint: true } };
+  const name = finish.ink || ink.ink;
+  return { hex: inkHex(ink.screen, name), model: 'spot', spot: { name, cmyk: ink.cmyk, tint: 100, overprint: true } };
+}
+
+/** A screen colour of its own for each ink: the outputs know a spot ink by
+ *  its `#rrggbb`, so two plates of one kind (a gloss and a matt varnish)
+ *  must not share one. The blue channel moves a little, by the name. */
+function inkHex(screen: string, name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const b = parseInt(screen.slice(5, 7), 16);
+  const shifted = (b + (h % 24) - 12 + 256) % 256;
+  return `${screen.slice(0, 5)}${shifted.toString(16).padStart(2, '0')}`;
 }
 
 /** The decoration over the text: the effects, the logos, then (after the

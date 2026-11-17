@@ -19,20 +19,25 @@ export function rectXml(w: Writer, item: Pick<RectItem, 'rect' | 'fill' | 'strok
   if (!fill && !stroke) return '';
   const g = boxGeometry(w, item.rect, item.rotate);
   return (
-    `<Rectangle${attr('Self', w.next())} ContentType="Unassigned" ItemLayer="ulayer"${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
+    `<Rectangle${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)}${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
     `${paintAttrs(w, fill, stroke, item.strokeWidthPx, item.radius)}${attr('Name', name ?? (item.frame ? `${frameName(item.frame)} (box)` : undefined))}>` +
     `${g.geometry}${opacityXml(fill?.opacity ?? stroke?.opacity ?? 1)}</Rectangle>`
   );
 }
 
 /** Fill, stroke (inside the edge) and rounded corners of a box. */
-function paintAttrs(w: Writer, fill: { ref: string } | undefined, stroke: { ref: string } | undefined, strokeWidthPx: number | undefined, radiusPx: number | undefined): string {
+function paintAttrs(w: Writer, fill: { ref: string; overprint?: true } | undefined, stroke: { ref: string; overprint?: true } | undefined, strokeWidthPx: number | undefined, radiusPx: number | undefined): string {
   const radius = radiusPx ? radiusPx * w.k : 0;
   const corners = radius > 0 ? ['TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'].map((c) => `${attr(`${c}CornerOption`, 'RoundedCorner')}${attr(`${c}CornerRadius`, radius)}`).join('') : '';
   return (
     `${attr('FillColor', fill?.ref ?? 'Swatch/None')}${attr('StrokeColor', stroke?.ref ?? 'Swatch/None')}${attr('StrokeWeight', stroke ? strokeWidthPx! * w.k : 0)}` +
-    `${stroke ? ' StrokeAlignment="InsideAlignment"' : ''}${corners}`
+    `${stroke ? ' StrokeAlignment="InsideAlignment"' : ''}${corners}${overprintAttrs(fill, stroke)}`
   );
+}
+
+/** A spot ink that overprints what is under it (a varnish, a foil). */
+export function overprintAttrs(fill: { overprint?: true } | undefined, stroke: { overprint?: true } | undefined): string {
+  return `${fill?.overprint ? ' OverprintFill="true"' : ''}${stroke?.overprint ? ' OverprintStroke="true"' : ''}`;
 }
 
 /** The boxes of a text item's chips (a label's fill, an outline) as
@@ -74,6 +79,7 @@ export function chipFields(w: Writer, item: TextItem, map?: (r: DisplayRect) => 
       const sizePx = field.sizePx ?? (parseCssFont(run.fontString).sizePx || 12);
       out.push(
         fieldXml(w.next, field, value, {
+          layer: w.layer,
           cx: c.x,
           cy: c.y,
           hw: (rect.width * w.k) / 2,
@@ -95,7 +101,7 @@ export function ruleXml(w: Writer, item: Extract<DisplayItem, { kind: 'rule' }>)
   const b = toSpread(w, item.x2, item.y2);
   const dash = item.dash?.length ? ` StrokeType="StrokeStyle/$ID/Dashed"${attr('StrokeDashAndGap', item.dash.map((d) => num(d * w.k)).join(' '))}` : '';
   return (
-    `<GraphicLine${attr('Self', w.next())} ContentType="Unassigned" ItemLayer="ulayer" ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
+    `<GraphicLine${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)} ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
     ` FillColor="Swatch/None"${attr('StrokeColor', stroke.ref)}${attr('StrokeWeight', item.widthPx * w.k)}${dash} LeftLineEnd="None" RightLineEnd="None">` +
     `${pathGeometry([{ points: [pp(a), pp(b)], open: true }])}${opacityXml(stroke.opacity)}</GraphicLine>`
   );
@@ -149,8 +155,8 @@ export function pathXml(w: Writer, item: Extract<DisplayItem, { kind: 'path' }>)
   const cap = item.stroke?.cap === 'round' ? ' EndCap="RoundEndCap"' : item.stroke?.cap === 'square' ? ' EndCap="ProjectingEndCap"' : '';
   const join = item.stroke?.join === 'round' ? ' EndJoin="RoundEndJoin"' : item.stroke?.join === 'bevel' ? ' EndJoin="BevelEndJoin"' : '';
   return (
-    `<Polygon${attr('Self', w.next())} ContentType="Unassigned" ItemLayer="ulayer" ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
-    `${attr('FillColor', fill?.ref ?? 'Swatch/None')}${attr('StrokeColor', stroke?.ref ?? 'Swatch/None')}${attr('StrokeWeight', stroke ? item.stroke!.widthPx * w.k : 0)}${dash}${cap}${join}>` +
+    `<Polygon${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)} ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
+    `${attr('FillColor', fill?.ref ?? 'Swatch/None')}${attr('StrokeColor', stroke?.ref ?? 'Swatch/None')}${attr('StrokeWeight', stroke ? item.stroke!.widthPx * w.k : 0)}${dash}${cap}${join}${overprintAttrs(fill, stroke)}>` +
     `${pathGeometry(paths)}${opacityXml(fill?.opacity ?? stroke?.opacity ?? 1)}</Polygon>`
   );
 }

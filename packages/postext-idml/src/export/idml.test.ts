@@ -133,6 +133,50 @@ describe('idmlDocument', () => {
     expect(Number(attr(guides[1]!, 'Location'))).toBeCloseTo(-height / 2 + (10 * 72) / 25.4, 2);
   });
 
+  it('sorts the page items into the layers asked for, by element, the text on its own', () => {
+    const ground = { kind: 'box', id: 'ground', placement: { ...top(0, 0), size: { width: mm(50), height: mm(50) } }, style: { backgroundColor: hex('#123456') } };
+    const veil = { kind: 'box', id: 'veil', over: true, placement: { ...top(5, 5), size: { width: mm(20), height: mm(20) } }, style: { backgroundColor: hex('#000000') } };
+    const cfg = composedConfig(
+      [{ name: 'body', flow: true, style: 'body', placement: top(10, 10), width: mm(80), height: mm(40) }],
+      [plain('body', 10)],
+      {},
+      { elements: [ground, veil] },
+    );
+    const f = idml(sheet('Some words.'), cfg, {
+      layers: [
+        { name: 'Background', takes: (i) => i.element === 'ground' },
+        { name: 'Mirror', locked: true, printable: true, color: 'Orange', takes: () => false },
+        { name: 'Texts', default: true, takes: (i) => i.text },
+        { name: 'Effects', takes: (i) => i.element === 'veil' },
+      ],
+    });
+    const layers = descendants(xml(f, 'designmap.xml'), 'Layer');
+    expect(layers.map((l) => attr(l, 'Name'))).toEqual(['Background', 'Mirror', 'Texts', 'Effects']);
+    expect(attr(layers[1]!, 'Locked')).toBe('true');
+    const id = (name: string) => attr(layers.find((l) => attr(l, 'Name') === name)!, 'Self');
+    expect(attr(xml(f, 'designmap.xml'), 'ActiveLayer')).toBe(id('Texts'));
+    const spread = xml(f, spreads(f)[0]!);
+    const rects = descendants(spread, 'Rectangle');
+    expect(rects.map((r) => attr(r, 'ItemLayer'))).toEqual([id('Background'), id('Effects')]);
+    expect(descendants(spread, 'TextFrame').map((t) => attr(t, 'ItemLayer'))).toEqual([id('Texts')]);
+  });
+
+  it('writes a spot colour as a spot swatch named after its ink, overprinting where it says so', () => {
+    const varnish = { hex: '#7fb2e5', model: 'spot', spot: { name: 'Barniz UVI', cmyk: { c: 0, m: 0, y: 0, k: 15 }, tint: 100, overprint: true } };
+    const cfg = composedConfig(
+      [{ name: 'body', flow: true, style: 'body', placement: top(10, 10), width: mm(80), height: mm(40) }],
+      [plain('body', 10)],
+      {},
+      { elements: [{ kind: 'box', id: 'gloss', over: true, placement: { ...top(5, 5), size: { width: mm(20), height: mm(20) } }, style: { backgroundColor: varnish } }] },
+    );
+    const f = idml(sheet('Some words.'), cfg);
+    const swatch = descendants(xml(f, 'Resources/Graphic.xml'), 'Color').find((c) => attr(c, 'Name') === 'Barniz UVI')!;
+    expect(attr(swatch, 'Model')).toBe('Spot');
+    expect(attr(swatch, 'ColorValue')).toBe('0 0 0 15');
+    const rect = descendants(xml(f, spreads(f)[0]!), 'Rectangle').find((r) => attr(r, 'FillColor') === attr(swatch, 'Self'))!;
+    expect(attr(rect, 'OverprintFill')).toBe('true');
+  });
+
   it('writes no guide layer without guides', () => {
     const f = idml(MD, TITLE_BODY);
     expect(descendants(xml(f, 'designmap.xml'), 'Layer')).toHaveLength(1);

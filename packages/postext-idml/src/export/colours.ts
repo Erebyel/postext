@@ -1,5 +1,6 @@
-// Colours as swatches: authored CMYK colours become process swatches under
-// their palette names, other colours RGB ones. Swatch names are unique, and
+// Colours as swatches: spot colours become spot swatches named after their
+// ink, authored CMYK colours process swatches under their palette names,
+// other colours RGB ones. Swatch names are unique, and
 // none takes the name of one of InDesign's own (Black, Paper,
 // Registration, None).
 
@@ -32,11 +33,22 @@ const hex2 = (n: number) => Math.round(n).toString(16).padStart(2, '0');
 
 /** A colour as a swatch reference: authored CMYK (palette names when the
  *  configuration names it), else RGB. */
-export function swatch(w: Writer, color: string | undefined): { ref: string; opacity: number } | undefined {
+export function swatch(w: Writer, color: string | undefined): { ref: string; opacity: number; overprint?: true } | undefined {
   const c = parseColor(color);
   if (!c) return undefined;
   if (c.a === 0) return undefined;
   const key = `#${hex2(c.r)}${hex2(c.g)}${hex2(c.b)}`;
+  // A spot ink: a swatch of its own plate, named as the printer knows it.
+  const spot = w.spots.get(key);
+  if (spot) {
+    let s = w.swatches.get(`spot:${spot.name}`);
+    if (!s) {
+      const name = uniqueName(w.swatchNames, spot.name);
+      s = { self: `Color/${name}`, name, space: 'CMYK', value: [spot.cmyk.c, spot.cmyk.m, spot.cmyk.y, spot.cmyk.k], spot: true };
+      w.swatches.set(`spot:${spot.name}`, s);
+    }
+    return { ref: s.self, opacity: c.a, ...(spot.overprint ? { overprint: true as const } : {}) };
+  }
   const cmyk = w.cmyk.get(key);
   if (cmyk && cmyk.c === 0 && cmyk.m === 0 && cmyk.y === 0 && cmyk.k === 100) return { ref: 'Color/Black', opacity: c.a };
   if (cmyk && cmyk.c === 0 && cmyk.m === 0 && cmyk.y === 0 && cmyk.k === 0) return { ref: 'Color/Paper', opacity: c.a };

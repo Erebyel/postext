@@ -80,3 +80,18 @@ describe('cover layers over the text', () => {
     expect(over).toEqual(['box', 'box', 'box']);
   });
 });
+
+describe('finish inks', () => {
+  it('gives each ink a screen colour of its own, so plates of one kind stay apart', () => {
+    const two: CoverDesign = {
+      finishes: [
+        { id: 'a', kind: 'varnish', ink: 'Barniz brillo', shape: { box: { zone: 'front', x: 0, y: 0, width: 10, height: 10 } } },
+        { id: 'b', kind: 'varnish', ink: 'Barniz mate', shape: { box: { zone: 'front', x: 20, y: 0, width: 10, height: 10 } } },
+      ],
+    };
+    const els = coverPage(sheet, { design: two, finishes: 'press' }).template.decoration!.elements as { style: { backgroundColor: { hex: string } } }[];
+    const [a, b] = els.map((e) => e.style.backgroundColor.hex);
+    expect(a).not.toBe(b);
+    expect(a).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});

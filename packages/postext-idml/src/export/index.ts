@@ -19,7 +19,7 @@
 // `spreads.ts`, and `parts.ts` for the package's fixed parts.
 
 import { strToU8, zipSync, type Zippable } from 'fflate';
-import { dimensionToPx, flowRectToPage, pageDisplayList, pageIsVertical } from 'postext';
+import { authoredSpotColors, dimensionToPx, flowRectToPage, pageDisplayList, pageIsVertical, type VDTDocument } from 'postext';
 import { authoredCmykColors } from 'postext/writer';
 import { RESERVED_SWATCH_NAMES } from './colours.js';
 import {
@@ -36,11 +36,25 @@ import {
 } from './parts.js';
 import { linksXml, sectionsXml } from './document.js';
 import { pageItemsXml, spreadXml, type SpreadPage } from './spreads.js';
-import { keepsLines, type IdmlOptions, type IdmlResult, type Writer } from './writer.js';
+import { keepsLines, type IdmlExportLayer, type IdmlOptions, type IdmlResult, type Writer } from './writer.js';
 
-export type { IdmlOptions, IdmlResult, IdmlRulerGuide, IdmlWarning } from './writer.js';
+export type { IdmlExportLayer, IdmlOptions, IdmlResult, IdmlRulerGuide, IdmlWarning } from './writer.js';
 
 const GUIDE_LAYER = 'uguides';
+
+/** The spot inks the documents' configurations name, by `#rrggbb`. */
+function idmlSpots(docs: readonly VDTDocument[]): Writer['spots'] {
+  const spots = authoredSpotColors(docs.flatMap((d) => [d.config, d.printColors]));
+  return new Map([...spots].map(([hex, s]) => [hex, { name: s.name, cmyk: s.cmyk, overprint: s.overprint }]));
+}
+
+/** The layers of `options.layers` with their ids; the default one's id
+ *  (`ulayer` when there are none). */
+function idmlLayers(options: IdmlOptions): { layers: (IdmlExportLayer & { id: string })[]; defaultId: string } {
+  const layers = (options.layers ?? []).map((l, i) => ({ ...l, id: `ulayer${i}` }));
+  const def = layers.find((l) => l.default) ?? layers[0];
+  return { layers, defaultId: def?.id ?? 'ulayer' };
+}
 
 /** Write the laid-out documents as an IDML package. */
 export function idmlDocument(options: IdmlOptions): IdmlResult {
@@ -64,6 +78,8 @@ export function idmlDocument(options: IdmlOptions): IdmlResult {
     swatches: new Map(),
     swatchNames: new Set(RESERVED_SWATCH_NAMES.map((n) => n.toLowerCase())),
     cmyk: authoredCmykColors(first.config),
+    spots: idmlSpots(docs),
+    layer: 'ulayer',
     palette,
     fonts: new Map(),
     faces: new Map(),
@@ -81,6 +97,11 @@ export function idmlDocument(options: IdmlOptions): IdmlResult {
       options.onWarning?.({ code, message });
     },
   };
+
+  // The layers the page items go to (one, `Postext`, unless told).
+  const layering = idmlLayers(options);
+  w.layer = layering.defaultId;
+  w.layerOf = (item) => layering.layers.find((l) => l.takes?.(item))?.id ?? layering.defaultId;
 
   // The pages, each written in the frame of the spread it will stand in.
   const facing = options.spreads ? options.spreads === 'facing' : !!(first.config.page as { margins?: { mirror?: boolean } }).margins?.mirror;
@@ -146,7 +167,7 @@ export function idmlDocument(options: IdmlOptions): IdmlResult {
   const g = { ...geometry, pages: laid.length };
   const parts = new Map<string, Uint8Array>();
   parts.set('mimetype', strToU8(IDML_MIMETYPE));
-  parts.set('designmap.xml', strToU8(designMapXml({ title: options.title ?? 'Postext', layerId: 'ulayer', masterId: 'umaster', spreads: spreads.map((s) => s.id), stories: w.stories.map((s) => s.id), sections: sectionsXml(w, laid), links: linksXml(w, laid.map((p) => p.self)), ...(laid.some((p) => p.guides) ? { guideLayerId: GUIDE_LAYER } : {}) })));
+  parts.set('designmap.xml', strToU8(designMapXml({ title: options.title ?? 'Postext', layerId: layering.defaultId, ...(layering.layers.length ? { layers: layering.layers } : {}), masterId: 'umaster', spreads: spreads.map((s) => s.id), stories: w.stories.map((s) => s.id), sections: sectionsXml(w, laid), links: linksXml(w, laid.map((p) => p.self)), ...(laid.some((p) => p.guides) ? { guideLayerId: GUIDE_LAYER } : {}) })));
   parts.set('META-INF/container.xml', strToU8(CONTAINER_XML));
   parts.set('Resources/Graphic.xml', strToU8(graphicXml([...w.swatches.values()])));
   parts.set('Resources/Fonts.xml', strToU8(fontsXml(w.fonts)));

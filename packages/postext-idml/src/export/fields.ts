@@ -18,6 +18,8 @@ import { escapeXml } from '../xml/write.js';
 import { attr, num } from './parts.js';
 
 export interface FieldPaint {
+  /** The layer the field stands on (`ItemLayer`). Default `ulayer`. */
+  layer?: string;
   /** Sheet box of the field, centre and half sizes in spread pt. */
   cx: number;
   cy: number;
@@ -86,7 +88,7 @@ export function fieldXml(next: () => string, field: FormFieldSpec, value: string
   const list = field.kind === 'choice' ? choices(field.options ?? []) : { attr: '', prop: '' };
   const common =
     `${attr('Self', self)}${attr('Name', field.name)}${attr('Description', field.tooltip ?? '')}${attr('ReadOnly', !!field.readonly)}${attr('Required', !!field.required)}` +
-    ' PrintableInPdf="true" HiddenUntilTriggered="false" VisibilityInPdf="VisibleInPdf" Visible="true" ItemLayer="ulayer" AppliedObjectStyle="ObjectStyle/$ID/[None]"' +
+    ' PrintableInPdf="true" HiddenUntilTriggered="false" VisibilityInPdf="VisibleInPdf" Visible="true" ItemLayer="' + (f.layer ?? 'ulayer') + '" AppliedObjectStyle="ObjectStyle/$ID/[None]"' +
     attr('ItemTransform', `1 0 0 1 ${num(f.cx)} ${num(f.cy)}`);
   const own =
     field.kind === 'checkbox'

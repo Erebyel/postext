@@ -201,9 +201,12 @@ export interface DisplayLine {
 }
 
 /** What every item may carry: the composed-page frame (`VDTFrame.id`) it
- *  is set in, absent outside frames. */
+ *  is set in, absent outside frames; and the design element it paints
+ *  (`DesignElement.id`, a slot's or a template decoration's), for a writer
+ *  that sorts items by what they are (an IDML layer per kind). */
 export interface DisplayItemCommon {
   frame?: string;
+  element?: string;
 }
 
 export type DisplayItem = DisplayItemCommon & (

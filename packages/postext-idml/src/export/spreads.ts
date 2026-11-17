@@ -75,7 +75,7 @@ function textFrameXml(w: Writer, items: TextItem[], frame: VDTFrame | undefined,
   const storyId = link?.story ?? w.next();
   if (!link || link.write) w.stories.push({ id: storyId, xml: storyXml(w, storyId, link?.storyItems ?? withLines, frame) });
   return (
-    `<TextFrame${attr('Self', link?.self ?? w.next())}${attr('ParentStory', storyId)}${attr('PreviousTextFrame', link?.prev ?? 'n')}${attr('NextTextFrame', link?.next ?? 'n')} ContentType="TextType" ItemLayer="ulayer"` +
+    `<TextFrame${attr('Self', link?.self ?? w.next())}${attr('ParentStory', storyId)}${attr('PreviousTextFrame', link?.prev ?? 'n')}${attr('NextTextFrame', link?.next ?? 'n')} ContentType="TextType"${attr('ItemLayer', w.layer)}` +
     `${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0"${attr('Name', frame ? frameName(frame.name) : undefined)}>` +
     g.geometry +
     `<TextFramePreference TextColumnCount="1" FirstBaselineOffset="FixedHeight"${attr('MinimumFirstBaselineOffset', baselineOffset)} VerticalJustification="TopAlign"${attr('InsetSpacing', vertical ? `${num(left)} 0 ${num(right)} ${num(top)}` : `${num(top)} ${num(left)} 0 ${num(right)}`)} AutoSizingType="Off" IgnoreWrap="false"/>` +
@@ -148,6 +148,7 @@ export function pageItemsXml(w: Writer, page: DisplayPage, frames: Map<string, V
   // The paper's own colour, to the edge of the sheet (the bleed with it).
   if (page.background && !/^#f{3}(f{3})?$/i.test(page.background.trim())) out.push(rectXml(w, { rect: { x: 0, y: 0, width: page.width, height: page.height }, fill: page.background }, 'Paper'));
   for (const it of page.items) {
+    if (w.layerOf) w.layer = w.layerOf({ ...(it.element ? { element: it.element } : {}), text: it.kind === 'text' || it.kind === 'table' });
     switch (it.kind) {
       case 'rect':
         out.push(rectXml(w, it));

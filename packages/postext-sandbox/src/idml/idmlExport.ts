@@ -6,7 +6,7 @@
 // `Document fonts` folders.
 
 import { baseFontFamily, documentFontFaces, type PostextConfig, type Resource, type VDTDocument } from 'postext';
-import type { IdmlRulerGuide, IdmlWarning } from 'postext-idml';
+import type { IdmlExportLayer, IdmlRulerGuide, IdmlWarning } from 'postext-idml';
 import { zipSync, type Zippable } from 'fflate';
 import { getBlob } from '../storage/blobStore.js';
 
@@ -145,6 +145,9 @@ export interface IdmlExportInput {
   files?: Readonly<Record<string, Uint8Array>>;
   /** Ruler guides for the package (a cover's folds and safe areas). */
   guides?: readonly IdmlRulerGuide[];
+  /** Layers to sort the page items into (a cover's, one per designer
+   *  layer). */
+  layers?: readonly IdmlExportLayer[];
   onWarning?: (w: IdmlWarning) => void;
 }
 
@@ -186,6 +189,7 @@ export async function buildIdmlExport(input: IdmlExportInput): Promise<IdmlExpor
     ...(faces.length > 0 ? { fontFile: (family: string, weight: number, italic: boolean) => pickIdmlFace(faces, family, weight, italic)?.bytes } : {}),
     ...(input.title ? { title: input.title } : {}),
     ...(input.guides?.length ? { guides: input.guides } : {}),
+    ...(input.layers?.length ? { layers: input.layers } : {}),
     ...(input.onWarning ? { onWarning: input.onWarning } : {}),
   });
   const name = idmlFileName(input.title ?? '');

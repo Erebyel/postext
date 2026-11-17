@@ -100,7 +100,7 @@ export function tableXml(w: Writer, t: TableItem, pageIndex: number): string {
   const box = { ...t.rect, height: t.rect.height + 14 / w.k, width: t.rect.width + 1 / w.k };
   const g = boxGeometry(w, t.rotate ? t.rect : box, t.rotate);
   const frame =
-    `<TextFrame${attr('Self', w.next())}${attr('ParentStory', storyId)} PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType" ItemLayer="ulayer"${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0" Name="Table">` +
+    `<TextFrame${attr('Self', w.next())}${attr('ParentStory', storyId)} PreviousTextFrame="n" NextTextFrame="n" ContentType="TextType"${attr('ItemLayer', w.layer)}${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0" Name="Table">` +
     g.geometry +
     `<TextFramePreference TextColumnCount="1" FirstBaselineOffset="AscentOffset" VerticalJustification="TopAlign"${attr('InsetSpacing', '0 0 0 0')} AutoSizingType="Off" IgnoreWrap="true"/>` +
     '</TextFrame>';

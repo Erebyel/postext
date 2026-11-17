@@ -5522,6 +5522,7 @@ export const DEFAULT_LABELS: SandboxLabels = {
   coverLayerEffects: "Effects",
   coverLayerLogos: "Logos",
   coverLayerFinishes: "Special finishes",
+  coverLayerMirror: "Mirror bleed",
   coverLayerSoon: "Coming later",
   coverLayerShow: "Show the layer __layer__",
   coverLayerHide: "Hide the layer __layer__",

@@ -25,6 +25,14 @@ export interface DesignMapInput {
   links?: string;
   /** A second layer, over the first, that holds the ruler guides. */
   guideLayerId?: string;
+  /** The layers the page items are sorted into, bottom to top, instead of
+   *  the one `Postext` layer (`layerId` then names the default one). */
+  layers?: { id: string; name: string; color?: string; locked?: boolean; printable?: boolean }[];
+}
+
+/** A layer of the document map. */
+function layerXml(id: string, name: string, color: string, locked: boolean, printable: boolean): string {
+  return `<Layer${attr('Self', id)}${attr('Name', name)} Visible="true"${attr('Locked', String(locked))} IgnoreWrap="false" ShowGuides="true" LockGuides="false" UI="true" Expendable="true"${attr('Printable', String(printable))}><Properties><LayerColor type="enumeration">${color}</LayerColor></Properties></Layer>`;
 }
 
 export function designMapXml(d: DesignMapInput): string {
@@ -36,7 +44,9 @@ export function designMapXml(d: DesignMapInput): string {
     '<idPkg:Fonts src="Resources/Fonts.xml"/>' +
     '<idPkg:Styles src="Resources/Styles.xml"/>' +
     '<idPkg:Preferences src="Resources/Preferences.xml"/>' +
-    `<Layer${attr('Self', d.layerId)} Name="Postext" Visible="true" Locked="false" IgnoreWrap="false" ShowGuides="true" LockGuides="false" UI="true" Expendable="true" Printable="true"><Properties><LayerColor type="enumeration">LightBlue</LayerColor></Properties></Layer>` +
+    (d.layers?.length
+      ? d.layers.map((l) => layerXml(l.id, l.name, l.color ?? 'LightBlue', !!l.locked, l.printable !== false)).join('')
+      : layerXml(d.layerId, 'Postext', 'LightBlue', false, true)) +
     (d.guideLayerId ? `<Layer${attr('Self', d.guideLayerId)} Name="Guides" Visible="true" Locked="false" IgnoreWrap="false" ShowGuides="true" LockGuides="true" UI="true" Expendable="true" Printable="false"><Properties><LayerColor type="enumeration">Magenta</LayerColor></Properties></Layer>` : '') +
     `<idPkg:MasterSpread src="MasterSpreads/MasterSpread_${d.masterId}.xml"/>` +
     d.spreads.map((id) => `<idPkg:Spread src="Spreads/Spread_${id}.xml"/>`).join('') +
@@ -100,11 +110,13 @@ export interface Swatch {
   name: string;
   space: 'CMYK' | 'RGB';
   value: number[];
+  /** A spot ink (its own plate) rather than a process colour. */
+  spot?: true;
 }
 
 export function graphicXml(swatches: Swatch[]): string {
   const own = swatches
-    .map((s) => `<Color${attr('Self', s.self)} Model="Process"${attr('Space', s.space)}${attr('ColorValue', s.value.map(num).join(' '))} ColorOverride="Normal" AlternateSpace="NoAlternateColor" AlternateColorValue=""${attr('Name', s.name)} ColorEditable="true" ColorRemovable="true" Visible="true" SwatchCreatorID="7937"/>`)
+    .map((s) => `<Color${attr('Self', s.self)}${attr('Model', s.spot ? 'Spot' : 'Process')}${attr('Space', s.space)}${attr('ColorValue', s.value.map(num).join(' '))} ColorOverride="Normal" AlternateSpace="NoAlternateColor" AlternateColorValue=""${attr('Name', s.name)} ColorEditable="true" ColorRemovable="true" Visible="true" SwatchCreatorID="7937"/>`)
     .join('');
   return (
     `${XML_HEAD}<idPkg:Graphic xmlns:idPkg="${PKG_NS}" DOMVersion="${DOM_VERSION}">` +

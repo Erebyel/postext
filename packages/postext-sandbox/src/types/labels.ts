@@ -5675,6 +5675,7 @@ export interface SandboxLabels {
   coverLayerEffects: string;
   coverLayerLogos: string;
   coverLayerFinishes: string;
+  coverLayerMirror: string;
   coverLayerSoon: string;
   coverLayerShow: string;
   coverLayerHide: string;

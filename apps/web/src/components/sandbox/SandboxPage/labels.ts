@@ -5511,6 +5511,7 @@ export function buildSandboxLabels(t: SandboxTranslator): SandboxLabels {
     coverLayerEffects: t("coverLayerEffects"),
     coverLayerLogos: t("coverLayerLogos"),
     coverLayerFinishes: t("coverLayerFinishes"),
+    coverLayerMirror: t("coverLayerMirror"),
     coverLayerSoon: t("coverLayerSoon"),
     coverLayerShow: t("coverLayerShow"),
     coverLayerHide: t("coverLayerHide"),
