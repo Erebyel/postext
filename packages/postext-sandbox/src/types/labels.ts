@@ -5623,6 +5623,7 @@ export interface SandboxLabels {
   productionFromBookConfirm: string;
   productionDesignMargin: string;
   productionDesignMarginHint: string;
+  productionPrinterSettings: string;
   coverGuideMirror: string;
   coverMirrorSkipped: string;
   productionDesign: string;
@@ -5679,7 +5680,6 @@ export interface SandboxLabels {
   coverLayerSoon: string;
   coverLayerShow: string;
   coverLayerHide: string;
-  coverLayerBackgroundHint: string;
   coverLayerTextsHint: string;
   coverAddPicture: string;
   coverAddBox: string;
@@ -5706,7 +5706,6 @@ export interface SandboxLabels {
   coverLayerEffectsHint: string;
   coverLayerLogosHint: string;
   coverLayerFinishesHint: string;
-  coverLayerEdit: string;
   coverAddVeil: string;
   coverAddLogo: string;
   coverAddLogoFromBook: string;

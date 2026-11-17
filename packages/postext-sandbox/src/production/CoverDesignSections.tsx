@@ -17,7 +17,7 @@ import {
   type TextRole,
   type ZoneStyle,
 } from './bookProduction.js';
-import { HEADING, INPUT, type Labels } from './productionUi.js';
+import { INPUT, type Labels } from './productionUi.js';
 
 const DESIGN_ZONE_LABEL: Record<DesignZone, keyof Labels> = {
   front: 'productionZoneFront',
@@ -55,7 +55,8 @@ function ColorField({ label, value, fallback = '#ffffff', clearLabel, onChange }
 
 /** The cover's look, shared by every version: a ground for the whole
  *  sheet, one of the book's pictures over it, a ground per zone, and the
- *  colour of the text. */
+ *  colour of the text. Its controls alone, without a heading: the Cover
+ *  panel folds them, the designer opens them in its Background layer. */
 export function DesignSection({ design, resources, bookTextHex, labels, onChange }: {
   design: CoverDesignSettings;
   resources: readonly Resource[];
@@ -79,8 +80,7 @@ export function DesignSection({ design, resources, bookTextHex, labels, onChange
     set('zones', Object.keys(zones).length > 0 ? zones : undefined);
   };
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-(--rule) p-3">
-      <h3 className={HEADING}>{labels.productionDesign}</h3>
+    <>
       <p className="m-0 text-xs text-(--slate)">{labels.productionDesignIntro}</p>
       <ColorField label={labels.productionDesignBackground} value={design.background} clearLabel={labels.productionDesignClear} onChange={(v) => set('background', v)} />
       <label className="flex flex-col gap-1 text-xs">
@@ -116,7 +116,7 @@ export function DesignSection({ design, resources, bookTextHex, labels, onChange
         />
       ))}
       <ColorField label={labels.productionDesignTextColor} value={design.textColor} fallback={bookTextHex} clearLabel={labels.productionDesignClear} onChange={(v) => set('textColor', v)} />
-    </section>
+    </>
   );
 }
 
@@ -231,8 +231,7 @@ export function ZoneStylesSection({ design, config, hasFlaps, labels, onChange }
     setStyle(next);
   };
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-(--rule) p-3">
-      <h3 className={HEADING}>{labels.productionStyles}</h3>
+    <>
       <p className="m-0 text-xs text-(--slate)">{labels.productionStylesIntro}</p>
       <SegmentedControl
         size="sm"
@@ -264,7 +263,7 @@ export function ZoneStylesSection({ design, config, hasFlaps, labels, onChange }
           />
         </div>
       )}
-    </section>
+    </>
   );
 }
 

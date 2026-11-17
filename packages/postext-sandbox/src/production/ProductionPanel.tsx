@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Download, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, Download, Trash2, Upload } from 'lucide-react';
 import {
   BUILT_IN_BINDING_PROFILES,
   exportProductionProfiles,
@@ -43,6 +43,7 @@ import { HEADING, INPUT, mm1, type Labels } from './productionUi.js';
 import { LogoLibrary } from './LogoLibrarySection.js';
 import { DesignSection, ZoneStylesSection } from './CoverDesignSections.js';
 import { SheetPreview } from './SheetPreview.js';
+import { Fold } from './Fold.js';
 import { useBookProduction, useProfiles } from './useProduction.js';
 import { openCoverDesigner } from './coverDesignerStore.js';
 
@@ -176,21 +177,16 @@ export function ProductionPanel() {
   const fillFromBook = () => record && update({ ...record, texts: { ...record.texts, ...fromBook } });
   const hasOwnText = !!(record?.texts.front?.trim() || record?.texts.spine?.trim());
 
+  // In the order the work goes: the version, its spine, the sheet with
+  // the designer and the files; then the texts; then what is set once
+  // (the look, the zones' type) and the libraries, folded away.
   return (
     <div className="flex h-full flex-col">
-      <PanelHeader
-        title={labels.navProduction}
-        actions={
-          <>
-            <IconButton label={labels.productionImport} icon={<Upload size={14} />} onClick={() => importRef.current?.click()} />
-            <input ref={importRef} type="file" accept=".json,application/json" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void importFile(e)} />
-          </>
-        }
-      />
+      <PanelHeader title={labels.navProduction} />
       <PanelBody padded>
         <div className="flex flex-col gap-4" style={{ fontSize: 13, lineHeight: '19px' }}>
           <p className="m-0 text-xs font-semibold" style={{ overflowWrap: 'anywhere' }}>{fill(labels.productionForBook, { name: title })}</p>
-          <p className="m-0 text-xs text-(--slate)">{labels.productionIntro}</p>
+          {versions.length === 0 && <p className="m-0 text-xs text-(--slate)">{labels.productionIntro}</p>}
 
           <section className="flex flex-col gap-2">
             <h3 className={HEADING}>{labels.productionVersions}</h3>
@@ -224,19 +220,46 @@ export function ProductionPanel() {
           )}
 
           {version && (
-            <section className="flex flex-col gap-1 rounded-lg border border-(--rule) p-3">
-              <h3 className={HEADING}>{labels.productionSpine}</h3>
+            <section className="flex flex-col gap-1">
               {!complete || !ready ? (
-                <p className="m-0 text-xs text-(--slate)">{labels.productionSpinePending}</p>
+                <>
+                  <h3 className={HEADING}>{labels.productionSpine}</h3>
+                  <p className="m-0 text-xs text-(--slate)">{labels.productionSpinePending}</p>
+                </>
               ) : (
                 <SpineSummary config={config} sheets={ready} labels={labels} />
               )}
               {sheets && sheets.warnings.length > 0 && (
                 <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs">
-                  {sheets.warnings.map((w, i) => <li key={i} className="text-(--slate)">{warningText(w, labels)}</li>)}
+                  {sheets.warnings.map((w, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <AlertTriangle size={13} aria-hidden="true" className="mt-0.5 shrink-0 text-(--brand)" />
+                      <span>{warningText(w, labels)}</span>
+                    </li>
+                  ))}
                 </ul>
               )}
             </section>
+          )}
+
+          {version && record && ready && complete && (
+            <Button variant="primary" size="sm" onClick={openCoverDesigner}>{labels.coverDesignerOpen}</Button>
+          )}
+
+          {version && record && ready && complete && (
+            <SheetPreview
+              config={config}
+              version={version}
+              texts={record.texts}
+              design={record.design}
+              bookResources={bookResources}
+              sheets={ready}
+              choices={choices}
+              shown={shown}
+              onChoose={setChoice}
+              labels={labels}
+              fileTitle={title}
+            />
           )}
 
           {version && record && (
@@ -268,71 +291,55 @@ export function ProductionPanel() {
           )}
 
           {version && record && (
-            <DesignSection
-              design={record.design ?? {}}
-              resources={bookResources}
-              bookTextHex={bookTextHex}
-              labels={labels}
-              onChange={(design) => update({ ...record, design })}
-            />
-          )}
-
-          {version && record && (
-            <ZoneStylesSection
-              design={record.design ?? {}}
-              config={config}
-              hasFlaps={versions.some((v) => v.flaps)}
-              labels={labels}
-              onChange={(design) => update({ ...record, design })}
-            />
-          )}
-
-          {version && record && ready && complete && (
-            <Button variant="primary" size="sm" onClick={openCoverDesigner}>{labels.coverDesignerOpen}</Button>
-          )}
-
-          {version && record && ready && complete && (
-            <SheetPreview
-              config={config}
-              version={version}
-              texts={record.texts}
-              design={record.design}
-              bookResources={bookResources}
-              sheets={ready}
-              choices={choices}
-              shown={shown}
-              onChoose={setChoice}
-              labels={labels}
-              fileTitle={title}
-            />
-          )}
-
-          <section className="flex flex-col gap-2 rounded-lg border border-(--rule) p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="m-0 text-xs font-semibold">{labels.productionLibrary}</h3>
-              {stored.length > 0 && (
-                <IconButton label={labels.productionExportProfiles} icon={<Download size={14} aria-hidden="true" />} onClick={exportFile} />
-              )}
+            <div className="flex flex-col gap-2">
+              <Fold title={labels.productionDesign}>
+                <DesignSection
+                  design={record.design ?? {}}
+                  resources={bookResources}
+                  bookTextHex={bookTextHex}
+                  labels={labels}
+                  onChange={(design) => update({ ...record, design })}
+                />
+              </Fold>
+              <Fold title={labels.productionStyles}>
+                <ZoneStylesSection
+                  design={record.design ?? {}}
+                  config={config}
+                  hasFlaps={versions.some((v) => v.flaps)}
+                  labels={labels}
+                  onChange={(design) => update({ ...record, design })}
+                />
+              </Fold>
             </div>
-            <p className="m-0 text-xs text-(--slate)">{labels.productionLibraryIntro}</p>
-            {stored.length === 0 && <p className="m-0 text-xs text-(--slate)">{labels.productionLibraryEmpty}</p>}
-            <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs">
-              {stored.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate">
-                    {p.kind === 'paper' ? `${labels.productionPaperProfile}: ` : `${labels.productionBinding}: `}
-                    {p.profile.name}
-                    {p.kind === 'paper' && p.profile.grammage ? ` · ${p.profile.grammage} g/m²` : ''}
-                  </span>
-                  <ConfirmPopover message={`${labels.productionDeleteProfile}: ${p.profile.name}`} confirmLabel={labels.productionDeleteProfile} onConfirm={() => void deleteProfile(p.id)}>
-                    {({ open }) => <IconButton label={`${labels.productionDeleteProfile}: ${p.profile.name}`} icon={<Trash2 size={14} aria-hidden="true" />} onClick={open} />}
-                  </ConfirmPopover>
-                </li>
-              ))}
-            </ul>
-          </section>
+          )}
 
-          <LogoLibrary labels={labels} />
+          <div className="flex flex-col gap-2">
+            <Fold title={labels.productionLibrary} note={stored.length > 0 ? String(stored.length) : undefined}>
+              <p className="m-0 text-xs text-(--slate)">{stored.length === 0 ? labels.productionLibraryEmpty : labels.productionLibraryIntro}</p>
+              <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs">
+                {stored.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate">
+                      {p.kind === 'paper' ? `${labels.productionPaperProfile}: ` : `${labels.productionBinding}: `}
+                      {p.profile.name}
+                      {p.kind === 'paper' && p.profile.grammage ? ` · ${p.profile.grammage} g/m²` : ''}
+                    </span>
+                    <ConfirmPopover message={`${labels.productionDeleteProfile}: ${p.profile.name}`} confirmLabel={labels.productionDeleteProfile} onConfirm={() => void deleteProfile(p.id)}>
+                      {({ open }) => <IconButton label={`${labels.productionDeleteProfile}: ${p.profile.name}`} icon={<Trash2 size={14} aria-hidden="true" />} onClick={open} />}
+                    </ConfirmPopover>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" icon={<Upload size={13} />} onClick={() => importRef.current?.click()}>{labels.productionImport}</Button>
+                {stored.length > 0 && (
+                  <Button variant="outline" size="sm" icon={<Download size={13} />} onClick={exportFile}>{labels.productionExportProfiles}</Button>
+                )}
+              </div>
+              <input ref={importRef} type="file" accept=".json,application/json" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void importFile(e)} />
+            </Fold>
+            <LogoLibrary labels={labels} />
+          </div>
         </div>
       </PanelBody>
     </div>
@@ -373,7 +380,7 @@ function VersionForm({ version, labels, bindingOptions, library, trim, onChange,
   };
 
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-(--rule) p-3">
+    <section className="flex flex-col gap-2">
       <div className="flex items-end gap-2">
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
           {labels.productionVersionName}
@@ -426,35 +433,37 @@ function VersionForm({ version, labels, bindingOptions, library, trim, onChange,
           ariaLabel={labels.productionSpineDirection}
         />
       </div>
-      <label className="flex flex-col gap-1 text-xs">
-        {labels.productionSpineOverride}
-        <input
-          type="number"
-          min={0}
-          step={0.1}
-          value={override}
-          onChange={(e) => {
-            setOverride(e.target.value);
-            const n = Number(e.target.value);
-            onChange(e.target.value.trim() && Number.isFinite(n) && n > 0 ? { ...version, spineOverride: n } : without('spineOverride'));
-          }}
-          className={INPUT}
-        />
-        <span className="text-(--slate)">{labels.productionSpineOverrideHint}</span>
-      </label>
-      <label className="flex flex-col gap-1 text-xs">
-        {labels.productionDesignMargin}
-        <input
-          type="number"
-          min={0}
-          step={0.5}
-          value={margin}
-          placeholder={profileMargin !== undefined ? mm1(profileMargin) : ''}
-          onChange={(e) => setMarginOverride(e.target.value)}
-          className={INPUT}
-        />
-        <span className="text-(--slate)">{labels.productionDesignMarginHint}</span>
-      </label>
+      <Fold title={labels.productionPrinterSettings} note={[version.spineOverride !== undefined ? `${labels.productionSpineOverride}: ${mm1(version.spineOverride)}` : '', version.overrides?.designMargin !== undefined ? `${labels.productionDesignMargin}: ${mm1(version.overrides.designMargin)}` : ''].filter(Boolean).join(' · ') || undefined} defaultOpen={version.spineOverride !== undefined}>
+        <label className="flex flex-col gap-1 text-xs">
+          {labels.productionSpineOverride}
+          <input
+            type="number"
+            min={0}
+            step={0.1}
+            value={override}
+            onChange={(e) => {
+              setOverride(e.target.value);
+              const n = Number(e.target.value);
+              onChange(e.target.value.trim() && Number.isFinite(n) && n > 0 ? { ...version, spineOverride: n } : without('spineOverride'));
+            }}
+            className={INPUT}
+          />
+          <span className="text-(--slate)">{labels.productionSpineOverrideHint}</span>
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          {labels.productionDesignMargin}
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={margin}
+            placeholder={profileMargin !== undefined ? mm1(profileMargin) : ''}
+            onChange={(e) => setMarginOverride(e.target.value)}
+            className={INPUT}
+          />
+          <span className="text-(--slate)">{labels.productionDesignMarginHint}</span>
+        </label>
+      </Fold>
     </section>
   );
 }
@@ -468,11 +477,13 @@ function SpineSummary({ config, sheets, labels }: {
   const s = sheets.spine;
   return (
     <>
-      <p className="m-0 text-xs">
+      <h3 className={HEADING}>{labels.productionSpine}</h3>
+      <p className="m-0 text-base font-semibold tabular-nums">{mm1(s.used)} mm</p>
+      <p className="m-0 text-xs text-(--slate)">
         {fill(labels.productionSpineSummary, {
           pages: String(s.pages),
           grammage: String(paper.grammage),
-          bulk: String(paper.bulk),
+          bulk: paper.bulk.toLocaleString(),
           block: mm1(s.block),
           spine: mm1(s.used),
         })}

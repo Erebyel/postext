@@ -7,15 +7,16 @@
  * printer — and from there to editing, and back. Editing works in fixed
  * layers, bottom to top (./coverLayers.ts): the background, the movable
  * elements, the editable texts, the effects, the logos and the finishes.
- * Each layer can be hidden while working, and the canvas moves the items
- * of the one being edited. It is opened from the Cover panel and from the
+ * Each layer can be hidden while working; one is open at a time (the
+ * background with the cover's look, an item layer to edit), and the
+ * canvas moves the items of the one being edited. It is opened from the Cover panel and from the
  * book's preview (./coverDesignerStore.ts).
  */
 
 import { useMemo, useState } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Image as ImageIcon, Pencil, Sparkles, Square, Stamp, Trash2, X } from 'lucide-react';
-import { COVER_FINISH_INKS, type CoverFinishKind, type CoverZoneName, type Resource } from 'postext';
+import { ArrowDown, ArrowUp, ChevronRight, Eye, EyeOff, Image as ImageIcon, Sparkles, Square, Stamp, Trash2, X } from 'lucide-react';
+import { COVER_FINISH_INKS, resolveBodyTextConfig, resolveColorValue, type CoverFinishKind, type CoverZoneName, type Resource } from 'postext';
 import { useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
 import { Button, IconButton, NumberField, SegmentedControl, Select, cn, usePortalContainer } from '../ui/index.js';
 import { POPUP_Z_INDEX } from '../ui/layout/surface.js';
@@ -41,6 +42,7 @@ import {
   type ItemLayer,
 } from './coverLayers.js';
 import { CoverCanvas } from './CoverCanvas.js';
+import { DesignSection } from './CoverDesignSections.js';
 import { closeCoverDesigner, useCoverDesignerOpen } from './coverDesignerStore.js';
 import { DEFAULT_LOGO_CLEARANCE, logoResourceId, type LogoRecord } from './logoLibrary.js';
 import { useCoverWorkspace, useLogos, useMirror } from './useProduction.js';
@@ -56,7 +58,6 @@ const LAYER_LABEL: Record<CoverLayer, keyof Labels> = {
 };
 
 const LAYER_HINT: Partial<Record<CoverLayer, keyof Labels>> = {
-  background: 'coverLayerBackgroundHint',
   texts: 'coverLayerTextsHint',
   effects: 'coverLayerEffectsHint',
   logos: 'coverLayerLogosHint',
@@ -100,9 +101,14 @@ function CoverDesigner() {
   const [mode, setMode] = useState<'preview' | 'edit'>('preview');
   const [hidden, setHidden] = useState<ReadonlySet<CoverLayer>>(new Set());
   const [active, setActive] = useState<ItemLayer>('elements');
+  const [open, setOpen] = useState<CoverLayer>('elements');
   const [selected, setSelected] = useState<string | null>(null);
 
   const design = useMemo(() => record?.design ?? {}, [record]);
+  const bookTextHex = useMemo(() => {
+    const color = resolveBodyTextConfig(config.bodyText, config.locale).color;
+    return resolveColorValue(color, config.colorPalette, { hex: '#000000', model: 'hex' }).hex.slice(0, 7).toLowerCase();
+  }, [config]);
   const elements = useMemo(() => design.elements ?? [], [design]);
   const effects = useMemo(() => design.effects ?? [], [design]);
   const logos = useMemo(() => design.logos ?? [], [design]);
@@ -151,6 +157,7 @@ function CoverDesigner() {
     const list = layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes;
     setDesign(layer, [...list, item]);
     setActive(layer);
+    setOpen(layer);
     setSelected(item.id);
     setMode('edit');
   };
@@ -160,10 +167,15 @@ function CoverDesigner() {
     else next.add(layer);
     setHidden(next);
   };
-  const activate = (layer: ItemLayer) => {
-    setActive(layer);
-    setSelected(null);
-    setMode('edit');
+  // One layer open at a time, the rest a line each: an item layer opens
+  // to be edited, the background to show its controls.
+  const openLayer = (layer: CoverLayer) => {
+    setOpen(layer);
+    if (isItemLayer(layer) && layer !== active) {
+      setActive(layer);
+      setSelected(null);
+      setMode('edit');
+    }
   };
   const zoneName = (z: CoverZoneName) => (ZONE_LABEL[z] ? String(labels[ZONE_LABEL[z]!]) : z);
   const logoName = (l: CoverLogoSetting) => library.find((x) => l.logoId === x.id)?.name ?? l.resourceId ?? labels.coverItemLogo;
@@ -216,32 +228,40 @@ function CoverDesigner() {
                 {[...COVER_LAYERS].reverse().map((layer) => {
                   const name = String(labels[LAYER_LABEL[layer]]);
                   const editing = isItemLayer(layer) && layer === active && mode === 'edit';
+                  const expanded = layer === open;
                   const hint = LAYER_HINT[layer];
                   const list = layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : layer === 'finishes' ? finishes : [];
                   return (
-                    <section key={layer} className={cn('flex flex-col gap-2 rounded-md border p-2', editing ? 'border-(--brand)' : 'border-(--rule)')}>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium">{name}</span>
-                        <span className="flex items-center gap-1">
-                          {isItemLayer(layer) && !editing && (
-                            <IconButton label={fill(labels.coverLayerEdit, { layer: name })} icon={<Pencil size={13} aria-hidden="true" />} onClick={() => activate(layer)} />
-                          )}
-                          <IconButton
-                            label={fill(hidden.has(layer) ? labels.coverLayerShow : labels.coverLayerHide, { layer: name })}
-                            icon={hidden.has(layer) ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
-                            onClick={() => toggle(layer)}
-                          />
-                        </span>
+                    <section key={layer} className={cn('flex flex-col gap-2 rounded-md border', expanded ? 'p-2' : 'px-2 py-1', editing ? 'border-(--brand)' : 'border-(--rule)')}>
+                      <div className="flex items-center justify-between gap-1">
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          onClick={() => openLayer(layer)}
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded border-0 bg-transparent px-0 py-0.5 text-start text-(--foreground) hover:text-(--brand)"
+                        >
+                          <ChevronRight size={13} aria-hidden="true" className="shrink-0 text-(--slate) rtl:-scale-x-100" style={{ transform: expanded ? 'rotate(90deg)' : undefined, transition: 'transform 200ms ease' }} />
+                          <span className={cn('truncate font-medium', hidden.has(layer) && 'text-(--slate) line-through')}>{name}</span>
+                          {list.length > 0 && <span className="text-(--slate) tabular-nums">{list.length}</span>}
+                        </button>
+                        <IconButton
+                          label={fill(hidden.has(layer) ? labels.coverLayerShow : labels.coverLayerHide, { layer: name })}
+                          icon={hidden.has(layer) ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                          onClick={() => toggle(layer)}
+                        />
                       </div>
-                      {hint && <p className="m-0 text-(--slate)">{String(labels[hint])}</p>}
+                      {expanded && hint && <p className="m-0 text-(--slate)">{String(labels[hint])}</p>}
+                      {expanded && layer === 'background' && record && (
+                        <DesignSection design={design} resources={bookResources} bookTextHex={bookTextHex} labels={labels} onChange={(d) => update({ ...record, design: d })} />
+                      )}
 
-                      {layer === 'elements' && (
+                      {expanded && layer === 'elements' && (
                         <>
                           <PictureAdder pictures={pictures} labels={labels} onPick={(p) => add('elements', newElement(sheet, 'image', p))} />
                           <Button variant="outline" size="sm" onClick={() => add('elements', newElement(sheet, 'box'))}>{labels.coverAddBox}</Button>
                         </>
                       )}
-                      {layer === 'effects' && (
+                      {expanded && layer === 'effects' && (
                         <>
                           <PictureAdder pictures={pictures} labels={labels} onPick={(p) => add('effects', newElement(sheet, 'image', p))} />
                           <Button variant="outline" size="sm" onClick={() => { const box = newElement(sheet, 'box', undefined, '#000000'); add('effects', box ? ({ ...box, opacity: 0.4 } as CoverElementSetting) : undefined); }}>
@@ -249,7 +269,7 @@ function CoverDesigner() {
                           </Button>
                         </>
                       )}
-                      {layer === 'logos' && (
+                      {expanded && layer === 'logos' && (
                         <LogoAdder
                           library={library}
                           pictures={pictures}
@@ -258,7 +278,7 @@ function CoverDesigner() {
                           onBook={(p) => add('logos', newLogo(sheet, { resourceId: p.id }, pictureAspect(p), DEFAULT_LOGO_CLEARANCE))}
                         />
                       )}
-                      {layer === 'finishes' && (
+                      {expanded && layer === 'finishes' && (
                         <Select
                           size="sm"
                           value=""
@@ -268,7 +288,7 @@ function CoverDesigner() {
                         />
                       )}
 
-                      {isItemLayer(layer) && list.length > 0 && (
+                      {expanded && isItemLayer(layer) && list.length > 0 && (
                         <ul className="m-0 flex list-none flex-col gap-1 p-0">
                           {[...list].reverse().map((item) => (
                             <li key={item.id}>

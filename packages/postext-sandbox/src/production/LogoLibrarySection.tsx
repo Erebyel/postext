@@ -7,8 +7,8 @@
  */
 
 import { useEffect, useMemo, useRef } from 'react';
-import { Download, Trash2, Upload } from 'lucide-react';
-import { ConfirmPopover, IconButton, NumberField, Select, announce } from '../ui/index.js';
+import { Download, Plus, Trash2, Upload } from 'lucide-react';
+import { Button, ConfirmPopover, IconButton, NumberField, Select, announce } from '../ui/index.js';
 import { downloadBytes } from '../storage/persistence.js';
 import { fill } from '../print/fillTokens.js';
 import {
@@ -25,6 +25,7 @@ import {
 import { deleteLogo, putLogos } from './productionStore.js';
 import { useLogos } from './useProduction.js';
 import { INPUT, type Labels } from './productionUi.js';
+import { Fold } from './Fold.js';
 
 const GROUP_LABEL: Record<LogoGroup, keyof Labels> = {
   publisher: 'productionLogoGroupPublisher',
@@ -96,28 +97,11 @@ export function LogoLibrary({ labels }: { labels: Labels }) {
   const change = (logo: LogoRecord, patch: Partial<LogoRecord>) => void putLogos([{ ...logo, ...patch, updatedAt: Date.now() }]);
 
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-(--rule) p-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="m-0 text-xs font-semibold">{labels.productionLogos}</h3>
-        <span className="flex items-center gap-1">
-          <IconButton label={labels.productionLogoUpload} icon={<Upload size={14} aria-hidden="true" />} onClick={() => uploadRef.current?.click()} />
-          <IconButton label={labels.productionLogoImport} icon={<Upload size={14} aria-hidden="true" className="rotate-180" />} onClick={() => importRef.current?.click()} />
-          {logos.length > 0 && (
-            <IconButton
-              label={labels.productionLogoExport}
-              icon={<Download size={14} aria-hidden="true" />}
-              onClick={() => downloadBytes(JSON.stringify(exportLogos(logos)), 'logos.postext-logos.json', 'application/json')}
-            />
-          )}
-        </span>
-        <input ref={uploadRef} type="file" multiple accept="image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
-        <input ref={importRef} type="file" accept=".json,application/json" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void importFile(e)} />
-      </div>
-      <p className="m-0 text-xs text-(--slate)">{labels.productionLogosIntro}</p>
-      {logos.length === 0 && <p className="m-0 text-xs text-(--slate)">{labels.productionLogoEmpty}</p>}
+    <Fold title={labels.productionLogos} note={logos.length > 0 ? String(logos.length) : undefined}>
+      <p className="m-0 text-xs text-(--slate)">{logos.length === 0 ? labels.productionLogoEmpty : labels.productionLogosIntro}</p>
       <ul className="m-0 flex list-none flex-col gap-2 p-0 text-xs">
         {logos.map((logo) => (
-          <li key={logo.id} className="flex flex-col gap-1 rounded border border-(--rule) p-2">
+          <li key={logo.id} className="flex flex-col gap-1 border-t border-(--rule) pt-2">
             <div className="flex items-center gap-2">
               <Thumb logo={logo} />
               <input
@@ -147,6 +131,22 @@ export function LogoLibrary({ labels }: { labels: Labels }) {
           </li>
         ))}
       </ul>
-    </section>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" icon={<Plus size={13} />} onClick={() => uploadRef.current?.click()}>{labels.productionLogoUpload}</Button>
+        <Button variant="outline" size="sm" icon={<Upload size={13} />} onClick={() => importRef.current?.click()}>{labels.productionLogoImport}</Button>
+        {logos.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Download size={13} />}
+            onClick={() => downloadBytes(JSON.stringify(exportLogos(logos)), 'logos.postext-logos.json', 'application/json')}
+          >
+            {labels.productionLogoExport}
+          </Button>
+        )}
+      </div>
+      <input ref={uploadRef} type="file" multiple accept="image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
+      <input ref={importRef} type="file" accept=".json,application/json" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void importFile(e)} />
+    </Fold>
   );
 }
