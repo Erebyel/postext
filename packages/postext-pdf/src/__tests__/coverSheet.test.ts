@@ -156,4 +156,32 @@ describe('cover sheets as PDF', () => {
     expect(inks).toContain('Barniz UVI');
     expect(overprints).toBe(true);
   });
+
+  it('draws a case’s mirror bleed as vectors, its pictures embedded as they are', async () => {
+    const v = sheetsOf({ id: 'carton', name: 'Cartoné', binding: 'case-flat' });
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+    const cover = coverPage(v.cover, {
+      mirrorMargin: v.measures.designMargin,
+      mirrorPictures: { art: { href: `data:image/png;base64,${png}`, width: 1, height: 1 } },
+      design: { background: { hex: '#123456', model: 'hex' }, image: { resourceId: 'art', area: 'front' } },
+    });
+    expect(cover.designed).toBeDefined();
+    const config: PostextConfig = { page: { ...cover.page, dpi: 150 }, header: { elements: [] }, footer: { elements: [] }, pageTemplates: [cover.template] };
+    const doc = buildDocument({ markdown: coverMarkdown('cover', text, cover.slots), resources: cover.resources }, config);
+    const warnings: { kind: string }[] = [];
+    const bytes = await renderToPdf(doc, { fontProvider, resourceBytes: (id: string) => cover.files[id], onWarning: (w) => void warnings.push(w) });
+    expect(warnings.filter((w) => w.kind === 'missingImage')).toEqual([]);
+    const pdf = await PDFDocument.load(bytes);
+    // The mirror's form, with the picture inside it as an image.
+    let forms = 0;
+    let images = 0;
+    for (const [, obj] of pdf.context.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFRawStream)) continue;
+      const sub = obj.dict.lookup(PDFName.of('Subtype'))?.toString();
+      if (sub === '/Form') forms++;
+      if (sub === '/Image') images++;
+    }
+    expect(forms).toBeGreaterThan(0);
+    expect(images).toBeGreaterThan(0);
+  });
 });

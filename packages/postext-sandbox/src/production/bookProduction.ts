@@ -20,6 +20,7 @@ import {
   type ColorValue,
   type CoverDesign,
   type CoverZoneName,
+  type MirrorPicture,
   type Dimension,
   type PageRun,
   type PromoFormat,
@@ -331,6 +332,9 @@ export function coverDocumentInput(
     /** Finishes as solid spot-colour plates (the PDF, InDesign) instead of
      *  their translucent screen colour. */
     press?: boolean;
+    /** Mirror bleed past this design margin, mm (the version's
+     *  `designMargin`), with the pictures it draws (`loadMirrorPictures`). */
+    mirror?: { margin: number; pictures: Readonly<Record<string, MirrorPicture>> };
   } = {},
 ): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
@@ -352,6 +356,7 @@ export function coverDocumentInput(
     ...(Object.keys(verticalAlign).length > 0 ? { verticalAlign } : {}),
     ...(options.barcodePdf ? { barcodePdf: true } : {}),
     ...(options.press ? { finishes: 'press' as const } : {}),
+    ...(options.mirror ? { mirrorMargin: options.mirror.margin, mirrorPictures: options.mirror.pictures } : {}),
     resources: [...bookResources, ...(options.logos ?? []).map(logoResource)],
   });
   // The library's logos the design places, as pictures of the cover's own.

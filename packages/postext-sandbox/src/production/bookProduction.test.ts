@@ -187,4 +187,18 @@ describe('book production', () => {
     const noFinishes = coverDocumentInput(sheets.cover, version, {}, config, design, [], { logos: library, hidden: new Set(['finishes'] as const) });
     expect(ids(noFinishes)).toEqual(['cover-fx-veil', 'cover-logo-l']);
   });
+
+  it('mirrors a hardcover’s design into its turn-in past the version’s design margin', () => {
+    const version = { ...newVersion('hardcover', 'Cartoné'), overrides: { designMargin: 6 } };
+    const sheets = sheetsOf(version, config, 242, []);
+    if (!('cover' in sheets)) throw new Error('no profile');
+    expect(sheets.measures.designMargin).toBe(6);
+    const input = coverDocumentInput(sheets.cover, version, {}, config, { background: '#112233' }, [], { mirror: { margin: sheets.measures.designMargin, pictures: {} } });
+    expect(input.cover.designed?.x).toBeCloseTo(sheets.cover.trim.x - 6, 6);
+    expect(input.resources.map((r) => r.id)).toContain('cover-mirror');
+    const paper = sheetsOf(newVersion('paperback', 'Rústica'), config, 242, []);
+    if (!('cover' in paper)) throw new Error('no profile');
+    const soft = coverDocumentInput(paper.cover, newVersion('paperback', 'R'), {}, config, { background: '#112233' }, [], { mirror: { margin: paper.measures.designMargin, pictures: {} } });
+    expect(soft.cover.designed).toBeUndefined();
+  });
 });

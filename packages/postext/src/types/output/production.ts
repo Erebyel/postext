@@ -83,6 +83,10 @@ export interface BindingMeasures {
   endpaperBleed: ProductionLength;
   /** Safe zone kept clear inside each fold, score, joint and trim. */
   safeMargin: ProductionLength;
+  /** How far past the trim the design is drawn, mm: beyond it, out to the
+   *  end of the bleed or the turn-in, the background and the movable
+   *  elements are mirrored (`coverPage`'s `mirrorMargin`). */
+  designMargin: ProductionLength;
 }
 
 /** What a binding profile can make; a book outside it gets a

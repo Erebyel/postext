@@ -43,7 +43,7 @@ import {
 import { CoverCanvas } from './CoverCanvas.js';
 import { closeCoverDesigner, useCoverDesignerOpen } from './coverDesignerStore.js';
 import { DEFAULT_LOGO_CLEARANCE, logoResourceId, type LogoRecord } from './logoLibrary.js';
-import { useCoverWorkspace, useLogos } from './useProduction.js';
+import { useCoverWorkspace, useLogos, useMirror } from './useProduction.js';
 import type { Labels } from './productionUi.js';
 
 const LAYER_LABEL: Record<CoverLayer, keyof Labels> = {
@@ -108,11 +108,12 @@ function CoverDesigner() {
   const logos = useMemo(() => design.logos ?? [], [design]);
   const finishes = useMemo(() => design.finishes ?? [], [design]);
   const sheet = useMemo(() => (sheets ? pickSheet(sheets, 'cover', bookTrimMm(config)) : null), [sheets, config]);
+  const mirror = useMirror(design, bookResources, sheets?.measures.designMargin);
   const input = useMemo(
     () => (sheet && version && record
-      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { hidden, logos: library })
+      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { hidden, logos: library, ...(mirror ? { mirror } : {}) })
       : null),
-    [sheet, version, record, config, design, bookResources, hidden, library],
+    [sheet, version, record, config, design, bookResources, hidden, library, mirror],
   );
   const pictures = useMemo(() => bookResources.filter(isPicture), [bookResources]);
   const issues = useMemo(() => (sheet ? coverElementIssues(sheet, [...elements, ...effects], bookResources) : []), [sheet, elements, effects, bookResources]);
@@ -325,6 +326,8 @@ function CoverDesigner() {
                       </ul>
                     )}
                     <p className="m-0 text-(--slate)">{labels.coverGuidesLegend}</p>
+                    {input.cover.designed && <p className="m-0 text-(--slate)">{labels.coverGuideMirror}</p>}
+                    {input.cover.mirrorSkipped && <p className="m-0">{fill(labels.coverMirrorSkipped, { pictures: input.cover.mirrorSkipped.join(', ') })}</p>}
                     <Button variant="primary" size="sm" onClick={() => setMode('edit')}>{labels.coverDesignerEdit}</Button>
                   </>
                 ) : selectedFinish ? (

@@ -1,7 +1,9 @@
 // The pictures a cover sheet carries itself (the barcode, the library's
 // logos), decoded for the canvas, which draws pictures it has been given.
 
-import { registerResourceImage } from 'postext';
+import { registerResourceImage, type MirrorPicture, type Resource } from 'postext';
+import { getBlob } from '../storage/blobStore.js';
+import type { CoverDesignSettings } from './bookProduction.js';
 import { sniffLogoMime } from './logoLibrary.js';
 
 /** Decode the sheet's own pictures (the barcode, the library's logos) for
@@ -17,4 +19,26 @@ export async function registerCoverImages(files: Record<string, Uint8Array>): Pr
     await img.decode().catch(() => undefined);
     registerResourceImage(fileId, img, { vector: mime === 'image/svg+xml', singleInk: false });
   }));
+}
+
+/** The pictures a cover's mirror bleed draws: the background picture and
+ *  the movable elements' that are PNG or JPEG bitmaps of the book, as data
+ *  URIs (an SVG picture is left out of the mirror). */
+export async function loadMirrorPictures(design: CoverDesignSettings | undefined, resources: readonly Resource[]): Promise<Record<string, MirrorPicture>> {
+  const ids = new Set([design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId)].filter((id): id is string => !!id));
+  const out: Record<string, MirrorPicture> = {};
+  for (const id of ids) {
+    const r = resources.find((x) => x.id === id);
+    const bitmap = r?.kind === 'bitmap' ? r.bitmap : undefined;
+    if (!bitmap?.fileId || !bitmap.width || !bitmap.height) continue;
+    const rec = await getBlob(bitmap.fileId).catch(() => null);
+    if (!rec) continue;
+    const bytes = new Uint8Array(rec.bytes);
+    const mime = sniffLogoMime(bytes);
+    if (mime !== 'image/png' && mime !== 'image/jpeg') continue;
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    out[id] = { href: `data:${mime};base64,${btoa(bin)}`, width: bitmap.width, height: bitmap.height };
+  }
+  return out;
 }

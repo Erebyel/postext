@@ -25,7 +25,7 @@ const STYLES: ReadonlySet<string> = new Set<BindingStyle>(['perfect', 'sewnSoftc
 const MEASURES: ReadonlySet<string> = new Set<keyof BindingMeasures>([
   'spineAllowance', 'bleed', 'hingeScore', 'flapWidth', 'flapFoldInset', 'board', 'square', 'joint', 'turnIn',
   'boardSetback', 'caseSpineAllowance', 'roundSpineAllowance', 'jacketFoldAllowance', 'jacketFlapWidth', 'jacketBleed',
-  'endpaperGlueStrip', 'endpaperBleed', 'safeMargin',
+  'endpaperGlueStrip', 'endpaperBleed', 'safeMargin', 'designMargin',
 ]);
 
 /** The file for these profiles. */

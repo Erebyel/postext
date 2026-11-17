@@ -1120,9 +1120,12 @@ describe("package exports", () => {
       "COVER_FINISH_INKS",
       "coverElementRect",
       "placeCoverElement",
+      "MIRROR_RESOURCE_ID",
       "coverPage",
       "coverMarkdown",
       "sheetGuides",
+      "mirrorBands",
+      "mirrorBleedSvg",
     ]);
   });
 });

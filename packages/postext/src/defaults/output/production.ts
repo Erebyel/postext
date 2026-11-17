@@ -55,6 +55,10 @@ const BASE: BindingMeasures = {
   // Not from a source: 5 mm, between IngramSpark's spine margins (1–2 mm)
   // and KDP's 10 mm text-free band at a case's hinge.
   safeMargin: 5,
+  // Not from a source: the 5–10 mm a designer draws past the trim (the
+  // decision of 12 Nov 2026), its lower end. Past it, a case's turn-in is
+  // filled by mirroring.
+  designMargin: 5,
 };
 
 /** The measures each binding style starts from, before a profile's own. */

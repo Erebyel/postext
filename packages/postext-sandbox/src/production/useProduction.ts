@@ -6,12 +6,14 @@
 // from the book's pages, paper and binding.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ProductionVersion, VersionSheets } from 'postext';
+import type { MirrorPicture, ProductionVersion, Resource, VersionSheets } from 'postext';
 import { useBookPlan, useSandboxSelector } from '../context/SandboxContext.js';
 import { bookMetadata } from '../book/compose.js';
 import { WORKING_BOOK, emptyProduction, planPageCount, sheetsOf, type BookProduction } from './bookProduction.js';
 import { getBookProduction, listLogos, listProfiles, onProductionChange, putBookProduction, type StoredProfile } from './productionStore.js';
 import type { LogoRecord } from './logoLibrary.js';
+import { loadMirrorPictures } from './coverImages.js';
+import type { CoverDesignSettings } from './bookProduction.js';
 
 /** The book's production record, kept current and saved on change. A
  *  record another view saved is read again, unless this one has a change
@@ -69,6 +71,26 @@ export function useLogos(): LogoRecord[] {
     return () => { alive = false; off(); };
   }, []);
   return list;
+}
+
+/** The mirror bleed of a cover: its design margin (the version's, from
+ *  its sheets' measures) and the pictures it draws, loaded once per set
+ *  of pictures. Undefined without a margin. */
+export function useMirror(
+  design: CoverDesignSettings | undefined,
+  resources: readonly Resource[],
+  margin: number | undefined,
+): { margin: number; pictures: Readonly<Record<string, MirrorPicture>> } | undefined {
+  const [pictures, setPictures] = useState<Record<string, MirrorPicture>>({});
+  const key = [design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId)].join('|');
+  const latest = useRef(design);
+  latest.current = design;
+  useEffect(() => {
+    let alive = true;
+    loadMirrorPictures(latest.current, resources).then((p) => { if (alive) setPictures(p); }, () => undefined);
+    return () => { alive = false; };
+  }, [key, resources]);
+  return useMemo(() => (margin !== undefined ? { margin, pictures } : undefined), [margin, pictures]);
 }
 
 const isSheets = (s: ReturnType<typeof sheetsOf>): s is VersionSheets => 'cover' in s;

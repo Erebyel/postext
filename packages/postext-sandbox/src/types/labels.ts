@@ -5621,6 +5621,10 @@ export interface SandboxLabels {
   productionForBook: string;
   productionFromBook: string;
   productionFromBookConfirm: string;
+  productionDesignMargin: string;
+  productionDesignMarginHint: string;
+  coverGuideMirror: string;
+  coverMirrorSkipped: string;
   productionDesign: string;
   productionDesignIntro: string;
   productionDesignBackground: string;

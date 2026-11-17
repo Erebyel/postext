@@ -11,10 +11,12 @@ import {
   resolvePageConfig,
   resolveBodyTextConfig,
   resolveColorValue,
+  resolveBindingMeasures,
   type BindingProfile,
   type PostextConfig,
   type ProductionVersion,
   type ProductionWarning,
+  type TrimMm,
   type VersionSheets,
 } from 'postext';
 import { useBookPlan, useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
@@ -25,6 +27,7 @@ import { fill } from '../print/fillTokens.js';
 import {
   COVER_TEXT_ZONES,
   WORKING_BOOK,
+  bookTrimMm,
   metadataIsbn,
   metadataTexts,
   newVersion,
@@ -214,6 +217,7 @@ export function ProductionPanel() {
               labels={labels}
               bindingOptions={bindingOptions}
               library={bindings}
+              trim={bookTrimMm(config)}
               onChange={setVersion}
               onDelete={() => removeVersion(version.id)}
             />
@@ -335,11 +339,12 @@ export function ProductionPanel() {
   );
 }
 
-function VersionForm({ version, labels, bindingOptions, library, onChange, onDelete }: {
+function VersionForm({ version, labels, bindingOptions, library, trim, onChange, onDelete }: {
   version: ProductionVersion;
   labels: Labels;
   bindingOptions: SelectOption<string>[];
   library: readonly BindingProfile[];
+  trim: TrimMm;
   onChange: (v: ProductionVersion) => void;
   onDelete: () => void;
 }) {
@@ -348,6 +353,19 @@ function VersionForm({ version, labels, bindingOptions, library, onChange, onDel
   const isCase = profile?.style === 'caseFlat' || profile?.style === 'caseRound';
   const isbnBad = !!version.isbn?.trim() && !parseIsbn(version.isbn).ok;
   const [override, setOverride] = useState(version.spineOverride !== undefined ? String(version.spineOverride) : '');
+  // The design margin the profile gives, and this version's own.
+  const profileMargin = profile ? resolveBindingMeasures(profile, trim).designMargin : undefined;
+  const [margin, setMargin] = useState(version.overrides?.designMargin !== undefined ? String(version.overrides.designMargin) : '');
+  const setMarginOverride = (raw: string) => {
+    setMargin(raw);
+    const n = Number(raw);
+    const overrides = { ...version.overrides };
+    if (raw.trim() && Number.isFinite(n) && n >= 0) overrides.designMargin = n;
+    else delete overrides.designMargin;
+    const next: ProductionVersion = { ...version, overrides };
+    if (Object.keys(overrides).length === 0) delete next.overrides;
+    onChange(next);
+  };
   const without = <K extends keyof ProductionVersion>(key: K): ProductionVersion => {
     const rest = { ...version };
     delete rest[key];
@@ -423,6 +441,19 @@ function VersionForm({ version, labels, bindingOptions, library, onChange, onDel
           className={INPUT}
         />
         <span className="text-(--slate)">{labels.productionSpineOverrideHint}</span>
+      </label>
+      <label className="flex flex-col gap-1 text-xs">
+        {labels.productionDesignMargin}
+        <input
+          type="number"
+          min={0}
+          step={0.5}
+          value={margin}
+          placeholder={profileMargin !== undefined ? mm1(profileMargin) : ''}
+          onChange={(e) => setMarginOverride(e.target.value)}
+          className={INPUT}
+        />
+        <span className="text-(--slate)">{labels.productionDesignMarginHint}</span>
       </label>
     </section>
   );

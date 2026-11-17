@@ -184,6 +184,10 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
           >
             <g transform={`translate(${offset} ${offset})`} fill="none" strokeWidth={px}>
               <rect x={0} y={0} width={sheet.width} height={sheet.height} stroke="#e00000" strokeDasharray={`${4 * px} ${3 * px}`} />
+              {input.cover.designed && (
+                // How far the design goes; past it, the mirror bleed.
+                <rect x={input.cover.designed.x} y={input.cover.designed.y} width={input.cover.designed.width} height={input.cover.designed.height} stroke="#f08c00" strokeDasharray={`${6 * px} ${3 * px}`} />
+              )}
               {sheet.lines.map((l, i) => (
                 <line key={`l${i}`} x1={l.x} x2={l.x} y1={0} y2={sheet.height} stroke="#e4007c" />
               ))}

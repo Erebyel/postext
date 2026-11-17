@@ -13,6 +13,7 @@ import type { DesignBoxElement, DesignElement, DesignImageElement } from '../typ
 import type { ColorValue, Dimension, PageConfig } from '../types/page.js';
 import type { CmykPercent } from '../types/output/print.js';
 import { contourPolygon } from '../contour/index.js';
+import { mirrorBleedSvg } from './mirrorBleed.js';
 import type { Resource } from '../types/resources/resources.js';
 import type { ProductionVersion } from '../types/output/production.js';
 import { isbnBarcodeSvg } from './barcodeSvg.js';
@@ -162,6 +163,79 @@ export interface CoverPageOptions {
   /** The book's resources, for the contour and proportions of a picture a
    *  finish takes its shape from. */
   resources?: readonly Resource[];
+  /** Mirror bleed: the design is drawn this far past the trim, mm, and
+   *  beyond it the background and the movable elements are mirrored out to
+   *  the sheet's edge (./mirrorBleed.ts). Unset: no mirroring. */
+  mirrorMargin?: number;
+  /** The pictures the mirror draws, by resource id: a PNG or JPEG as a
+   *  data URI and its size in px. A picture missing here is left out of
+   *  the mirror. */
+  mirrorPictures?: Readonly<Record<string, MirrorPicture>>;
+}
+
+/** A picture the mirror bleed draws (see `CoverPageOptions.mirrorPictures`). */
+export interface MirrorPicture {
+  href: string;
+  width: number;
+  height: number;
+}
+
+export const MIRROR_RESOURCE_ID = 'cover-mirror';
+
+const mmN = (v: number): string => String(Math.round(v * 1000) / 1000);
+
+/** A colour as an SVG fill: `#rrggbb` and its opacity. */
+function svgFill(color: ColorValue, opacity = 1): string {
+  const hex = color.hex;
+  const alpha = hex.length === 9 ? parseInt(hex.slice(7, 9), 16) / 255 : 1;
+  const a = alpha * opacity;
+  return `fill="${hex.slice(0, 7)}"${a < 1 ? ` fill-opacity="${mmN(a)}"` : ''}`;
+}
+
+/** Where a picture of `w` × `h` px is drawn to cover `area`, centred on
+ *  `focus` (fractions of the picture) as far as the area allows. */
+function coverPictureRect(area: SheetRect, w: number, h: number, focus = { x: 0.5, y: 0.5 }): SheetRect {
+  const s = Math.max(area.width / w, area.height / h);
+  const dw = w * s;
+  const dh = h * s;
+  const x = Math.min(area.x, Math.max(area.x + area.width - dw, area.x + area.width / 2 - focus.x * dw));
+  const y = Math.min(area.y, Math.max(area.y + area.height - dh, area.y + area.height / 2 - focus.y * dh));
+  return { x, y, width: dw, height: dh };
+}
+
+/** The background and movable elements as SVG in sheet mm, as the
+ *  decoration draws them: what the mirror bleed folds out; and the
+ *  pictures it has no data for (`missing`). */
+function underContentSvg(sheet: ProductionSheet, design: CoverDesign, pictures: Readonly<Record<string, MirrorPicture>>): { content: string; defs: string; missing: string[] } {
+  const parts: string[] = [];
+  const defs: string[] = [];
+  const missing: string[] = [];
+  const rect = (r: SheetRect, fill: string) => `<rect x="${mmN(r.x)}" y="${mmN(r.y)}" width="${mmN(r.width)}" height="${mmN(r.height)}" ${fill}/>`;
+  const image = (p: MirrorPicture, r: SheetRect) => `<image href="${p.href}" x="${mmN(r.x)}" y="${mmN(r.y)}" width="${mmN(r.width)}" height="${mmN(r.height)}"/>`;
+  const whole = { x: 0, y: 0, width: sheet.width, height: sheet.height };
+  if (design.background) parts.push(rect(whole, svgFill(design.background)));
+  const bg = design.image?.resourceId ? pictures[design.image.resourceId] : undefined;
+  if (design.image?.resourceId && !bg) missing.push(design.image.resourceId);
+  if (bg && design.image) {
+    const front = sheet.zones.find((z) => z.name === 'front');
+    const area = design.image.area === 'front' && front ? toBleed(front.rect, sheet) : whole;
+    const id = `mc${defs.length}`;
+    defs.push(`<clipPath id="${id}" clipPathUnits="userSpaceOnUse">${rect(area, '')}</clipPath>`);
+    parts.push(`<g clip-path="url(#${id})">${image(bg, coverPictureRect(area, bg.width, bg.height, design.image.focus))}</g>`);
+  }
+  for (const zone of sheet.zones) {
+    const color = design.zones?.[zone.name];
+    if (color) parts.push(rect(toBleed(zone.rect, sheet), svgFill(color)));
+  }
+  for (const el of design.elements ?? []) {
+    const r = coverElementRect(sheet, el);
+    if (!r || r.width <= 0 || r.height <= 0) continue;
+    if (el.kind === 'box' && el.color) parts.push(rect(r, svgFill(el.color, el.opacity)));
+    const p = el.kind === 'image' && el.resourceId ? pictures[el.resourceId] : undefined;
+    if (p) parts.push(image(p, containedRect(r, p.width / p.height)));
+    else if (el.kind === 'image' && el.resourceId) missing.push(el.resourceId);
+  }
+  return { content: parts.join(''), defs: defs.join(''), missing };
 }
 
 /** A zone's rectangle run out into the bleed at the sheet's edges. */
@@ -324,6 +398,13 @@ export interface CoverPage {
   files: Record<string, Uint8Array>;
   /** The frames the Markdown can fill, by slot name. */
   slots: CoverZoneName[];
+  /** With a mirror bleed, the part of the sheet the design is drawn on
+   *  (the trim and the design margin past it); the rest is mirrored. */
+  designed?: SheetRect;
+  /** The pictures that kept the mirror bleed from being made (the mirror
+   *  draws only PNG and JPEG pictures it was given): the design then runs
+   *  to the sheet's edge as it is. */
+  mirrorSkipped?: string[];
 }
 
 function frameFor(
@@ -398,9 +479,33 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     header: false,
     footer: false,
   };
-  const elements: DesignElement[] = [...designElements(sheet, options.design), ...overElements(sheet, options.design)];
+  const elements: DesignElement[] = designElements(sheet, options.design);
   const resources: Resource[] = [];
   const files: Record<string, Uint8Array> = {};
+  // Past the design margin, the background and the movable elements
+  // folded out to the sheet's edge, over them and under the text.
+  const under = options.mirrorMargin !== undefined && sheet.kind !== 'promo' && options.design
+    ? underContentSvg(sheet, options.design, options.mirrorPictures ?? {})
+    : undefined;
+  // A picture the mirror cannot draw (no data, an SVG) would leave a hole
+  // its ground fills: then the design goes to the edge as it is.
+  const mirror = under?.content && under.missing.length === 0 ? mirrorBleedSvg(sheet, options.mirrorMargin!, under.content, under.defs) : undefined;
+  const mirrorSkipped = under && under.missing.length > 0 && mirrorBleedSvg(sheet, options.mirrorMargin!, 'x') ? [...new Set(under.missing)] : undefined;
+  if (mirror) {
+    const fileId = `${MIRROR_RESOURCE_ID}.svg`;
+    const px = (v: number) => (v / 25.4) * 96;
+    resources.push({
+      id: MIRROR_RESOURCE_ID,
+      typeId: 'figure',
+      kind: 'svg',
+      createdAt: 0,
+      updatedAt: 0,
+      svg: { fileId, width: px(sheet.width), height: px(sheet.height) },
+    } as Resource);
+    files[fileId] = new TextEncoder().encode(mirror.svg);
+    elements.push({ kind: 'image', id: MIRROR_RESOURCE_ID, resourceId: MIRROR_RESOURCE_ID, decorative: true, fit: 'contain', placement: onSheet({ x: 0, y: 0, width: sheet.width, height: sheet.height }) });
+  }
+  elements.push(...overElements(sheet, options.design));
   const back = sheet.zones.find((z) => z.name === 'back');
   const barcode = options.isbn && back
     ? isbnBarcodeSvg(options.isbn, { addOn: options.isbnAddOn, magnification: options.barcodeMagnification })
@@ -437,7 +542,15 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
   }
   elements.push(...finishElements(sheet, options.design, options.finishes ?? 'screen', options.resources ?? []));
   if (elements.length > 0) template.decoration = { elements };
-  return { page, template, resources, files, slots: frames.map((f) => f.name as CoverZoneName) };
+  return {
+    page,
+    template,
+    resources,
+    files,
+    slots: frames.map((f) => f.name as CoverZoneName),
+    ...(mirror ? { designed: mirror.designed } : {}),
+    ...(mirrorSkipped ? { mirrorSkipped } : {}),
+  };
 }
 
 /** The Markdown of a cover: the page fence with a frame for each slot that
