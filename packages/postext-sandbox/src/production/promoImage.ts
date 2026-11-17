@@ -6,7 +6,8 @@ import type { EpubCover } from 'postext-epub';
 import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
 import { ensureResourceImages } from '../controls/media/resourceImages.js';
 import { bookTrimMm, coverDocumentInput, pickSheet, sheetsOf } from './bookProduction.js';
-import { getBookProduction, listProfiles } from './productionStore.js';
+import { getBookProduction, listLogos, listProfiles } from './productionStore.js';
+import { registerCoverImages } from './coverImages.js';
 
 export /** A screen picture of a laid-out promo sheet: its page painted at the
  *  format's pixel width on white, as a JPEG. */
@@ -49,9 +50,13 @@ export async function productionEpubCover(
   const sheets = sheetsOf(version, config, 2, library);
   if (!('cover' in sheets)) return null;
   const sheet = pickSheet(sheets, 'epub', bookTrimMm(config));
-  const input = coverDocumentInput(sheet, version, record.texts, config, record.design, resources);
+  const logos = await listLogos().catch(() => []);
+  // A screen picture carries no finishes: they are plates for the press.
+  const input = coverDocumentInput(sheet, version, record.texts, config, record.design, resources, { logos, hidden: new Set(['finishes'] as const) });
   await ensureConfigFontsLoaded(input.config, input.markdown);
-  await ensureResourceImages(input.resources).catch(() => false);
+  await registerCoverImages(input.cover.files);
+  const own = new Set(Object.keys(input.cover.files));
+  await ensureResourceImages(input.resources.filter((r) => !own.has(r.svg?.fileId ?? r.bitmap?.fileId ?? ''))).catch(() => false);
   if (document.fonts) await document.fonts.ready;
   const doc = buildDocument({ markdown: input.markdown, resources: input.resources }, input.config);
   const px = PROMO_FORMATS.epub;

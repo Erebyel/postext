@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PDFArray, PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { buildDocument, coverMarkdown, coverPage, versionSheets } from 'postext';
 import type { PostextConfig, ProductionVersion, VersionSheets } from 'postext';
@@ -124,5 +124,36 @@ describe('cover sheets as PDF', () => {
     // The case's bleed is its turn-in.
     const [b0] = caseSheet.box('BleedBox');
     expect((c0! - b0!) / MM).toBeCloseTo(caseSheet.v.measures.turnIn, 1);
+  });
+
+  it('prints a finish on its own spot plate, overprinting, over the text', async () => {
+    const v = sheetsOf({ id: 'rustica', name: 'Rústica', binding: 'perfect' });
+    const cover = coverPage(v.cover, {
+      finishes: 'press',
+      design: {
+        background: { hex: '#123456', model: 'hex' },
+        finishes: [{ id: 'gloss', kind: 'varnish', ink: 'Barniz UVI', shape: { box: { zone: 'front', x: 20, y: 20, width: 60, height: 40 } } }],
+      },
+    });
+    const config: PostextConfig = { page: { ...cover.page, dpi: 150 }, header: { elements: [] }, footer: { elements: [] }, pageTemplates: [cover.template] };
+    const doc = buildDocument({ markdown: coverMarkdown('cover', text, cover.slots) }, config);
+    // For the press: PDF/X-4 on FOGRA39, where inks overprint.
+    const fogra39 = new Uint8Array(fs.readFileSync(new URL('../../../postext/icc/fogra39.icc', import.meta.url)));
+    const bytes = await renderToPdf(doc, { fontProvider, print: { standard: 'pdfx4' }, outputProfile: fogra39 });
+    const pdf = await PDFDocument.load(bytes);
+    const inks: string[] = [];
+    let overprints = false;
+    for (const [, obj] of pdf.context.enumerateIndirectObjects()) {
+      if (obj instanceof PDFArray && obj.lookup(0)?.toString() === '/Separation') inks.push(new TextDecoder().decode((obj.lookup(1) as PDFName).asBytes()));
+    }
+    const states = pdf.getPage(0).node.Resources()?.lookup(PDFName.of('ExtGState'));
+    if (states instanceof PDFDict) {
+      for (const [, ref] of states.entries()) {
+        const d = pdf.context.lookup(ref);
+        if (d instanceof PDFDict && d.lookup(PDFName.of('op'))?.toString() === 'true') overprints = true;
+      }
+    }
+    expect(inks).toContain('Barniz UVI');
+    expect(overprints).toBe(true);
   });
 });

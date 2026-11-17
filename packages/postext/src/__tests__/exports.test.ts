@@ -1117,6 +1117,7 @@ describe("package exports", () => {
       "importProductionProfiles",
       "BARCODE_RESOURCE_ID",
       "BARCODE_PDF_FILE_ID",
+      "COVER_FINISH_INKS",
       "coverElementRect",
       "placeCoverElement",
       "coverPage",

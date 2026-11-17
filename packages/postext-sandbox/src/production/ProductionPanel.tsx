@@ -37,6 +37,7 @@ import {
 } from './bookProduction.js';
 import { deleteProfile, putProfiles } from './productionStore.js';
 import { HEADING, INPUT, mm1, type Labels } from './productionUi.js';
+import { LogoLibrary } from './LogoLibrarySection.js';
 import { DesignSection, ZoneStylesSection } from './CoverDesignSections.js';
 import { SheetPreview } from './SheetPreview.js';
 import { useBookProduction, useProfiles } from './useProduction.js';
@@ -326,6 +327,8 @@ export function ProductionPanel() {
               ))}
             </ul>
           </section>
+
+          <LogoLibrary labels={labels} />
         </div>
       </PanelBody>
     </div>

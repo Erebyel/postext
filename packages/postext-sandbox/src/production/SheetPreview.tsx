@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PROMO_FORMATS,
-  registerResourceImage,
   renderPageToCanvas,
   resolvePrintConfig,
   type PostextConfig,
@@ -35,16 +34,9 @@ import {
   type SheetChoice,
 } from './bookProduction.js';
 import { HEADING, mm1, type Labels } from './productionUi.js';
+import { registerCoverImages } from './coverImages.js';
+import { useLogos } from './useProduction.js';
 
-/** Decode the sheet's own pictures (the barcode) for the canvas. */
-export async function registerCoverImages(files: Record<string, Uint8Array>): Promise<void> {
-  await Promise.all(Object.entries(files).map(async ([fileId, bytes]) => {
-    const img = new Image();
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new TextDecoder().decode(bytes))}`;
-    await img.decode().catch(() => undefined);
-    registerResourceImage(fileId, img, { vector: true, singleInk: false });
-  }));
-}
 
 const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
   cover: 'productionSheetCover',
@@ -81,10 +73,15 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
   const doc = built?.doc ?? null;
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const library = useLogos();
   const sheet = pickSheet(sheets, shown, bookTrimMm(config));
+  // A screen picture carries no finishes: they are plates for the press.
   const input = useMemo(
-    () => coverDocumentInput(sheet, version, texts, config, design, bookResources),
-    [sheet, version, texts, config, design, bookResources],
+    () => coverDocumentInput(sheet, version, texts, config, design, bookResources, {
+      logos: library,
+      ...(isPromo(shown) ? { hidden: new Set(['finishes'] as const) } : {}),
+    }),
+    [sheet, version, texts, config, design, bookResources, library, shown],
   );
   const isCaseCover = sheet.kind === 'case';
 
@@ -144,11 +141,18 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
       const outputProfile = print.standard !== 'none'
         ? await loadPrintProfile(print).then((p) => p.bytes, () => undefined)
         : undefined;
-      const { bytes: resourceBytes, previews: previewBytes } = await buildPdfResourceBytes(built.input.resources.filter((r) => r.id !== 'isbn-barcode'), config);
-      for (const [fileId, bytes] of Object.entries(built.input.cover.files)) resourceBytes.set(fileId, bytes);
+      // Finishes go to the press as solid plates that overprint: the sheet
+      // is laid out again with them so, when it has any.
+      const press = design?.finishes?.length
+        ? coverDocumentInput(sheet, version, texts, config, design, bookResources, { logos: library, press: true })
+        : built.input;
+      const pressDoc = press === built.input ? built.doc : await build({ markdown: press.markdown, resources: press.resources }, press.config);
+      const own = new Set(Object.keys(press.cover.files));
+      const { bytes: resourceBytes, previews: previewBytes } = await buildPdfResourceBytes(press.resources.filter((r) => !own.has(r.svg?.fileId ?? r.bitmap?.fileId ?? '')), config);
+      for (const [fileId, bytes] of Object.entries(press.cover.files)) resourceBytes.set(fileId, bytes);
       const worker = createPdfWorker();
       try {
-        const bytes = await worker.render([built.doc], {
+        const bytes = await worker.render([pressDoc], {
           fontProvider: createPdfFontProvider(),
           resourceBytes,
           ...(previewBytes.size > 0 ? { previewBytes } : {}),
@@ -174,7 +178,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
     try {
       const file = await buildCoverIdml({
         sheet,
-        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true }),
+        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true, logos: library, press: true }),
         title: sheetFileName(fileTitle, version.name, built.sheet, 'idml').replace(/\.idml$/, ''),
       });
       downloadBytes(file.bytes, file.name, file.mime);

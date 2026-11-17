@@ -5,18 +5,23 @@
  * time. The grounds (the sheet's colour, its picture, the zones') are the
  * background; the movable elements stand over them, anywhere on the sheet,
  * placed by the zone they stand in; the texts go in their zones' frames
- * above. Effects, logos and finishes come later. Pure functions: the
- * designer (./CoverDesigner.tsx) draws what they work out.
+ * above; over the text, the effects (translucent boxes, pictures with
+ * transparency of their own), the logos with their clear space, and the
+ * finishes, each a spot-colour plate the shape of a box or of an element.
+ * Pure functions: the designer (./CoverDesigner.tsx) draws what they work
+ * out.
  */
 
-import { coverElementRect, placeCoverElement, type CoverElement, type CoverZoneName, type ProductionSheet, type Resource, type SheetRect } from 'postext';
+import { coverElementRect, placeCoverElement, type CoverElement, type CoverFinishKind, type CoverZoneName, type ProductionSheet, type Resource, type SheetRect } from 'postext';
 import type { CoverDesignSettings } from './bookProduction.js';
 
 export const COVER_LAYERS = ['background', 'elements', 'texts', 'effects', 'logos', 'finishes'] as const;
 export type CoverLayer = (typeof COVER_LAYERS)[number];
 
-/** The layers the designer edits today. */
-export const READY_LAYERS: ReadonlySet<CoverLayer> = new Set(['background', 'elements', 'texts']);
+/** The layers whose items are placed on the sheet (the canvas edits the
+ *  active one's). */
+export type ItemLayer = 'elements' | 'effects' | 'logos' | 'finishes';
+export const ITEM_LAYERS: readonly ItemLayer[] = ['elements', 'effects', 'logos', 'finishes'];
 
 /** A movable element as the book stores it: a picture of the book, or a
  *  box of colour (`#rrggbb`), its box mm from its zone's top-left corner. */
@@ -30,6 +35,28 @@ export interface CoverElementSetting {
   y: number;
   width: number;
   height: number;
+  /** A box's opacity, 0 … 1 (an effect's); absent: opaque. */
+  opacity?: number;
+}
+
+/** A logo on the cover: a picture of the logo library (`logoId`) or of
+ *  the book (`resourceId`), and the clear space round it, mm. */
+export interface CoverLogoSetting extends CoverElementSetting {
+  kind: 'image';
+  logoId?: string;
+  clearance: number;
+}
+
+export const FINISH_KINDS: readonly CoverFinishKind[] = ['varnish', 'lamination', 'foilGold', 'foilSilver', 'emboss', 'deboss'];
+
+/** A finish as the book stores it: its kind, the ink its plate is named
+ *  after, and what it covers — a box of its own, placed like an element,
+ *  or the shape of an element, effect or logo of the design. */
+export interface CoverFinishSetting {
+  id: string;
+  kind: CoverFinishKind;
+  ink: string;
+  shape: { box: { zone: CoverZoneName; x: number; y: number; width: number; height: number } } | { element: string };
 }
 
 const ZONE_NAMES: ReadonlySet<string> = new Set(['flapBack', 'back', 'jointBack', 'spine', 'jointFront', 'front', 'flapFront', 'pastedown', 'flyleaf', 'hinge']);
@@ -56,8 +83,50 @@ export function readCoverElements(raw: unknown): CoverElementSetting[] {
       y: e.y,
       width: e.width,
       height: e.height,
+      ...(finite(e.opacity) && e.opacity >= 0 && e.opacity < 1 ? { opacity: e.opacity } : {}),
     }];
   });
+}
+
+/** The stored logos that read: pictures (of the library or the book) with
+ *  a clear space of 0 mm or more. */
+export function readCoverLogos(raw: unknown): CoverLogoSetting[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((l): CoverLogoSetting[] => {
+    if (!isRecord(l)) return [];
+    const logoId = typeof l.logoId === 'string' ? l.logoId : undefined;
+    const [el] = readCoverElements([{ ...l, kind: 'image', resourceId: typeof l.resourceId === 'string' ? l.resourceId : logoId ? `logo:${logoId}` : undefined }]);
+    if (!el) return [];
+    const clearance = finite(l.clearance) && l.clearance >= 0 ? l.clearance : 0;
+    return [{ ...el, kind: 'image', ...(logoId ? { logoId } : {}), clearance }];
+  });
+}
+
+/** The stored finishes that read: a kind, an ink, and a box or an
+ *  element to take their shape from. */
+export function readCoverFinishes(raw: unknown): CoverFinishSetting[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((f): CoverFinishSetting[] => {
+    if (!isRecord(f) || typeof f.id !== 'string' || !FINISH_KINDS.includes(f.kind as CoverFinishKind)) return [];
+    const ink = typeof f.ink === 'string' ? f.ink : '';
+    const shape = isRecord(f.shape) ? f.shape : {};
+    if (typeof shape.element === 'string') return [{ id: f.id, kind: f.kind as CoverFinishKind, ink, shape: { element: shape.element } }];
+    const [box] = readCoverElements([{ id: f.id, kind: 'box', color: '#000000', ...(isRecord(shape.box) ? shape.box : {}) }]);
+    if (!box) return [];
+    return [{ id: f.id, kind: f.kind as CoverFinishKind, ink, shape: { box: { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height } } }];
+  });
+}
+
+/** A finish with a box of its own as an element the canvas can move, in
+ *  its colour on screen; undefined for one shaped by an element. */
+export function finishAsElement(finish: CoverFinishSetting, screen: string): CoverElementSetting | undefined {
+  if (!('box' in finish.shape)) return undefined;
+  return { id: finish.id, kind: 'box', color: screen, ...finish.shape.box };
+}
+
+/** The finish moved to where its element now stands. */
+export function finishFromElement(finish: CoverFinishSetting, el: CoverElementSetting): CoverFinishSetting {
+  return { ...finish, shape: { box: { zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height } } };
 }
 
 /** The design with the hidden layers' parts left out. */
@@ -70,6 +139,9 @@ export function designShowing(design: CoverDesignSettings | undefined, hidden: R
     delete out.zones;
   }
   if (hidden.has('elements')) delete out.elements;
+  if (hidden.has('effects')) delete out.effects;
+  if (hidden.has('logos')) delete out.logos;
+  if (hidden.has('finishes')) delete out.finishes;
   return out;
 }
 
@@ -118,8 +190,41 @@ export function newElement(sheet: ProductionSheet, kind: 'image' | 'box', resour
   };
 }
 
+/** A new logo near the foot of the front cover, a quarter of it wide at
+ *  its own proportions: a picture of the logo library or of the book. */
+export function newLogo(
+  sheet: ProductionSheet,
+  source: { logoId: string } | { resourceId: string },
+  aspect: number,
+  clearance: number,
+): CoverLogoSetting | undefined {
+  const front = sheet.zones.find((z) => z.name === 'front');
+  if (!front) return undefined;
+  const round = (v: number) => Math.round(v * 100) / 100;
+  const width = front.rect.width * 0.25;
+  const height = width / (aspect > 0 ? aspect : 1);
+  return {
+    id: newElementId(),
+    kind: 'image',
+    ...('logoId' in source ? { logoId: source.logoId, resourceId: `logo:${source.logoId}` } : { resourceId: source.resourceId }),
+    zone: 'front',
+    x: round((front.rect.width - width) / 2),
+    y: round(front.safe.y + front.safe.height - front.rect.y - height),
+    width: round(width),
+    height: round(height),
+    clearance,
+  };
+}
+
+/** A new finish: a box of its own in the middle of the front cover. */
+export function newFinish(sheet: ProductionSheet, kind: CoverFinishKind, ink: string): CoverFinishSetting | undefined {
+  const box = newElement(sheet, 'box');
+  if (!box) return undefined;
+  return { id: box.id, kind, ink, shape: { box: { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height } } };
+}
+
 /** `id` moved one step up (toward the front) or down the stack. */
-export function restack(elements: readonly CoverElementSetting[], id: string, step: 1 | -1): CoverElementSetting[] {
+export function restack<T extends { id: string }>(elements: readonly T[], id: string, step: 1 | -1): T[] {
   const i = elements.findIndex((e) => e.id === id);
   const j = i + step;
   if (i < 0 || j < 0 || j >= elements.length) return [...elements];

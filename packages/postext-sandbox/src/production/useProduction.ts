@@ -10,7 +10,8 @@ import type { ProductionVersion, VersionSheets } from 'postext';
 import { useBookPlan, useSandboxSelector } from '../context/SandboxContext.js';
 import { bookMetadata } from '../book/compose.js';
 import { WORKING_BOOK, emptyProduction, planPageCount, sheetsOf, type BookProduction } from './bookProduction.js';
-import { getBookProduction, listProfiles, onProductionChange, putBookProduction, type StoredProfile } from './productionStore.js';
+import { getBookProduction, listLogos, listProfiles, onProductionChange, putBookProduction, type StoredProfile } from './productionStore.js';
+import type { LogoRecord } from './logoLibrary.js';
 
 /** The book's production record, kept current and saved on change. A
  *  record another view saved is read again, unless this one has a change
@@ -50,6 +51,19 @@ export function useProfiles(): StoredProfile[] {
   useEffect(() => {
     let alive = true;
     const load = () => { listProfiles().then((l) => { if (alive) setList(l); }, () => undefined); };
+    load();
+    const off = onProductionChange(load);
+    return () => { alive = false; off(); };
+  }, []);
+  return list;
+}
+
+/** The user's logo library, kept current. */
+export function useLogos(): LogoRecord[] {
+  const [list, setList] = useState<LogoRecord[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () => { listLogos().then((l) => { if (alive) setList(l); }, () => undefined); };
     load();
     const off = onProductionChange(load);
     return () => { alive = false; off(); };

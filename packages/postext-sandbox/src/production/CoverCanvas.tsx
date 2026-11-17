@@ -19,7 +19,7 @@ import { handleAt, handlePoint, RESIZE_HANDLES, type Handle } from '../templates
 import type { coverDocumentInput } from './bookProduction.js';
 import { elementAt, elementRect, elementUnder, type CoverElementSetting } from './coverLayers.js';
 import { coverSnapLines, dragCoverRect } from './coverDrag.js';
-import { registerCoverImages } from './SheetPreview.js';
+import { registerCoverImages } from './coverImages.js';
 
 const MM_PER_IN = 25.4;
 /** Handles and the room to grab them, CSS px. */
@@ -29,11 +29,13 @@ const SNAP_PX = 6;
 
 type Drag = { id: string; handle: Handle; start: SheetRect; x0: number; y0: number; moved: boolean };
 
-export function CoverCanvas({ sheet, input, mode, elements, selected, onSelect, onChange, onDelete, label, failedLabel }: {
+export function CoverCanvas({ sheet, input, mode, elements, clearance, selected, onSelect, onChange, onDelete, label, failedLabel }: {
   sheet: ProductionSheet;
   input: ReturnType<typeof coverDocumentInput>;
   mode: 'preview' | 'edit';
   elements: readonly CoverElementSetting[];
+  /** The clear space round an item (a logo's), mm: drawn dashed round it. */
+  clearance?: ((id: string) => number) | undefined;
   selected: string | null;
   onSelect: (id: string | null) => void;
   onChange: (el: CoverElementSetting) => void;
@@ -192,7 +194,13 @@ export function CoverCanvas({ sheet, input, mode, elements, selected, onSelect, 
                 const r = drag?.id === el.id && draft ? draft : elementRect(sheet, el);
                 if (!r) return null;
                 const on = el.id === selected;
-                return <rect key={el.id} x={r.x} y={r.y} width={r.width} height={r.height} stroke={on ? '#2563eb' : '#64748b'} strokeWidth={on ? 2 * px : px} strokeDasharray={on ? undefined : `${2 * px} ${2 * px}`} />;
+                const c = clearance?.(el.id) ?? 0;
+                return (
+                  <g key={el.id}>
+                    {c > 0 && <rect x={r.x - c} y={r.y - c} width={r.width + 2 * c} height={r.height + 2 * c} stroke="#16a34a" strokeDasharray={`${1.5 * px} ${2 * px}`} />}
+                    <rect x={r.x} y={r.y} width={r.width} height={r.height} stroke={on ? '#2563eb' : '#64748b'} strokeWidth={on ? 2 * px : px} strokeDasharray={on ? undefined : `${2 * px} ${2 * px}`} />
+                  </g>
+                );
               })}
               {mode === 'edit' && selectedRect && RESIZE_HANDLES.map((h) => {
                 const p = handlePoint(selectedRect, h);

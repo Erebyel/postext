@@ -31,7 +31,17 @@ import {
   type TrimMm,
   type VersionSheets,
 } from 'postext';
-import { designShowing, readCoverElements, type CoverElementSetting, type CoverLayer } from './coverLayers.js';
+import {
+  designShowing,
+  readCoverElements,
+  readCoverFinishes,
+  readCoverLogos,
+  type CoverElementSetting,
+  type CoverFinishSetting,
+  type CoverLayer,
+  type CoverLogoSetting,
+} from './coverLayers.js';
+import { logoFileId, logoResource, logoResourceId, type LogoRecord } from './logoLibrary.js';
 
 /** The zones whose text the panel edits. */
 export const COVER_TEXT_ZONES = ['front', 'spine', 'back', 'flapFront', 'flapBack'] as const;
@@ -50,6 +60,10 @@ export interface CoverDesignSettings {
   textColor?: string;
   /** The movable elements, back to front (./coverLayers.ts). */
   elements?: CoverElementSetting[];
+  /** Over the text, back to front: translucent boxes and pictures. */
+  effects?: CoverElementSetting[];
+  logos?: CoverLogoSetting[];
+  finishes?: CoverFinishSetting[];
 }
 
 /** A book's production, kept per project. */
@@ -198,9 +212,20 @@ export function coverDesignOf(settings: CoverDesignSettings | undefined): CoverD
     zones.flapFront = ink(z.flaps);
     zones.flapBack = ink(z.flaps);
   }
-  const elements = (settings.elements ?? []).map(({ color, ...e }): NonNullable<CoverDesign['elements']>[number] => ({ ...e, ...(color ? { color: ink(color) } : {}) }));
+  const toCore = ({ color, ...e }: CoverElementSetting): NonNullable<CoverDesign['elements']>[number] => ({ ...e, ...(color ? { color: ink(color) } : {}) });
+  const elements = (settings.elements ?? []).map(toCore);
+  const effects = (settings.effects ?? []).map(toCore);
+  const logos = (settings.logos ?? []).map(({ logoId, color: _c, ...l }): NonNullable<CoverDesign['logos']>[number] => ({
+    ...l,
+    kind: 'image',
+    ...(logoId ? { resourceId: logoResourceId(logoId) } : {}),
+  }));
+  const finishes = settings.finishes ?? [];
   const design: CoverDesign = {
     ...(elements.length > 0 ? { elements } : {}),
+    ...(effects.length > 0 ? { effects } : {}),
+    ...(logos.length > 0 ? { logos } : {}),
+    ...(finishes.length > 0 ? { finishes } : {}),
     ...(settings.background ? { background: ink(settings.background) } : {}),
     ...(settings.image?.resourceId ? { image: { resourceId: settings.image.resourceId, area: settings.image.area ?? 'sheet' } } : {}),
     ...(Object.keys(zones).length > 0 ? { zones } : {}),
@@ -297,7 +322,16 @@ export function coverDocumentInput(
   config: PostextConfig,
   settings?: CoverDesignSettings,
   bookResources: readonly Resource[] = [],
-  options: { barcodePdf?: boolean; hidden?: ReadonlySet<CoverLayer> } = {},
+  options: {
+    barcodePdf?: boolean;
+    hidden?: ReadonlySet<CoverLayer>;
+    /** The logo library: the logos the design places from it come along,
+     *  their bytes in the cover's files. */
+    logos?: readonly LogoRecord[];
+    /** Finishes as solid spot-colour plates (the PDF, InDesign) instead of
+     *  their translucent screen colour. */
+    press?: boolean;
+  } = {},
 ): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
   const hidden = options.hidden ?? new Set<CoverLayer>();
@@ -317,9 +351,20 @@ export function coverDocumentInput(
     ...(design ? { design } : {}),
     ...(Object.keys(verticalAlign).length > 0 ? { verticalAlign } : {}),
     ...(options.barcodePdf ? { barcodePdf: true } : {}),
+    ...(options.press ? { finishes: 'press' as const } : {}),
+    resources: [...bookResources, ...(options.logos ?? []).map(logoResource)],
   });
-  const pictures = [design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId)]
-    .flatMap((id) => bookResources.filter((r) => r.id === id));
+  // The library's logos the design places, as pictures of the cover's own.
+  const placed = new Set((design?.logos ?? []).map((l) => l.resourceId));
+  const libraryLogos = (options.logos ?? []).filter((l) => placed.has(logoResourceId(l.id)));
+  const files = { ...cover.files };
+  for (const l of libraryLogos) files[logoFileId(l)] = l.bytes;
+  const pictures = [
+    design?.image?.resourceId,
+    ...(design?.elements ?? []).map((e) => e.resourceId),
+    ...(design?.effects ?? []).map((e) => e.resourceId),
+    ...(design?.logos ?? []).map((e) => e.resourceId),
+  ].flatMap((id) => bookResources.filter((r) => r.id === id));
   const textColor = isCover && settings?.textColor ? ink(settings.textColor) : undefined;
   const content: Partial<Record<CoverZoneName, string>> = {};
   if (isCover && !hidden.has('texts')) {
@@ -333,8 +378,8 @@ export function coverDocumentInput(
   const rest: PostextConfig = { ...config };
   delete rest.headingStyles;
   return {
-    cover,
-    resources: [...cover.resources, ...new Set(pictures)],
+    cover: { ...cover, files },
+    resources: [...cover.resources, ...libraryLogos.map(logoResource), ...new Set(pictures)],
     config: {
       ...rest,
       paragraphStyles: [...(config.paragraphStyles ?? []), ...coverParagraphStyles(config, isCover ? settings : undefined)],
@@ -413,6 +458,12 @@ function readDesign(raw: unknown): CoverDesignSettings | undefined {
   }
   const elements = readCoverElements(raw.elements);
   if (elements.length > 0) out.elements = elements;
+  const effects = readCoverElements(raw.effects);
+  if (effects.length > 0) out.effects = effects;
+  const logos = readCoverLogos(raw.logos);
+  if (logos.length > 0) out.logos = logos;
+  const finishes = readCoverFinishes(raw.finishes);
+  if (finishes.length > 0) out.finishes = finishes;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 

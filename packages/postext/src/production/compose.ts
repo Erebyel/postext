@@ -11,6 +11,8 @@ import type { PageTemplate } from '../composed/types/templates.js';
 import type { FrameConfig } from '../composed/types/frames.js';
 import type { DesignBoxElement, DesignElement, DesignImageElement } from '../types/designElements.js';
 import type { ColorValue, Dimension, PageConfig } from '../types/page.js';
+import type { CmykPercent } from '../types/output/print.js';
+import { contourPolygon } from '../contour/index.js';
 import type { Resource } from '../types/resources/resources.js';
 import type { ProductionVersion } from '../types/output/production.js';
 import { isbnBarcodeSvg } from './barcodeSvg.js';
@@ -40,7 +42,48 @@ export interface CoverDesign {
   /** The movable elements, back to front, over the grounds and under the
    *  text. */
   elements?: CoverElement[];
+  /** Effects: elements over the text, back to front — a translucent box
+   *  (`opacity`), a picture with transparency of its own. */
+  effects?: CoverElement[];
+  /** Logos (the publisher's, the collection's, a seal), over the effects,
+   *  each with the clear space it keeps round it. */
+  logos?: CoverLogo[];
+  /** Finishes: each a spot-colour plate that overprints everything, the
+   *  shape of a box of its own or of one of the design's elements. */
+  finishes?: CoverFinish[];
 }
+
+/** A logo of the cover: a picture placed as an element, and the clear
+ *  space (mm) nothing else should enter round it. */
+export interface CoverLogo extends CoverElement {
+  kind: 'image';
+  clearance: number;
+}
+
+/** The finishes a cover's plates stand for. */
+export type CoverFinishKind = 'varnish' | 'lamination' | 'foilGold' | 'foilSilver' | 'emboss' | 'deboss';
+
+/** A finish of the cover: what it is, the ink its plate is named after (as
+ *  the printer knows it), and what it covers — a box of its own, placed
+ *  like an element, or the shape of an element, effect or logo of the
+ *  design (a picture's contour when its resource has one). */
+export interface CoverFinish {
+  id: string;
+  kind: CoverFinishKind;
+  ink: string;
+  shape: { box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height'> } | { element: string };
+}
+
+/** Each finish's default plate name, the CMYK a composite viewer shows its
+ *  ink as, and its colour on screen (where it is drawn translucent). */
+export const COVER_FINISH_INKS: Readonly<Record<CoverFinishKind, { ink: string; cmyk: CmykPercent; screen: string }>> = {
+  varnish: { ink: 'Varnish', cmyk: { c: 0, m: 0, y: 0, k: 15 }, screen: '#7fb2e5' },
+  lamination: { ink: 'Lamination', cmyk: { c: 0, m: 0, y: 0, k: 10 }, screen: '#9ad1c7' },
+  foilGold: { ink: 'Gold foil', cmyk: { c: 0, m: 20, y: 60, k: 20 }, screen: '#c9a227' },
+  foilSilver: { ink: 'Silver foil', cmyk: { c: 0, m: 0, y: 0, k: 30 }, screen: '#b5b8bd' },
+  emboss: { ink: 'Emboss', cmyk: { c: 0, m: 0, y: 0, k: 20 }, screen: '#e07a5f' },
+  deboss: { ink: 'Deboss', cmyk: { c: 0, m: 0, y: 0, k: 25 }, screen: '#8d6cab' },
+};
 
 /** A movable element of a cover's design: one of the book's pictures, or
  *  a box of colour. Placed by the zone it stands in, so it moves with that
@@ -59,6 +102,9 @@ export interface CoverElement {
   y: number;
   width: number;
   height: number;
+  /** A box's opacity, 0 … 1 (default 1). A picture keeps its own
+   *  transparency. */
+  opacity?: number;
 }
 
 /** The zone an element is placed by on a sheet that lacks its own: a flap
@@ -109,6 +155,13 @@ export interface CoverPageOptions {
    *  whose bytes the host gives: for an output that places a PDF better
    *  than an SVG (IDML). */
   barcodePdf?: boolean;
+  /** How finishes are drawn: `'screen'` (the default) in their colour on
+   *  screen, translucent, to see what they cover; `'press'` as solid
+   *  spot-colour plates that overprint, for the PDF and InDesign. */
+  finishes?: 'screen' | 'press';
+  /** The book's resources, for the contour and proportions of a picture a
+   *  finish takes its shape from. */
+  resources?: readonly Resource[];
 }
 
 /** A zone's rectangle run out into the bleed at the sheet's edges. */
@@ -156,15 +209,107 @@ function designElements(sheet: ProductionSheet, design: CoverDesign | undefined)
     if (!color) continue;
     out.push({ kind: 'box', id: `cover-zone-${zone.name}`, placement: onSheet(toBleed(zone.rect, sheet)), style: { backgroundColor: color } } as DesignBoxElement);
   }
-  for (const el of design.elements ?? []) {
-    const rect = coverElementRect(sheet, el);
-    if (!rect || rect.width <= 0 || rect.height <= 0) continue;
-    const id = `cover-el-${el.id}`;
-    if (el.kind === 'image' && el.resourceId) {
-      out.push({ kind: 'image', id, resourceId: el.resourceId, decorative: true, fit: 'contain', placement: onSheet(rect) });
-    } else if (el.kind === 'box' && el.color) {
-      out.push({ kind: 'box', id, placement: onSheet(rect), style: { backgroundColor: el.color } } as DesignBoxElement);
+  for (const el of design.elements ?? []) out.push(...elementDrawing(sheet, el, 'cover-el', false));
+  return out;
+}
+
+/** A colour at an opacity: `#rrggbb` with its alpha. */
+function withOpacity(color: ColorValue, opacity: number | undefined): ColorValue {
+  if (opacity === undefined || opacity >= 1) return color;
+  const a = Math.round(Math.max(0, Math.min(1, opacity)) * 255).toString(16).padStart(2, '0');
+  return { ...color, hex: color.hex.slice(0, 7) + a };
+}
+
+/** An element as the decoration draws it: a picture fitted in its box, or
+ *  a box of its colour; `over` the text frames or under them. */
+function elementDrawing(sheet: ProductionSheet, el: CoverElement, prefix: string, over: boolean): DesignElement[] {
+  const rect = coverElementRect(sheet, el);
+  if (!rect || rect.width <= 0 || rect.height <= 0) return [];
+  const id = `${prefix}-${el.id}`;
+  const above = over ? { over: true } : {};
+  if (el.kind === 'image' && el.resourceId) {
+    return [{ kind: 'image', id, resourceId: el.resourceId, decorative: true, fit: 'contain', placement: onSheet(rect), ...above }];
+  }
+  if (el.kind === 'box' && el.color) {
+    return [{ kind: 'box', id, placement: onSheet(rect), style: { backgroundColor: withOpacity(el.color, el.opacity) }, ...above } as DesignBoxElement];
+  }
+  return [];
+}
+
+/** Where a picture fitted (`contain`) in a box is drawn, by its aspect. */
+function containedRect(rect: SheetRect, aspect: number): SheetRect {
+  if (!(aspect > 0)) return rect;
+  if (rect.width / rect.height > aspect) {
+    const width = rect.height * aspect;
+    return { x: rect.x + (rect.width - width) / 2, y: rect.y, width, height: rect.height };
+  }
+  const height = rect.width / aspect;
+  return { x: rect.x, y: rect.y + (rect.height - height) / 2, width: rect.width, height };
+}
+
+/** A picture's outline in fractions of it: its contour's polygon, or the
+ *  rows of its traced alpha channel (left edges down, right edges up). */
+function pictureOutline(resource: Resource | undefined): { x: number; y: number }[] | undefined {
+  const polygon = contourPolygon(resource?.contour);
+  if (polygon) return polygon;
+  const traced = resource?.contour?.traced;
+  if (!traced || traced.rows <= 0) return undefined;
+  const left: { x: number; y: number }[] = [];
+  const right: { x: number; y: number }[] = [];
+  for (let r = 0; r < traced.rows; r++) {
+    const lo = traced.spans[2 * r]!;
+    const hi = traced.spans[2 * r + 1]!;
+    if (lo < 0 || hi < 0) continue;
+    const y0 = r / traced.rows;
+    const y1 = (r + 1) / traced.rows;
+    left.push({ x: lo, y: y0 }, { x: lo, y: y1 });
+    right.push({ x: hi, y: y0 }, { x: hi, y: y1 });
+  }
+  return left.length >= 2 ? [...left, ...right.reverse()] : undefined;
+}
+
+/** The colour of a finish: translucent on screen, or its ink's plate,
+ *  solid and overprinting, for the press. */
+function finishColor(finish: CoverFinish, mode: 'screen' | 'press'): ColorValue {
+  const ink = COVER_FINISH_INKS[finish.kind];
+  if (mode === 'screen') return { hex: `${ink.screen}73`, model: 'hex' };
+  return { hex: ink.screen, model: 'spot', spot: { name: finish.ink || ink.ink, cmyk: ink.cmyk, tint: 100, overprint: true } };
+}
+
+/** The decoration over the text: the effects, the logos, then (after the
+ *  barcode, which the caller adds) the finishes. */
+function overElements(sheet: ProductionSheet, design: CoverDesign | undefined): DesignElement[] {
+  const out: DesignElement[] = [];
+  for (const el of design?.effects ?? []) out.push(...elementDrawing(sheet, el, 'cover-fx', true));
+  for (const logo of design?.logos ?? []) out.push(...elementDrawing(sheet, logo, 'cover-logo', true));
+  return out;
+}
+
+function finishElements(sheet: ProductionSheet, design: CoverDesign | undefined, mode: 'screen' | 'press', resources: readonly Resource[]): DesignElement[] {
+  const out: DesignElement[] = [];
+  const all = [...(design?.elements ?? []), ...(design?.effects ?? []), ...(design?.logos ?? [])];
+  for (const finish of design?.finishes ?? []) {
+    const fill = finishColor(finish, mode);
+    const id = `cover-finish-${finish.id}`;
+    if ('box' in finish.shape) {
+      const rect = coverElementRect(sheet, { id: finish.id, kind: 'box', ...finish.shape.box });
+      if (rect && rect.width > 0 && rect.height > 0) out.push({ kind: 'box', id, over: true, placement: onSheet(rect), style: { backgroundColor: fill } } as DesignBoxElement);
+      continue;
     }
+    const target = all.find((e) => e.id === (finish.shape as { element: string }).element);
+    const rect = target ? coverElementRect(sheet, target) : undefined;
+    if (!target || !rect || rect.width <= 0 || rect.height <= 0) continue;
+    const resource = target.kind === 'image' ? resources.find((r) => r.id === target.resourceId) : undefined;
+    const outline = pictureOutline(resource);
+    if (!outline) {
+      out.push({ kind: 'box', id, over: true, placement: onSheet(rect), style: { backgroundColor: fill } } as DesignBoxElement);
+      continue;
+    }
+    // The contour, over the picture as it is drawn (fitted in its box).
+    const size = resource?.bitmap ?? resource?.svg;
+    const drawn = containedRect(rect, size?.width && size?.height ? size.width / size.height : 0);
+    const d = outline.map((p, i) => `${i === 0 ? 'M' : 'L'} ${Math.round(p.x * 10000) / 10000} ${Math.round(p.y * 10000) / 10000}`).join(' ') + ' Z';
+    out.push({ kind: 'path', id, over: true, d, viewBox: [1, 1], preserveAspectRatio: 'none', fill, placement: onSheet(drawn) });
   }
   return out;
 }
@@ -253,7 +398,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     header: false,
     footer: false,
   };
-  const elements: DesignElement[] = designElements(sheet, options.design);
+  const elements: DesignElement[] = [...designElements(sheet, options.design), ...overElements(sheet, options.design)];
   const resources: Resource[] = [];
   const files: Record<string, Uint8Array> = {};
   const back = sheet.zones.find((z) => z.name === 'back');
@@ -276,10 +421,12 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     // In the back cover's corner by the spine and the foot (Spanish ISBN
     // agency, BISG), inside its safe area.
     const s = back.safe;
+    // Over the text, the effects and the logos: nothing hides it.
     const element: DesignImageElement = {
       kind: 'image',
       id: BARCODE_RESOURCE_ID,
       resourceId: BARCODE_RESOURCE_ID,
+      over: true,
       placement: {
         anchor: { to: 'page', edge: 'top-left' },
         offset: { x: mm(s.x + s.width - barcode.width - sheet.trim.x), y: mm(s.y + s.height - barcode.height - sheet.trim.y) },
@@ -288,6 +435,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     };
     elements.push(element);
   }
+  elements.push(...finishElements(sheet, options.design, options.finishes ?? 'screen', options.resources ?? []));
   if (elements.length > 0) template.decoration = { elements };
   return { page, template, resources, files, slots: frames.map((f) => f.name as CoverZoneName) };
 }

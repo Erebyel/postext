@@ -159,4 +159,32 @@ describe('book production', () => {
     const read = readBookProduction({ projectId: 'p', versions: [], texts: {}, design: { zoneStyles: { front: { title: { fontSize: 30, align: 'middle' }, vertical: 'bottom' }, nowhere: {} } } });
     expect(read?.design).toEqual({ zoneStyles: { front: { title: { fontSize: 30 }, vertical: 'bottom' } } });
   });
+
+  it('lays the effects, the library’s logos and the finishes over the text, plates for the press', () => {
+    const version = newVersion('paperback', 'Rústica');
+    const sheets = sheetsOf(version, config, 242, []);
+    if (!('cover' in sheets)) throw new Error('no profile');
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0, 0]);
+    const library = [{ id: 'pub', name: 'Editorial', group: 'publisher' as const, clearance: 4, mime: 'image/png' as const, bytes: png, width: 200, height: 100, updatedAt: 0 }];
+    const design = {
+      effects: [{ id: 'veil', kind: 'box' as const, color: '#000000', opacity: 0.5, zone: 'front' as const, x: 0, y: 0, width: 50, height: 20 }],
+      logos: [{ id: 'l', kind: 'image' as const, logoId: 'pub', resourceId: 'logo:pub', zone: 'front' as const, x: 10, y: 180, width: 30, height: 15, clearance: 4 }],
+      finishes: [{ id: 'gold', kind: 'foilGold' as const, ink: 'Oro', shape: { element: 'l' } }],
+    };
+    expect(coverDesignOf(design)).toMatchObject({
+      effects: [{ id: 'veil', opacity: 0.5, color: { hex: '#000000' } }],
+      logos: [{ id: 'l', resourceId: 'logo:pub', clearance: 4 }],
+      finishes: [{ id: 'gold', ink: 'Oro' }],
+    });
+    const screen = coverDocumentInput(sheets.cover, version, {}, config, design, [], { logos: library });
+    expect(screen.resources.map((r) => r.id)).toEqual(['logo:pub']);
+    expect(screen.cover.files['logo-pub.png']).toBe(png);
+    const ids = (input: typeof screen) => (input.cover.template.decoration?.elements ?? []).map((e) => ('id' in e ? e.id : ''));
+    expect(ids(screen)).toEqual(['cover-fx-veil', 'cover-logo-l', 'cover-finish-gold']);
+    const press = coverDocumentInput(sheets.cover, version, {}, config, design, [], { logos: library, press: true });
+    const gold = press.cover.template.decoration!.elements.find((e) => 'id' in e && e.id === 'cover-finish-gold') as { style: { backgroundColor: { model: string; spot: { name: string } } } };
+    expect(gold.style.backgroundColor).toMatchObject({ model: 'spot', spot: { name: 'Oro' } });
+    const noFinishes = coverDocumentInput(sheets.cover, version, {}, config, design, [], { logos: library, hidden: new Set(['finishes'] as const) });
+    expect(ids(noFinishes)).toEqual(['cover-fx-veil', 'cover-logo-l']);
+  });
 });

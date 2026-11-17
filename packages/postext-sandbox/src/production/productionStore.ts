@@ -1,15 +1,18 @@
 // The Cover panel's storage, in its own IndexedDB database: each book's
-// production (versions and cover texts) keyed by project id, and the
-// user's library of paper and binding profiles, which travel between users
-// as `.postext-production.json` files (see `exportProductionProfiles`).
+// production (versions and cover texts) keyed by project id, the user's
+// library of paper and binding profiles, which travel between users as
+// `.postext-production.json` files (see `exportProductionProfiles`), and
+// the user's logo library (./logoLibrary.ts).
 
 import type { BindingProfile, PaperProfile } from 'postext';
 import { readBookProduction, type BookProduction } from './bookProduction.js';
+import type { LogoRecord } from './logoLibrary.js';
 
 const DB_NAME = 'postext-production';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const BOOKS = 'books';
 const PROFILES = 'profiles';
+const LOGOS = 'logos';
 
 /** A profile of the library as stored. */
 export type StoredProfile =
@@ -27,6 +30,7 @@ function openDb(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(BOOKS)) db.createObjectStore(BOOKS, { keyPath: 'projectId' });
       if (!db.objectStoreNames.contains(PROFILES)) db.createObjectStore(PROFILES, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(LOGOS)) db.createObjectStore(LOGOS, { keyPath: 'id' });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -98,5 +102,27 @@ export async function putProfiles(papers: readonly PaperProfile[], bindings: rea
 
 export async function deleteProfile(id: string): Promise<void> {
   await run(PROFILES, 'readwrite', (s) => s.delete(id));
+  changed();
+}
+
+/** The logo library, by name. */
+export async function listLogos(): Promise<LogoRecord[]> {
+  const all = await run<LogoRecord[]>(LOGOS, 'readonly', (st) => st.getAll() as IDBRequest<LogoRecord[]>);
+  return all.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Store logos; one whose id the library has replaces it. */
+export async function putLogos(logos: readonly LogoRecord[]): Promise<void> {
+  if (logos.length === 0) return;
+  await run(LOGOS, 'readwrite', (st) => {
+    let last: IDBRequest<IDBValidKey> | undefined;
+    for (const l of logos) last = st.put(l);
+    return last!;
+  });
+  changed();
+}
+
+export async function deleteLogo(id: string): Promise<void> {
+  await run(LOGOS, 'readwrite', (st) => st.delete(id));
   changed();
 }

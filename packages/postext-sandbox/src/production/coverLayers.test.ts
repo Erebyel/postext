@@ -62,3 +62,34 @@ describe('cover layers', () => {
     expect(hidden.markdown).not.toContain('Title');
   });
 });
+
+describe('effects, logos and finishes', () => {
+  it('reads an effect’s opacity, a logo’s clear space and a finish’s shape', async () => {
+    const { readCoverElements, readCoverLogos, readCoverFinishes } = await import('./coverLayers.js');
+    expect(readCoverElements([{ id: 'v', kind: 'box', color: '#000000', zone: 'front', x: 0, y: 0, width: 10, height: 10, opacity: 0.4 }])[0]!.opacity).toBe(0.4);
+    expect(readCoverElements([{ id: 'v', kind: 'box', color: '#000000', zone: 'front', x: 0, y: 0, width: 10, height: 10, opacity: 1 }])[0]!.opacity).toBeUndefined();
+    expect(readCoverLogos([{ id: 'l', logoId: 'pub', zone: 'back', x: 1, y: 2, width: 20, height: 10, clearance: 3 }])).toEqual([
+      { id: 'l', kind: 'image', resourceId: 'logo:pub', logoId: 'pub', zone: 'back', x: 1, y: 2, width: 20, height: 10, clearance: 3 },
+    ]);
+    expect(readCoverLogos([{ id: 'l', zone: 'back', x: 1, y: 2, width: 20, height: 10 }])).toEqual([]);
+    expect(readCoverFinishes([
+      { id: 'a', kind: 'varnish', ink: 'Barniz', shape: { box: { zone: 'front', x: 1, y: 2, width: 3, height: 4 } } },
+      { id: 'b', kind: 'foilGold', ink: 'Oro', shape: { element: 'l' } },
+      { id: 'c', kind: 'glitter', ink: 'X', shape: { element: 'l' } },
+      { id: 'd', kind: 'emboss', ink: 'X', shape: {} },
+    ]).map((f) => f.id)).toEqual(['a', 'b']);
+  });
+
+  it('moves a finish’s own box on the canvas, and places new logos and finishes on the front', async () => {
+    const { finishAsElement, finishFromElement, newFinish, newLogo } = await import('./coverLayers.js');
+    const finish = { id: 'a', kind: 'varnish' as const, ink: 'Barniz', shape: { box: { zone: 'front' as const, x: 1, y: 2, width: 3, height: 4 } } };
+    const el = finishAsElement(finish, '#7fb2e5')!;
+    expect(el).toMatchObject({ id: 'a', kind: 'box', color: '#7fb2e5', zone: 'front', x: 1 });
+    expect(finishFromElement(finish, { ...el, x: 9 }).shape).toEqual({ box: { zone: 'front', x: 9, y: 2, width: 3, height: 4 } });
+    expect(finishAsElement({ ...finish, shape: { element: 'x' } }, '#fff')).toBeUndefined();
+    const logo = newLogo(sheet, { logoId: 'pub' }, 2, 3)!;
+    expect(logo).toMatchObject({ kind: 'image', logoId: 'pub', resourceId: 'logo:pub', zone: 'front', clearance: 3 });
+    expect(logo.width / logo.height).toBeCloseTo(2, 1);
+    expect(newFinish(sheet, 'foilGold', 'Oro')).toMatchObject({ kind: 'foilGold', ink: 'Oro', shape: { box: { zone: 'front' } } });
+  });
+});
