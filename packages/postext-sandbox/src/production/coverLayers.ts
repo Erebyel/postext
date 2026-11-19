@@ -53,6 +53,9 @@ export interface CoverElementSetting {
   y: number;
   width: number;
   height: number;
+  /** Its zone's size when it was placed, mm: when the zone changes (the
+   *  format, the spine), it is scaled with it. */
+  basis?: { width: number; height: number };
   /** A box's opacity, 0 … 1 (an effect's); absent: opaque. */
   opacity?: number;
   /** A movable element painted as it is past the design margin, over the
@@ -85,7 +88,7 @@ export interface CoverFinishSetting {
     | { outline: CoverOutline; box: FinishBox };
 }
 
-type FinishBox = { zone: CoverZoneName; x: number; y: number; width: number; height: number };
+type FinishBox = { zone: CoverZoneName; x: number; y: number; width: number; height: number; basis?: { width: number; height: number } };
 
 /** A stored path that reads: subpaths of two nodes or more, each node a
  *  point with handles that are points too. */
@@ -164,6 +167,7 @@ export function readCoverElements(raw: unknown): CoverElementSetting[] {
       ...(e.kind !== 'image' ? readEffects(e) : {}),
       ...(outline ? { outline } : {}),
       ...(clip ? { clip } : {}),
+      ...(isRecord(e.basis) && finite(e.basis.width) && finite(e.basis.height) && e.basis.width > 0 && e.basis.height > 0 ? { basis: { width: e.basis.width, height: e.basis.height } } : {}),
       ...named(e.name),
       zone: e.zone as CoverZoneName,
       x: e.x,
@@ -201,7 +205,7 @@ export function readCoverFinishes(raw: unknown): CoverFinishSetting[] {
     if (typeof shape.element === 'string') return [{ id: f.id, ...named(f.name), kind: f.kind as CoverFinishKind, ink, shape: { element: shape.element } }];
     const [box] = readCoverElements([{ id: f.id, kind: 'box', color: '#000000', ...(isRecord(shape.box) ? shape.box : {}) }]);
     if (!box) return [];
-    const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height };
+    const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height, ...(box.basis ? { basis: box.basis } : {}) };
     const outline = readOutline(shape.outline);
     return [{ id: f.id, ...named(f.name), kind: f.kind as CoverFinishKind, ink, shape: outline ? { outline, box: at } : { box: at } }];
   });
@@ -217,7 +221,7 @@ export function finishAsElement(finish: CoverFinishSetting, screen: string): Cov
 
 /** The finish moved to where its element now stands. */
 export function finishFromElement(finish: CoverFinishSetting, el: CoverElementSetting): CoverFinishSetting {
-  const box = { zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height };
+  const box = { zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height, ...(el.basis ? { basis: el.basis } : {}) };
   return { ...finish, shape: 'outline' in finish.shape ? { outline: finish.shape.outline, box } : { box } };
 }
 
@@ -243,12 +247,12 @@ export const elementRect = (sheet: ProductionSheet, el: CoverElementSetting): Sh
 
 /** The element at `rect` (sheet mm), placed by the zone it now stands in. */
 export function elementAt(sheet: ProductionSheet, el: CoverElementSetting, rect: SheetRect): CoverElementSetting {
-  const { zone, x, y, width, height } = placeCoverElement(sheet, geometryOf(el), rect);
-  return { ...el, zone, x, y, width, height };
+  const { zone, x, y, width, height, basis } = placeCoverElement(sheet, geometryOf(el), rect);
+  return { ...el, zone, x, y, width, height, ...(basis ? { basis } : {}) };
 }
 
 /** Only the placing of an element, which is all the engine's geometry reads. */
-const geometryOf = (el: CoverElementSetting): CoverElement => ({ id: el.id, kind: el.kind, zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height });
+const geometryOf = (el: CoverElementSetting): CoverElement => ({ id: el.id, kind: el.kind, zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height, ...(el.basis ? { basis: el.basis } : {}) });
 
 export function newElementId(): string {
   return `el-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -275,6 +279,7 @@ export function newElement(sheet: ProductionSheet, kind: 'image' | 'box', resour
     kind,
     ...(kind === 'image' ? { resourceId: resource?.id ?? '' } : { color }),
     zone: 'front',
+    basis: { width: front.rect.width, height: front.rect.height },
     x: round((front.rect.width - width) / 2),
     y: round((front.rect.height - height) / 2),
     width: round(width),
@@ -300,6 +305,7 @@ export function newLogo(
     kind: 'image',
     ...('logoId' in source ? { logoId: source.logoId, resourceId: `logo:${source.logoId}` } : { resourceId: source.resourceId }),
     zone: 'front',
+    basis: { width: front.rect.width, height: front.rect.height },
     x: round((front.rect.width - width) / 2),
     y: round(front.safe.y + front.safe.height - front.rect.y - height),
     width: round(width),
@@ -313,7 +319,7 @@ export function newLogo(
 export function newFinish(sheet: ProductionSheet, kind: CoverFinishKind, ink: string, trace?: { outline: CoverOutline; aspect: number }): CoverFinishSetting | undefined {
   const box = trace ? newShape(sheet, trace, '#000000') : newElement(sheet, 'box');
   if (!box) return undefined;
-  const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height };
+  const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height, ...(box.basis ? { basis: box.basis } : {}) };
   return { id: box.id, kind, ink, shape: trace ? { outline: trace.outline, box: at } : { box: at } };
 }
 
@@ -330,6 +336,7 @@ export function newBasicShape(sheet: ProductionSheet, kind: BasicShape, color: s
     path: basicShape(kind),
     ...(line ? { stroke: { color, width: 0.75 } } : { color }),
     zone: box.zone,
+    ...(box.basis ? { basis: box.basis } : {}),
     x: box.x,
     y: line ? Math.round((box.y + (box.height - height) / 2) * 100) / 100 : box.y,
     width: box.width,
@@ -351,6 +358,7 @@ export function newShape(sheet: ProductionSheet, trace: { outline: CoverOutline;
     color,
     outline: trace.outline,
     zone: 'front',
+    basis: { width: front.rect.width, height: front.rect.height },
     x: round((front.rect.width - width) / 2),
     y: round((front.rect.height - height) / 2),
     width: round(width),

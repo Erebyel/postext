@@ -153,6 +153,10 @@ function CoverDesigner() {
     update({ ...record, design: d });
   };
   const finishLabel = (kind: CoverFinishKind) => String(labels[FINISH_LABEL[kind]]);
+  const settled = (el: CoverElementSetting): CoverElementSetting => {
+    const r = sheet ? elementRect(sheet, el) : undefined;
+    return sheet && r ? elementAt(sheet, el, r) : el;
+  };
 
   // What the canvas moves: the active layer's items, a finish by its own
   // box (one shaped by an element follows that element).
@@ -403,7 +407,9 @@ function CoverDesigner() {
                   />
                 ) : selectedEl ? (
                   <ElementProperties
-                    el={selectedEl}
+                    // As it stands on this sheet (scaled when the format
+                    // changed since it was placed): what is edited is that.
+                    el={settled(selectedEl)}
                     layer={active}
                     zone={zoneName(selectedEl.zone)}
                     aspect={selectedEl.kind === 'image' ? aspectOf(selectedEl, allResources, library) : undefined}

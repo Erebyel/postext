@@ -76,9 +76,9 @@ export interface CoverFinish {
   /** A box of its own, an element's shape, or a saved outline laid in a
    *  box of its own. */
   shape:
-    | { box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height'> }
+    | { box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height' | 'basis'> }
     | { element: string }
-    | { outline: CoverOutline; box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height'> };
+    | { outline: CoverOutline; box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height' | 'basis'> };
 }
 
 /** An outline: closed polygons, their points in fractions of the box they
@@ -123,6 +123,12 @@ export interface CoverElement extends CoverEffects {
   /** A box's colour. */
   color?: ColorValue;
   zone: CoverZoneName;
+  /** The size of its zone when it was placed, mm. When the zone is
+   *  another size now (the book's format changed, the spine grew), the
+   *  element is scaled with it: a box or a shape on each axis, a picture
+   *  evenly, about where its centre falls, so it keeps its proportions.
+   *  Absent: it stays as placed. */
+  basis?: { width: number; height: number };
   /** Its box, mm from the zone's top-left corner; it may run out of the
    *  zone, onto the sheet's other zones or into the bleed. */
   x: number;
@@ -159,7 +165,20 @@ export function coverElementRect(sheet: ProductionSheet, el: CoverElement): Shee
   const zone = sheet.zones.find((z) => z.name === el.zone)
     ?? sheet.zones.find((z) => z.name === ZONE_STAND_IN[el.zone]);
   if (!zone) return undefined;
-  return { x: zone.rect.x + el.x, y: zone.rect.y + el.y, width: el.width, height: el.height };
+  const b = el.basis;
+  if (!b || b.width <= 0 || b.height <= 0 || (Math.abs(b.width - zone.rect.width) < 0.01 && Math.abs(b.height - zone.rect.height) < 0.01)) {
+    return { x: zone.rect.x + el.x, y: zone.rect.y + el.y, width: el.width, height: el.height };
+  }
+  const sx = zone.rect.width / b.width;
+  const sy = zone.rect.height / b.height;
+  if (el.kind === 'image') {
+    // A picture keeps its proportions: scaled evenly, its centre where it was.
+    const k = Math.min(sx, sy);
+    const cx = (el.x + el.width / 2) * sx;
+    const cy = (el.y + el.height / 2) * sy;
+    return { x: zone.rect.x + cx - (el.width * k) / 2, y: zone.rect.y + cy - (el.height * k) / 2, width: el.width * k, height: el.height * k };
+  }
+  return { x: zone.rect.x + el.x * sx, y: zone.rect.y + el.y * sy, width: el.width * sx, height: el.height * sy };
 }
 
 /** The element at `rect` (sheet mm) placed by the zone its centre falls in
@@ -170,7 +189,15 @@ export function placeCoverElement(sheet: ProductionSheet, el: CoverElement, rect
   const distance = (r: SheetRect) => Math.hypot(Math.max(r.x - cx, 0, cx - r.x - r.width), Math.max(r.y - cy, 0, cy - r.y - r.height));
   const zone = sheet.zones.reduce((best, z) => (distance(z.rect) < distance(best.rect) ? z : best), sheet.zones[0]!);
   const round = (v: number) => Math.round(v * 100) / 100;
-  return { ...el, zone: zone.name, x: round(rect.x - zone.rect.x), y: round(rect.y - zone.rect.y), width: round(rect.width), height: round(rect.height) };
+  return {
+    ...el,
+    zone: zone.name,
+    x: round(rect.x - zone.rect.x),
+    y: round(rect.y - zone.rect.y),
+    width: round(rect.width),
+    height: round(rect.height),
+    basis: { width: round(zone.rect.width), height: round(zone.rect.height) },
+  };
 }
 
 export interface CoverPageOptions {

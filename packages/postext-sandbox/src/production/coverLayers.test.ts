@@ -93,3 +93,21 @@ describe('effects, logos and finishes', () => {
     expect(newFinish(sheet, 'foilGold', 'Oro')).toMatchObject({ kind: 'foilGold', ink: 'Oro', shape: { box: { zone: 'front' } } });
   });
 });
+
+describe('elements when the format changes', () => {
+  const sheetOf = (width: number, height: number) => softcoverSheet({ width, height }, 20, resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, { width, height }), false);
+
+  it('keeps the zone’s size each element was placed in, and reads it back', () => {
+    const small = sheetOf(150, 230);
+    const el = newElement(small, 'box')!;
+    const front = small.zones.find((z) => z.name === 'front')!.rect;
+    expect(el.basis).toEqual({ width: front.width, height: front.height });
+    const [read] = readCoverElements([el]);
+    expect(read!.basis).toEqual(el.basis);
+    // Moved on a larger format: placed again by that format's zone.
+    const large = sheetOf(170, 240);
+    const moved = elementAt(large, el, elementRect(large, el)!);
+    expect(moved.basis!.width).toBeCloseTo(large.zones.find((z) => z.name === 'front')!.rect.width, 1);
+    expect(elementRect(large, el)!.width).toBeGreaterThan(el.width);
+  });
+});

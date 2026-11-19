@@ -9,7 +9,7 @@ import {
   roundedRectPath,
   shapeArt,
 } from '../../production/shapes.js';
-import { coverPage, resolveBindingMeasures, softcoverSheet } from '../../production/index.js';
+import { coverElementRect, coverPage, placeCoverElement, resolveBindingMeasures, softcoverSheet } from '../../production/index.js';
 
 const ink = (hex: string) => ({ hex, model: 'hex' as const });
 const trim = { width: 150, height: 230 };
@@ -84,5 +84,37 @@ describe('cover elements with effects', () => {
     expect(lifted.resourceId).toBe('cover-art-lifted');
     expect(cover.files['cover-art-lifted.svg']).toBeDefined();
     expect(els.find((e) => e.id === 'cover-el-star')!.d).toBe(pathData(basicShape('star')));
+  });
+});
+
+describe('cover elements when the format changes', () => {
+  const sheetOf = (width: number, height: number) => softcoverSheet({ width, height }, 20, resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, { width, height }), false);
+  const small = sheetOf(150, 230);
+  const large = sheetOf(170, 240);
+  const front = (s: typeof small) => s.zones.find((z) => z.name === 'front')!.rect;
+
+  it('scales a box with its zone, and keeps a picture’s proportions about its centre', () => {
+    const f = front(small);
+    const box = placeCoverElement(small, { id: 'b', kind: 'box', zone: 'front', x: 0, y: 0, width: 1, height: 1 }, { x: f.x + 15, y: f.y + 23, width: 75, height: 115 });
+    expect(box.basis).toEqual({ width: f.width, height: f.height });
+    const g = front(large);
+    const r = coverElementRect(large, box)!;
+    expect(r.x - g.x).toBeCloseTo(15 * (g.width / f.width), 1);
+    expect(r.width).toBeCloseTo(75 * (g.width / f.width), 1);
+    expect(r.height).toBeCloseTo(115 * (g.height / f.height), 1);
+
+    const pic = { ...box, kind: 'image' as const, resourceId: 'p' };
+    const p = coverElementRect(large, pic)!;
+    const k = Math.min(g.width / f.width, g.height / f.height);
+    expect(p.width / p.height).toBeCloseTo(75 / 115, 3);
+    expect(p.width).toBeCloseTo(75 * k, 1);
+    expect(p.x + p.width / 2 - g.x).toBeCloseTo((15 + 37.5) * (g.width / f.width), 1);
+  });
+
+  it('leaves an element placed before the change as it was, and one on its own zone alone', () => {
+    const el = { id: 'e', kind: 'box' as const, zone: 'front' as const, x: 10, y: 10, width: 20, height: 20 };
+    expect(coverElementRect(large, el)!.width).toBe(20);
+    const f = front(small);
+    expect(coverElementRect(small, { ...el, basis: { width: f.width, height: f.height } })!.width).toBe(20);
   });
 });
