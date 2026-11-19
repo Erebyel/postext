@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFNumber, PDFRawStream, decodePDFRawStream } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { buildDocument, coverMarkdown, coverPage, versionSheets } from 'postext';
+import { basicShape, buildDocument, coverMarkdown, coverPage, versionSheets } from 'postext';
 import type { PostextConfig, ProductionVersion, VersionSheets } from 'postext';
 import { renderToPdf } from '../pdf-backend/index.js';
 import { parseFontString } from '../fontString.js';
@@ -212,5 +212,25 @@ describe('cover sheets as PDF', () => {
     }
     expect(images).toBeGreaterThan(0);
     expect(clips).toBeGreaterThan(0);
+  });
+
+  it('draws a shape with a gradient, a shadow and a border, its pictures inside', async () => {
+    const v = sheetsOf({ id: 'rustica', name: 'Rústica', binding: 'perfect' });
+    const ink = (hex: string) => ({ hex, model: 'hex' as const });
+    const cover = coverPage(v.cover, {
+      design: { elements: [{ id: 'blob', kind: 'shape', color: ink('#ff0000'), path: basicShape('ellipse'), gradient: { to: ink('#0000ff'), angle: 45 }, shadow: { color: ink('#000000'), opacity: 0.5, x: 2, y: 2, blur: 3 }, stroke: { color: ink('#000000'), width: 0.5 }, zone: 'front', x: 10, y: 10, width: 60, height: 40 }] },
+    });
+    const config: PostextConfig = { page: { ...cover.page, dpi: 150 }, header: { elements: [] }, footer: { elements: [] }, pageTemplates: [cover.template] };
+    const doc = buildDocument({ markdown: coverMarkdown('cover', text, cover.slots), resources: cover.resources }, config);
+    const warnings: { kind: string }[] = [];
+    const bytes = await renderToPdf(doc, { fontProvider, resourceBytes: (id: string) => cover.files[id], onWarning: (w) => void warnings.push(w) });
+    expect(warnings.filter((w) => w.kind === 'missingImage' || w.kind === 'svgUnsupported')).toEqual([]);
+    const pdf = await PDFDocument.load(bytes);
+    let images = 0;
+    for (const [, obj] of pdf.context.enumerateIndirectObjects()) {
+      if (obj instanceof PDFRawStream && obj.dict.lookup(PDFName.of('Subtype'))?.toString() === '/Image') images++;
+    }
+    // The shadow and the gradient.
+    expect(images).toBeGreaterThanOrEqual(2);
   });
 });

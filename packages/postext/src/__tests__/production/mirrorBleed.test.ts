@@ -108,7 +108,8 @@ describe('coverPage with a mirror bleed', () => {
       design: { elements: [{ id: 'leaf', kind: 'shape', color: ink('#ff0000'), outline: [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0.5, y: 1 }]], zone: 'front', x: -5, y: 0, width: 20, height: 20 }] },
     });
     const svg = new TextDecoder().decode(cover.files['cover-mirror.svg']);
-    expect(svg).toContain('d="M 0 0 L 1 0 L 0.5 1 Z"');
+    // The triangle in sheet mm, at the shape's box.
+    expect(svg).toMatch(/<path d="M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+ Z" fill="#ff0000"\/>/);
   });
 
   it('adds no mirror where the bleed is within the design margin', () => {

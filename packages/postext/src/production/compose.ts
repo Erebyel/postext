@@ -14,6 +14,7 @@ import type { ColorValue, Dimension, PageConfig } from '../types/page.js';
 import type { CmykPercent } from '../types/output/print.js';
 import { contourPolygon } from '../contour/index.js';
 import { mirrorBleedSvg } from './mirrorBleed.js';
+import { needsArt, pathData, roundedRectPath, shapeArt, shapeArtSvg, type CoverEffects, type CoverPath } from './shapes.js';
 import type { Resource } from '../types/resources/resources.js';
 import type { ProductionVersion } from '../types/output/production.js';
 import { isbnBarcodeSvg } from './barcodeSvg.js';
@@ -109,11 +110,14 @@ export const COVER_FINISH_INKS: Readonly<Record<CoverFinishKind, { ink: string; 
  *  a shape of colour (a box with an outline). Placed by the zone it stands
  *  in, so it moves with that zone when the spine grows or the binding
  *  changes. */
-export interface CoverElement {
+export interface CoverElement extends CoverEffects {
   id: string;
   kind: 'image' | 'box' | 'shape';
-  /** A shape's outline, in its box. */
+  /** A shape's outline, in its box (a traced one). */
   outline?: CoverOutline;
+  /** A shape drawn by nodes (a basic shape, edited), in its box; over
+   *  `outline` when both are there. */
+  path?: CoverPath;
   /** An image's picture: a bitmap or SVG resource of the book. */
   resourceId?: string;
   /** A box's colour. */
@@ -280,9 +284,14 @@ function underContentSvg(sheet: ProductionSheet, design: CoverDesign, pictures: 
     if (el.bleed === 'own') continue;
     const r = coverElementRect(sheet, el);
     if (!r || r.width <= 0 || r.height <= 0) continue;
-    if (el.kind === 'box' && el.color) parts.push(rect(r, svgFill(el.color, el.opacity)));
-    if (el.kind === 'shape' && el.color && el.outline) {
-      parts.push(`<path transform="matrix(${mmN(r.width)} 0 0 ${mmN(r.height)} ${mmN(r.x)} ${mmN(r.y)})" d="${outlinePathData(el.outline)}" ${svgFill(el.color, el.opacity)}/>`);
+    if (el.kind === 'box' && el.color && !el.radius && !el.stroke && !needsArt(el)) parts.push(rect(r, svgFill(el.color, el.opacity)));
+    else if (el.kind !== 'image') {
+      const path = elementPath(el, r);
+      if (path) {
+        const drawn = shapeArt(r, path, el.color, el, el.opacity ?? 1, `m-${el.id}`);
+        parts.push(drawn.content);
+        defs.push(drawn.defs);
+      }
     }
     const p = el.kind === 'image' && el.resourceId ? pictures[el.resourceId] : undefined;
     if (p) parts.push(image(p, containedRect(r, p.width / p.height)));
@@ -311,7 +320,7 @@ const onSheet = (r: SheetRect) => ({
 
 /** The decoration a design draws under the frames: the sheet's ground, its
  *  picture, each zone's ground, then the movable elements. */
-function designElements(sheet: ProductionSheet, design: CoverDesign | undefined, mirrored = false): DesignElement[] {
+function designElements(sheet: ProductionSheet, design: CoverDesign | undefined, mirrored = false, art: ReadonlyMap<string, SheetRect> = new Map()): DesignElement[] {
   if (!design) return [];
   const out: DesignElement[] = [];
   const whole = { x: 0, y: 0, width: sheet.width, height: sheet.height };
@@ -337,7 +346,7 @@ function designElements(sheet: ProductionSheet, design: CoverDesign | undefined,
     out.push({ kind: 'box', id: `cover-zone-${zone.name}`, placement: onSheet(toBleed(zone.rect, sheet)), style: { backgroundColor: color } } as DesignBoxElement);
   }
   // Under a mirror, the elements that keep their own bleed go over it.
-  for (const el of design.elements ?? []) if (!mirrored || el.bleed !== 'own') out.push(...elementDrawing(sheet, el, 'cover-el', false));
+  for (const el of design.elements ?? []) if (!mirrored || el.bleed !== 'own') out.push(...elementDrawing(sheet, el, 'cover-el', false, art));
   return out;
 }
 
@@ -350,7 +359,7 @@ function withOpacity(color: ColorValue, opacity: number | undefined): ColorValue
 
 /** An element as the decoration draws it: a picture fitted in its box, or
  *  a box of its colour; `over` the text frames or under them. */
-function elementDrawing(sheet: ProductionSheet, el: CoverElement, prefix: string, over: boolean): DesignElement[] {
+function elementDrawing(sheet: ProductionSheet, el: CoverElement, prefix: string, over: boolean, art: ReadonlyMap<string, SheetRect> = new Map()): DesignElement[] {
   const rect = coverElementRect(sheet, el);
   if (!rect || rect.width <= 0 || rect.height <= 0) return [];
   const id = `${prefix}-${el.id}`;
@@ -358,12 +367,45 @@ function elementDrawing(sheet: ProductionSheet, el: CoverElement, prefix: string
   if (el.kind === 'image' && el.resourceId) {
     return [{ kind: 'image', id, resourceId: el.resourceId, decorative: true, fit: 'contain', placement: onSheet(rect), ...above }];
   }
-  if (el.kind === 'box' && el.color) {
+  // With a gradient or a shadow: the picture of itself `art` holds.
+  const drawn = art.get(el.id);
+  if (drawn) return [{ kind: 'image', id, resourceId: coverArtId(el.id), decorative: true, fit: 'contain', placement: onSheet(drawn), ...above }];
+  if (el.kind === 'box' && el.color && !el.radius && !el.stroke) {
     return [{ kind: 'box', id, placement: onSheet(rect), style: { backgroundColor: withOpacity(el.color, el.opacity) }, ...above } as DesignBoxElement];
   }
-  const d = el.kind === 'shape' && el.color && el.outline ? outlinePathData(el.outline) : '';
-  if (d) return [{ kind: 'path', id, d, viewBox: [1, 1], preserveAspectRatio: 'none', fill: withOpacity(el.color!, el.opacity), placement: onSheet(rect), ...above }];
-  return [];
+  const path = elementPath(el, rect);
+  if (!path) return [];
+  const closed = path.some((p) => p.closed);
+  const fill = closed && el.color ? withOpacity(el.color, el.opacity) : undefined;
+  const stroke = el.stroke && el.stroke.width > 0 ? el.stroke : undefined;
+  if (!fill && !stroke) return [];
+  return [{
+    kind: 'path',
+    id,
+    d: pathData(path),
+    viewBox: [1, 1],
+    preserveAspectRatio: 'none',
+    ...(fill ? { fill } : {}),
+    ...(stroke ? { stroke: withOpacity(stroke.color, el.opacity), width: mm(stroke.width) } : {}),
+    placement: onSheet(rect),
+    ...above,
+  }];
+}
+
+/** The resource id of a box's or shape's picture of itself (its gradient,
+ *  its shadow). */
+export const coverArtId = (id: string): string => `cover-art-${id}`;
+
+/** The shape of a box or a shape element, in fractions of its box `rect`:
+ *  its nodes, its traced outline, or its box (corners rounded or not). */
+export function elementPath(el: CoverElement, rect: SheetRect): CoverPath | undefined {
+  if (el.kind === 'shape') {
+    if (el.path?.length) return el.path;
+    if (el.outline?.length) return el.outline.map((poly) => ({ closed: true, nodes: poly.map((p) => ({ x: p.x, y: p.y })) }));
+    return undefined;
+  }
+  if (el.kind === 'box') return roundedRectPath(rect.width, rect.height, el.radius ?? 0);
+  return undefined;
 }
 
 /** Where a picture fitted (`contain`) in a box is drawn, by its aspect. */
@@ -421,11 +463,11 @@ function inkHex(screen: string, name: string): string {
 /** The decoration over the text: the effects, the logos, then (after the
  *  barcode, which the caller adds) the finishes. An effect cut to an
  *  outline draws the picture `clipped` makes of it instead of its own. */
-function overElements(sheet: ProductionSheet, design: CoverDesign | undefined, clipped: ReadonlyMap<string, string> = new Map()): DesignElement[] {
+function overElements(sheet: ProductionSheet, design: CoverDesign | undefined, clipped: ReadonlyMap<string, string> = new Map(), art: ReadonlyMap<string, SheetRect> = new Map()): DesignElement[] {
   const out: DesignElement[] = [];
   for (const el of design?.effects ?? []) {
     const own = clipped.get(el.id);
-    out.push(...elementDrawing(sheet, own ? { ...el, resourceId: own } : el, 'cover-fx', true));
+    out.push(...elementDrawing(sheet, own ? { ...el, resourceId: own } : el, 'cover-fx', true, art));
   }
   for (const logo of design?.logos ?? []) out.push(...elementDrawing(sheet, logo, 'cover-logo', true));
   return out;
@@ -451,8 +493,9 @@ function finishElements(sheet: ProductionSheet, design: CoverDesign | undefined,
     const target = all.find((e) => e.id === (finish.shape as { element: string }).element);
     const rect = target ? coverElementRect(sheet, target) : undefined;
     if (!target || !rect || rect.width <= 0 || rect.height <= 0) continue;
-    const own = target.kind === 'shape' ? target.outline : target.clip;
-    const shaped = own ? outlinePathData(own) : '';
+    const own = target.kind === 'image' ? target.clip : undefined;
+    const path = target.kind !== 'image' ? elementPath(target, rect) : undefined;
+    const shaped = own ? outlinePathData(own) : path ? pathData(path) : '';
     if (shaped) {
       out.push({ kind: 'path', id, over: true, d: shaped, viewBox: [1, 1], preserveAspectRatio: 'none', fill, placement: onSheet(rect) });
       continue;
@@ -577,7 +620,23 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
   // its ground fills: then the design goes to the edge as it is.
   const mirror = under?.content && under.missing.length === 0 ? mirrorBleedSvg(sheet, options.mirrorMargin!, under.content, under.defs) : undefined;
   const mirrorSkipped = under && under.missing.length > 0 && mirrorBleedSvg(sheet, options.mirrorMargin!, 'x') ? [...new Set(under.missing)] : undefined;
-  const elements: DesignElement[] = designElements(sheet, options.design, !!mirror);
+  // The boxes and shapes with a gradient or a shadow, each drawn as a
+  // picture of its own.
+  const art = new Map<string, SheetRect>();
+  for (const el of [...(options.design?.elements ?? []), ...(options.design?.effects ?? [])]) {
+    if (el.kind === 'image' || !needsArt(el)) continue;
+    const rect = coverElementRect(sheet, el);
+    const path = rect ? elementPath(el, rect) : undefined;
+    if (!rect || !path || rect.width <= 0 || rect.height <= 0) continue;
+    const drawn = shapeArt(rect, path, el.color, el, el.opacity ?? 1, `a-${el.id}`);
+    const id = coverArtId(el.id);
+    const fileId = `${id}.svg`;
+    const px = (v: number) => (v / 25.4) * 96;
+    resources.push({ id, typeId: 'figure', kind: 'svg', createdAt: 0, updatedAt: 0, svg: { fileId, width: px(drawn.bounds.width), height: px(drawn.bounds.height) } } as Resource);
+    files[fileId] = new TextEncoder().encode(shapeArtSvg(drawn));
+    art.set(el.id, drawn.bounds);
+  }
+  const elements: DesignElement[] = designElements(sheet, options.design, !!mirror, art);
   if (mirror) {
     const fileId = `${MIRROR_RESOURCE_ID}.svg`;
     const px = (v: number) => (v / 25.4) * 96;
@@ -592,7 +651,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     files[fileId] = new TextEncoder().encode(mirror.svg);
     elements.push({ kind: 'image', id: MIRROR_RESOURCE_ID, resourceId: MIRROR_RESOURCE_ID, decorative: true, fit: 'contain', placement: onSheet({ x: 0, y: 0, width: sheet.width, height: sheet.height }) });
   }
-  if (mirror) for (const el of options.design?.elements ?? []) if (el.bleed === 'own') elements.push(...elementDrawing(sheet, el, 'cover-el', false));
+  if (mirror) for (const el of options.design?.elements ?? []) if (el.bleed === 'own') elements.push(...elementDrawing(sheet, el, 'cover-el', false, art));
   // The effects cut to an outline, each as a picture of its own.
   const clipped = new Map<string, string>();
   const clipSkipped: string[] = [];
@@ -612,7 +671,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     files[fileId] = new TextEncoder().encode(clippedPictureSvg(rect, el.clip, picture));
     clipped.set(el.id, id);
   }
-  elements.push(...overElements(sheet, options.design, clipped));
+  elements.push(...overElements(sheet, options.design, clipped, art));
   const back = sheet.zones.find((z) => z.name === 'back');
   const barcode = options.isbn && back
     ? isbnBarcodeSvg(options.isbn, { addOn: options.isbnAddOn, magnification: options.barcodeMagnification })

@@ -16,13 +16,14 @@
 import { useMemo, useRef, useState } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { ArrowDown, ArrowUp, ChevronRight, Eye, EyeOff, Image as ImageIcon, PenTool, Plus, Sparkles, Square, Stamp, Trash2, X } from 'lucide-react';
-import { COVER_FINISH_INKS, resolveBodyTextConfig, resolveColorValue, type CoverFinishKind, type CoverZoneName, type Resource } from 'postext';
+import { BASIC_SHAPES, COVER_FINISH_INKS, resolveBodyTextConfig, resolveColorValue, type BasicShape, type CoverFinishKind, type CoverZoneName, type Resource } from 'postext';
 import { useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
 import { Button, IconButton, NumberField, SegmentedControl, Select, Switch, cn, usePortalContainer } from '../ui/index.js';
 import { POPUP_Z_INDEX } from '../ui/layout/surface.js';
 import { fill } from '../print/fillTokens.js';
 import { bookTrimMm, coverDocumentInput, pickSheet, type CoverDesignSettings } from './bookProduction.js';
 import {
+  newBasicShape,
   newShape,
   COVER_LAYERS,
   FINISH_KINDS,
@@ -44,6 +45,8 @@ import {
 } from './coverLayers.js';
 import { CoverCanvas } from './CoverCanvas.js';
 import { DesignSection } from './CoverDesignSections.js';
+import { CoverEffectsFields } from './CoverEffectsFields.js';
+import { outlineAsPath } from './pathEditing.js';
 import { galleryPictureOf, galleryPicturesFrom, galleryResource, type CoverGallery, type GalleryTrace } from './coverGallery.js';
 import { pictureSize } from './coverImages.js';
 import { closeCoverDesigner, useCoverDesignerOpen } from './coverDesignerStore.js';
@@ -106,7 +109,15 @@ function CoverDesigner() {
   const [hidden, setHidden] = useState<ReadonlySet<CoverLayer>>(new Set());
   const [active, setActive] = useState<ItemLayer>('elements');
   const [open, setOpen] = useState<CoverLayer>('elements');
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Editing the selected shape's points instead of its box; picking
+  // another item leaves it.
+  const [points, setPoints] = useState(false);
+  const selected = selectedId;
+  const setSelected = (id: string | null) => {
+    if (id !== selectedId) setPoints(false);
+    setSelectedId(id);
+  };
 
   const design = useMemo(() => record?.design ?? {}, [record]);
   const bookTextHex = useMemo(() => {
@@ -273,12 +284,14 @@ function CoverDesigner() {
                           <PictureAdder pictures={pictures} gallery={gallery} labels={labels} onPick={(p) => add('elements', newElement(sheet, 'image', p))} />
                           <GalleryUpload gallery={gallery} labels={labels} onAdded={(next, first) => { updateGallery(next); add('elements', newElement(sheet, 'image', galleryResource(first))); }} />
                           <Button variant="outline" size="sm" onClick={() => add('elements', newElement(sheet, 'box'))}>{labels.coverAddBox}</Button>
+                          <ShapeAdder labels={labels} onPick={(k) => add('elements', newBasicShape(sheet, k, '#808080'))} />
                         </>
                       )}
                       {expanded && layer === 'effects' && (
                         <>
                           <PictureAdder pictures={pictures} gallery={gallery} labels={labels} onPick={(p) => add('effects', newElement(sheet, 'image', p))} />
                           <TraceAdder traces={gallery.traces} label={labels.coverAddTracedVeil} onPick={(t) => add('effects', newShape(sheet, t, '#000000', 0.4))} />
+                          <ShapeAdder labels={labels} onPick={(k) => { const shape = newBasicShape(sheet, k, '#000000'); add('effects', shape ? { ...shape, ...(shape.color ? { opacity: 0.4 } : {}) } : undefined); }} />
                           <Button variant="outline" size="sm" onClick={() => { const box = newElement(sheet, 'box', undefined, '#000000'); add('effects', box ? ({ ...box, opacity: 0.4 } as CoverElementSetting) : undefined); }}>
                             {labels.coverAddVeil}
                           </Button>
@@ -344,6 +357,7 @@ function CoverDesigner() {
                   elements={canvasItems}
                   clearance={active === 'logos' ? (id) => logos.find((l) => l.id === id)?.clearance ?? 0 : undefined}
                   selected={selected}
+                  points={points}
                   onSelect={setSelected}
                   onChange={changeItem}
                   onDelete={deleteItem}
@@ -406,6 +420,16 @@ function CoverDesigner() {
                     }}
                     onRestack={(step) => setDesign(active, restack(activeList, selectedEl.id, step))}
                     onDelete={() => deleteItem(selectedEl.id)}
+                    points={points}
+                    onPoints={(on) => {
+                      // A traced outline becomes nodes the first time its points are edited.
+                      if (on && selectedEl.kind === 'shape' && !selectedEl.path && selectedEl.outline) {
+                        const next = { ...selectedEl, path: outlineAsPath(selectedEl.outline) };
+                        delete next.outline;
+                        changeItem(next);
+                      }
+                      setPoints(on);
+                    }}
                   />
                 ) : (
                   <p className="m-0 text-(--slate)">{labels.coverElementNone}</p>
@@ -465,6 +489,27 @@ function GalleryUpload({ gallery, labels, onAdded }: { gallery: CoverGallery; la
         }}
       />
     </>
+  );
+}
+
+const SHAPE_LABEL: Record<BasicShape, keyof Labels> = {
+  rectangle: 'coverShapeRectangle',
+  ellipse: 'coverShapeEllipse',
+  polygon: 'coverShapePolygon',
+  star: 'coverShapeStar',
+  line: 'coverShapeLine',
+};
+
+/** A basic shape to add, its points then editable. */
+function ShapeAdder({ labels, onPick }: { labels: Labels; onPick: (k: BasicShape) => void }) {
+  return (
+    <Select
+      size="sm"
+      value=""
+      onValueChange={(k) => { if (k) onPick(k as BasicShape); }}
+      options={[{ value: '', label: labels.coverAddShape }, ...BASIC_SHAPES.map((k) => ({ value: k, label: String(labels[SHAPE_LABEL[k]]) }))]}
+      ariaLabel={labels.coverAddShape}
+    />
   );
 }
 
@@ -539,7 +584,9 @@ const KEPT = '__kept__';
 /** The selected item's place, size and colour (an effect's opacity, a
  *  logo's clear space), and its order. A picture's height follows its
  *  width (its proportions). */
-function ElementProperties({ el, layer, zone, aspect, clearance, traces, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete }: {
+function ElementProperties({ el, layer, zone, aspect, clearance, traces, points, onPoints, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete }: {
+  points: boolean;
+  onPoints: (on: boolean) => void;
   el: CoverElementSetting;
   traces: readonly GalleryTrace[];
   layer: ItemLayer;
@@ -628,6 +675,15 @@ function ElementProperties({ el, layer, zone, aspect, clearance, traces, canForw
           />
         </label>
       )}
+      {el.kind === 'shape' && (
+        <div className="flex flex-col gap-1">
+          <Button variant={points ? 'primary' : 'outline'} size="sm" icon={<PenTool size={13} />} onClick={() => onPoints(!points)}>
+            {points ? labels.coverPointsDone : labels.coverPointsEdit}
+          </Button>
+          {points && <p className="m-0 text-(--slate)">{labels.coverPointsHint}</p>}
+        </div>
+      )}
+      {(layer === 'elements' || layer === 'effects') && el.kind !== 'image' && <CoverEffectsFields el={el} labels={labels} onChange={onChange} />}
       {layer === 'logos' && clearance !== undefined && row(labels.coverLogoClearance, clearance, (v) => onClearance(Math.max(0, v)), 0)}
       <div className="flex items-center gap-1">
         <IconButton label={labels.coverElementForward} icon={<ArrowUp size={14} aria-hidden="true" />} disabled={!canForward} onClick={() => onRestack(1)} />

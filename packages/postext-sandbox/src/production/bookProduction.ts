@@ -214,10 +214,17 @@ export function coverDesignOf(settings: CoverDesignSettings | undefined): CoverD
     zones.flapFront = ink(z.flaps);
     zones.flapBack = ink(z.flaps);
   }
-  const toCore = ({ color, ...e }: CoverElementSetting): NonNullable<CoverDesign['elements']>[number] => ({ ...e, ...(color ? { color: ink(color) } : {}) });
+  const toCore = ({ color, stroke, gradient, shadow, ...e }: CoverElementSetting): NonNullable<CoverDesign['elements']>[number] => ({
+    ...e,
+    ...(color ? { color: ink(color) } : {}),
+    ...(stroke ? { stroke: { color: ink(stroke.color), width: stroke.width } } : {}),
+    ...(gradient ? { gradient: { to: ink(gradient.to), angle: gradient.angle } } : {}),
+    ...(shadow ? { shadow: { ...shadow, color: ink(shadow.color) } } : {}),
+  });
   const elements = (settings.elements ?? []).map(toCore);
   const effects = (settings.effects ?? []).map(toCore);
-  const logos = (settings.logos ?? []).map(({ logoId, color: _c, ...l }): NonNullable<CoverDesign['logos']>[number] => ({
+  // A logo is a picture: no colour, no effects of a box.
+  const logos = (settings.logos ?? []).map(({ logoId, color: _c, stroke: _s, gradient: _g, shadow: _h, ...l }): NonNullable<CoverDesign['logos']>[number] => ({
     ...l,
     kind: 'image',
     ...(logoId ? { resourceId: logoResourceId(logoId) } : {}),

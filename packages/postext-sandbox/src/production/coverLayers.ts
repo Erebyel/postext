@@ -12,7 +12,7 @@
  * out.
  */
 
-import { coverElementRect, placeCoverElement, type CoverElement, type CoverFinishKind, type CoverOutline, type CoverZoneName, type ProductionSheet, type Resource, type SheetRect } from 'postext';
+import { basicShape, coverElementRect, placeCoverElement, type BasicShape, type CoverElement, type CoverFinishKind, type CoverOutline, type CoverPath, type CoverZoneName, type ProductionSheet, type Resource, type SheetRect } from 'postext';
 import type { CoverDesignSettings } from './bookProduction.js';
 
 export const COVER_LAYERS = ['background', 'elements', 'texts', 'effects', 'logos', 'finishes'] as const;
@@ -38,6 +38,14 @@ export interface CoverElementSetting {
   /** An effect's picture cut to an outline (a trace of the gallery),
    *  filling its box. */
   clip?: CoverOutline;
+  /** A shape drawn by nodes (a basic shape, its points edited). */
+  path?: CoverPath;
+  /** A box's or shape's effects: rounded corners (mm, a box's), a border,
+   *  a gradient from its colour, a soft shadow. Colours `#rrggbb`. */
+  radius?: number;
+  stroke?: { color: string; width: number };
+  gradient?: { to: string; angle: number };
+  shadow?: { color: string; opacity: number; x: number; y: number; blur: number };
   resourceId?: string;
   color?: string;
   zone: CoverZoneName;
@@ -79,6 +87,40 @@ export interface CoverFinishSetting {
 
 type FinishBox = { zone: CoverZoneName; x: number; y: number; width: number; height: number };
 
+/** A stored path that reads: subpaths of two nodes or more, each node a
+ *  point with handles that are points too. */
+export function readPath(raw: unknown): CoverPath | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const pt = (v: unknown) => (isRecord(v) && finite(v.x) && finite(v.y) ? { x: v.x, y: v.y } : undefined);
+  const out: CoverPath = [];
+  for (const sub of raw) {
+    if (!isRecord(sub) || !Array.isArray(sub.nodes)) continue;
+    const nodes = sub.nodes.flatMap((n) => {
+      const p = pt(n);
+      if (!p || !isRecord(n)) return [];
+      const i = pt(n.in);
+      const o = pt(n.out);
+      return [{ ...p, ...(i ? { in: i } : {}), ...(o ? { out: o } : {}) }];
+    });
+    if (nodes.length >= 2) out.push({ nodes, closed: sub.closed === true });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** A box's or shape's stored effects that read. */
+function readEffects(e: Record<string, unknown>): Pick<CoverElementSetting, 'radius' | 'stroke' | 'gradient' | 'shadow'> {
+  const out: Pick<CoverElementSetting, 'radius' | 'stroke' | 'gradient' | 'shadow'> = {};
+  const hex = (v: unknown): v is string => typeof v === 'string' && HEX.test(v);
+  if (finite(e.radius) && e.radius > 0) out.radius = e.radius;
+  if (isRecord(e.stroke) && hex(e.stroke.color) && finite(e.stroke.width) && e.stroke.width > 0) out.stroke = { color: e.stroke.color, width: e.stroke.width };
+  if (isRecord(e.gradient) && hex(e.gradient.to) && finite(e.gradient.angle)) out.gradient = { to: e.gradient.to, angle: e.gradient.angle };
+  const s = e.shadow;
+  if (isRecord(s) && hex(s.color) && finite(s.opacity) && finite(s.x) && finite(s.y) && finite(s.blur)) {
+    out.shadow = { color: s.color, opacity: Math.max(0, Math.min(1, s.opacity)), x: s.x, y: s.y, blur: Math.max(0, s.blur) };
+  }
+  return out;
+}
+
 /** A stored outline that reads: polygons of three points or more, each
  *  point within its box. */
 export function readOutline(raw: unknown): CoverOutline | undefined {
@@ -107,14 +149,19 @@ export function readCoverElements(raw: unknown): CoverElementSetting[] {
     if (typeof e.zone !== 'string' || !ZONE_NAMES.has(e.zone)) return [];
     if (!finite(e.x) || !finite(e.y) || !finite(e.width) || !finite(e.height) || e.width <= 0 || e.height <= 0) return [];
     if (e.kind === 'image' && typeof e.resourceId !== 'string') return [];
-    if (e.kind !== 'image' && (typeof e.color !== 'string' || !HEX.test(e.color))) return [];
+    // A shape may go without a fill (a line, an outline): then it has a border.
+    if (e.kind === 'box' && (typeof e.color !== 'string' || !HEX.test(e.color))) return [];
+    if (e.kind === 'shape' && e.color !== undefined && (typeof e.color !== 'string' || !HEX.test(e.color))) return [];
     const outline = e.kind === 'shape' ? readOutline(e.outline) : undefined;
+    const path = e.kind === 'shape' ? readPath(e.path) : undefined;
     const clip = e.kind === 'image' ? readOutline(e.clip) : undefined;
-    if (e.kind === 'shape' && !outline) return [];
+    if (e.kind === 'shape' && !outline && !path) return [];
     return [{
       id: e.id,
       kind: e.kind,
-      ...(e.kind === 'image' ? { resourceId: e.resourceId as string } : { color: e.color as string }),
+      ...(e.kind === 'image' ? { resourceId: e.resourceId as string } : typeof e.color === 'string' ? { color: e.color } : {}),
+      ...(path ? { path } : {}),
+      ...(e.kind !== 'image' ? readEffects(e) : {}),
       ...(outline ? { outline } : {}),
       ...(clip ? { clip } : {}),
       ...named(e.name),
@@ -268,6 +315,26 @@ export function newFinish(sheet: ProductionSheet, kind: CoverFinishKind, ink: st
   if (!box) return undefined;
   const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height };
   return { id: box.id, kind, ink, shape: trace ? { outline: trace.outline, box: at } : { box: at } };
+}
+
+/** A new basic shape in the middle of the front cover, a third of it
+ *  wide: filled in `color`, a line with a border instead. */
+export function newBasicShape(sheet: ProductionSheet, kind: BasicShape, color: string): CoverElementSetting | undefined {
+  const box = newElement(sheet, 'box', undefined, color);
+  if (!box) return undefined;
+  const line = kind === 'line';
+  const height = line ? Math.max(2, Math.round(box.height / 6)) : box.height;
+  return {
+    id: box.id,
+    kind: 'shape',
+    path: basicShape(kind),
+    ...(line ? { stroke: { color, width: 0.75 } } : { color }),
+    zone: box.zone,
+    x: box.x,
+    y: line ? Math.round((box.y + (box.height - height) / 2) * 100) / 100 : box.y,
+    width: box.width,
+    height,
+  };
 }
 
 /** A new shape of colour in the middle of the front cover, half of it
