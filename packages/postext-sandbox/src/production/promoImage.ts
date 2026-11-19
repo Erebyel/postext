@@ -7,7 +7,7 @@ import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
 import { ensureResourceImages } from '../controls/media/resourceImages.js';
 import { bookTrimMm, coverDocumentInput, pickSheet, sheetsOf } from './bookProduction.js';
 import { getBookProduction, getCoverGallery, listLogos, listProfiles } from './productionStore.js';
-import { registerCoverImages } from './coverImages.js';
+import { loadMirrorPictures, registerCoverImages } from './coverImages.js';
 
 export /** A screen picture of a laid-out promo sheet: its page painted at the
  *  format's pixel width on white, as a JPEG. */
@@ -52,8 +52,11 @@ export async function productionEpubCover(
   const sheet = pickSheet(sheets, 'epub', bookTrimMm(config));
   const logos = await listLogos().catch(() => []);
   const gallery = (await getCoverGallery(projectId).catch(() => null)) ?? undefined;
+  // The pictures of the effects cut to an outline (a promotional picture
+  // has no mirror: its margin plays no part).
+  const pictures = await loadMirrorPictures(record.design, resources, gallery).catch(() => ({}));
   // A screen picture carries no finishes: they are plates for the press.
-  const input = coverDocumentInput(sheet, version, record.texts, config, record.design, resources, { logos, ...(gallery ? { gallery } : {}), hidden: new Set(['finishes'] as const) });
+  const input = coverDocumentInput(sheet, version, record.texts, config, record.design, resources, { logos, ...(gallery ? { gallery } : {}), mirror: { margin: 0, pictures }, hidden: new Set(['finishes'] as const) });
   await ensureConfigFontsLoaded(input.config, input.markdown);
   await registerCoverImages(input.cover.files);
   const own = new Set(Object.keys(input.cover.files));

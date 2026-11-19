@@ -128,6 +128,10 @@ export interface CoverElement {
   /** A box's opacity, 0 … 1 (default 1). A picture keeps its own
    *  transparency. */
   opacity?: number;
+  /** An effect's picture cut to an outline (in fractions of its box): a
+   *  shine, a texture, a gradient that shows only within a shape. The
+   *  picture then fills the box (cropped to it) rather than fitting in it. */
+  clip?: CoverOutline;
   /** Past the design margin (a case's turn-in, a board's edge): `mirror`
    *  (the default) folds it out with the background; `own` paints the
    *  element as it is, over the fold, for an element whose picture goes on
@@ -194,9 +198,10 @@ export interface CoverPageOptions {
    *  beyond it the background and the movable elements are mirrored out to
    *  the sheet's edge (./mirrorBleed.ts). Unset: no mirroring. */
   mirrorMargin?: number;
-  /** The pictures the mirror draws, by resource id: a PNG or JPEG as a
-   *  data URI and its size in px. A picture missing here is left out of
-   *  the mirror. */
+  /** The pictures the mirror draws, and the effects cut to an outline,
+   *  by resource id: a PNG or JPEG as a data URI and its size in px. A
+   *  picture missing here is left out of the mirror, and an effect's is
+   *  drawn whole. */
   mirrorPictures?: Readonly<Record<string, MirrorPicture>>;
 }
 
@@ -208,6 +213,23 @@ export interface MirrorPicture {
 }
 
 export const MIRROR_RESOURCE_ID = 'cover-mirror';
+
+/** The resource id of an effect's picture cut to its outline. */
+export const clippedEffectId = (id: string): string => `cover-clip-${id}`;
+
+/** An effect's picture cut to its outline, as an SVG the size of its box
+ *  (mm): the picture filling the box, cropped to it, inside a clip path of
+ *  the outline. */
+export function clippedPictureSvg(rect: SheetRect, outline: CoverOutline, picture: MirrorPicture): string {
+  const w = rect.width;
+  const h = rect.height;
+  const box = { x: 0, y: 0, width: w, height: h };
+  const r = coverPictureRect(box, picture.width, picture.height);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${mmN(w)}mm" height="${mmN(h)}mm" viewBox="0 0 ${mmN(w)} ${mmN(h)}">`
+    + `<defs><clipPath id="shape" clipPathUnits="userSpaceOnUse"><path transform="matrix(${mmN(w)} 0 0 ${mmN(h)} 0 0)" d="${outlinePathData(outline)}"/></clipPath></defs>`
+    + `<g clip-path="url(#shape)"><image href="${picture.href}" x="${mmN(r.x)}" y="${mmN(r.y)}" width="${mmN(r.width)}" height="${mmN(r.height)}"/></g>`
+    + '</svg>';
+}
 
 const mmN = (v: number): string => String(Math.round(v * 1000) / 1000);
 
@@ -397,10 +419,14 @@ function inkHex(screen: string, name: string): string {
 }
 
 /** The decoration over the text: the effects, the logos, then (after the
- *  barcode, which the caller adds) the finishes. */
-function overElements(sheet: ProductionSheet, design: CoverDesign | undefined): DesignElement[] {
+ *  barcode, which the caller adds) the finishes. An effect cut to an
+ *  outline draws the picture `clipped` makes of it instead of its own. */
+function overElements(sheet: ProductionSheet, design: CoverDesign | undefined, clipped: ReadonlyMap<string, string> = new Map()): DesignElement[] {
   const out: DesignElement[] = [];
-  for (const el of design?.effects ?? []) out.push(...elementDrawing(sheet, el, 'cover-fx', true));
+  for (const el of design?.effects ?? []) {
+    const own = clipped.get(el.id);
+    out.push(...elementDrawing(sheet, own ? { ...el, resourceId: own } : el, 'cover-fx', true));
+  }
   for (const logo of design?.logos ?? []) out.push(...elementDrawing(sheet, logo, 'cover-logo', true));
   return out;
 }
@@ -425,7 +451,8 @@ function finishElements(sheet: ProductionSheet, design: CoverDesign | undefined,
     const target = all.find((e) => e.id === (finish.shape as { element: string }).element);
     const rect = target ? coverElementRect(sheet, target) : undefined;
     if (!target || !rect || rect.width <= 0 || rect.height <= 0) continue;
-    const shaped = target.kind === 'shape' && target.outline ? outlinePathData(target.outline) : '';
+    const own = target.kind === 'shape' ? target.outline : target.clip;
+    const shaped = own ? outlinePathData(own) : '';
     if (shaped) {
       out.push({ kind: 'path', id, over: true, d: shaped, viewBox: [1, 1], preserveAspectRatio: 'none', fill, placement: onSheet(rect) });
       continue;
@@ -462,6 +489,9 @@ export interface CoverPage {
    *  draws only PNG and JPEG pictures it was given): the design then runs
    *  to the sheet's edge as it is. */
   mirrorSkipped?: string[];
+  /** The pictures of effects cut to an outline that were drawn whole (the
+   *  cut draws only PNG and JPEG pictures it was given). */
+  clipSkipped?: string[];
 }
 
 function frameFor(
@@ -563,7 +593,26 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     elements.push({ kind: 'image', id: MIRROR_RESOURCE_ID, resourceId: MIRROR_RESOURCE_ID, decorative: true, fit: 'contain', placement: onSheet({ x: 0, y: 0, width: sheet.width, height: sheet.height }) });
   }
   if (mirror) for (const el of options.design?.elements ?? []) if (el.bleed === 'own') elements.push(...elementDrawing(sheet, el, 'cover-el', false));
-  elements.push(...overElements(sheet, options.design));
+  // The effects cut to an outline, each as a picture of its own.
+  const clipped = new Map<string, string>();
+  const clipSkipped: string[] = [];
+  for (const el of options.design?.effects ?? []) {
+    if (el.kind !== 'image' || !el.clip || !el.resourceId) continue;
+    const rect = coverElementRect(sheet, el);
+    const picture = options.mirrorPictures?.[el.resourceId];
+    if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+    if (!picture) {
+      clipSkipped.push(el.resourceId);
+      continue;
+    }
+    const id = clippedEffectId(el.id);
+    const fileId = `${id}.svg`;
+    const px = (v: number) => (v / 25.4) * 96;
+    resources.push({ id, typeId: 'figure', kind: 'svg', createdAt: 0, updatedAt: 0, svg: { fileId, width: px(rect.width), height: px(rect.height) } } as Resource);
+    files[fileId] = new TextEncoder().encode(clippedPictureSvg(rect, el.clip, picture));
+    clipped.set(el.id, id);
+  }
+  elements.push(...overElements(sheet, options.design, clipped));
   const back = sheet.zones.find((z) => z.name === 'back');
   const barcode = options.isbn && back
     ? isbnBarcodeSvg(options.isbn, { addOn: options.isbnAddOn, magnification: options.barcodeMagnification })
@@ -608,6 +657,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     slots: frames.map((f) => f.name as CoverZoneName),
     ...(mirror ? { designed: mirror.designed } : {}),
     ...(mirrorSkipped ? { mirrorSkipped } : {}),
+    ...(clipSkipped.length > 0 ? { clipSkipped: [...new Set(clipSkipped)] } : {}),
   };
 }
 

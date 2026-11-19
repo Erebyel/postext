@@ -192,6 +192,7 @@ function CoverDesigner() {
   const logoName = (l: CoverLogoSetting) => library.find((x) => l.logoId === x.id)?.name ?? l.resourceId ?? labels.coverItemLogo;
   const pictureName = (id: string | undefined) => galleryPictureOf(gallery, id)?.name ?? id ?? labels.coverElementPicture;
   const itemName = (layer: ItemLayer, item: CoverElementSetting | CoverFinishSetting): string => {
+    if (item.name) return item.name;
     if (layer === 'finishes') return finishLabel((item as CoverFinishSetting).kind);
     if (layer === 'logos') return logoName(item as CoverLogoSetting);
     const el = item as CoverElementSetting;
@@ -199,7 +200,7 @@ function CoverDesigner() {
   };
   const shapeTargets = [...elements, ...effects, ...logos].map((e) => ({
     value: e.id,
-    label: e.kind === 'image' ? (logos.some((l) => l.id === e.id) ? logoName(e as CoverLogoSetting) : pictureName(e.resourceId)) : e.kind === 'shape' ? labels.coverElementShape : labels.coverElementBox,
+    label: e.name ? e.name : e.kind === 'image' ? (logos.some((l) => l.id === e.id) ? logoName(e as CoverLogoSetting) : pictureName(e.resourceId)) : e.kind === 'shape' ? labels.coverElementShape : labels.coverElementBox,
   }));
 
   const selectedEl = canvasItems.find((e) => e.id === selected);
@@ -366,7 +367,8 @@ function CoverDesigner() {
                     )}
                     <p className="m-0 text-(--slate)">{labels.coverGuidesLegend}</p>
                     {input.cover.designed && <p className="m-0 text-(--slate)">{labels.coverGuideMirror}</p>}
-                    {input.cover.mirrorSkipped && <p className="m-0">{fill(labels.coverMirrorSkipped, { pictures: input.cover.mirrorSkipped.join(', ') })}</p>}
+                    {input.cover.mirrorSkipped && <p className="m-0">{fill(labels.coverMirrorSkipped, { pictures: input.cover.mirrorSkipped.map(pictureName).join(', ') })}</p>}
+                    {input.cover.clipSkipped && <p className="m-0">{fill(labels.coverClipSkipped, { pictures: input.cover.clipSkipped.map(pictureName).join(', ') })}</p>}
                     <Button variant="primary" size="sm" onClick={() => setMode('edit')}>{labels.coverDesignerEdit}</Button>
                   </>
                 ) : selectedFinish ? (
@@ -392,6 +394,7 @@ function CoverDesigner() {
                     zone={zoneName(selectedEl.zone)}
                     aspect={selectedEl.kind === 'image' ? aspectOf(selectedEl, allResources, library) : undefined}
                     clearance={active === 'logos' ? logos.find((l) => l.id === selectedEl.id)?.clearance : undefined}
+                    traces={gallery.traces}
                     canForward={activeList[activeList.length - 1]?.id !== selectedEl.id}
                     canBackward={activeList[0]?.id !== selectedEl.id}
                     labels={labels}
@@ -514,11 +517,31 @@ function LogoAdder({ library, pictures, labels, onLibrary, onBook }: {
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
+/** An item's own name, kept when the field is left (empty: none). */
+function NameField({ value, label, onChange }: { value: string | undefined; label: string; onChange: (name: string) => void }) {
+  return (
+    <label className="flex flex-col gap-1">
+      {label}
+      <input
+        type="text"
+        defaultValue={value ?? ''}
+        onBlur={(e) => { const name = e.target.value.trim(); if (name !== (value ?? '')) onChange(name); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+        className="rounded border border-(--pt-control-border) bg-(--background) px-2 py-1 text-xs text-(--foreground)"
+      />
+    </label>
+  );
+}
+
+/** The value of an outline the design keeps whose trace was deleted since. */
+const KEPT = '__kept__';
+
 /** The selected item's place, size and colour (an effect's opacity, a
  *  logo's clear space), and its order. A picture's height follows its
  *  width (its proportions). */
-function ElementProperties({ el, layer, zone, aspect, clearance, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete }: {
+function ElementProperties({ el, layer, zone, aspect, clearance, traces, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete }: {
   el: CoverElementSetting;
+  traces: readonly GalleryTrace[];
   layer: ItemLayer;
   zone: string;
   aspect: number | undefined;
@@ -542,6 +565,7 @@ function ElementProperties({ el, layer, zone, aspect, clearance, canForward, can
   return (
     <>
       <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-(--slate)">{title}</h3>
+      <NameField key={el.id} value={el.name} label={labels.productionGalleryName} onChange={(name) => { const next = { ...el }; if (name) next.name = name; else delete next.name; onChange(next); }} />
       <p className="m-0 text-(--slate)">{fill(labels.coverElementZone, { zone })}</p>
       {row(labels.coverElementX, el.x, (x) => onChange({ ...el, x }))}
       {row(labels.coverElementY, el.y, (y) => onChange({ ...el, y }))}
@@ -582,6 +606,28 @@ function ElementProperties({ el, layer, zone, aspect, clearance, canForward, can
         </label>
       )}
       {layer === 'elements' && <p className="m-0 text-(--slate)">{el.bleed === 'own' ? labels.coverElementMirrorOff : labels.coverElementMirrorOn}</p>}
+      {layer === 'effects' && el.kind === 'image' && (traces.length > 0 || el.clip) && (
+        <label className="flex flex-col gap-1">
+          {labels.coverElementClip}
+          <Select
+            size="sm"
+            value={el.clip ? (traces.find((t) => JSON.stringify(t.outline) === JSON.stringify(el.clip))?.id ?? KEPT) : ''}
+            onValueChange={(id) => {
+              const next = { ...el };
+              const t = traces.find((x) => x.id === id);
+              if (t) next.clip = t.outline;
+              else if (id === '') delete next.clip;
+              onChange(next);
+            }}
+            options={[
+              { value: '', label: labels.coverElementClipNone },
+              ...(el.clip && !traces.some((t) => JSON.stringify(t.outline) === JSON.stringify(el.clip)) ? [{ value: KEPT, label: labels.coverFinishShapeOutline }] : []),
+              ...traces.map((t) => ({ value: t.id, label: t.name })),
+            ]}
+            ariaLabel={labels.coverElementClip}
+          />
+        </label>
+      )}
       {layer === 'logos' && clearance !== undefined && row(labels.coverLogoClearance, clearance, (v) => onClearance(Math.max(0, v)), 0)}
       <div className="flex items-center gap-1">
         <IconButton label={labels.coverElementForward} icon={<ArrowUp size={14} aria-hidden="true" />} disabled={!canForward} onClick={() => onRestack(1)} />
@@ -617,6 +663,7 @@ function FinishProperties({ finish, targets, traces, zone, labels, finishLabel, 
   return (
     <>
       <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-(--slate)">{labels.coverItemFinish}</h3>
+      <NameField key={finish.id} value={finish.name} label={labels.productionGalleryName} onChange={(name) => { const next = { ...finish }; if (name) next.name = name; else delete next.name; onChange(next); }} />
       <label className="flex flex-col gap-1">
         {labels.coverFinishKind}
         <Select

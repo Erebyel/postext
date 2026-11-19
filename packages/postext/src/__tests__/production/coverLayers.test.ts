@@ -114,4 +114,30 @@ describe('finish inks', () => {
     expect(els.find((e) => e.id === 'cover-finish-traced')!.kind).toBe('path');
     expect(els.find((e) => e.id === 'cover-finish-onShade')!.d).toBe('M 0 0 L 1 0 L 0.5 1 Z');
   });
+
+  it('cuts an effect’s picture to its outline as a picture of its own, and lays a finish on that cut', () => {
+    const tri = [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0.5, y: 1 }]];
+    const shine = { id: 'shine', kind: 'image' as const, resourceId: 'gloss', clip: tri, zone: 'front' as const, x: 10, y: 10, width: 40, height: 20 };
+    const cover = coverPage(sheet, {
+      mirrorPictures: { gloss: { href: 'data:image/png;base64,AAAA', width: 100, height: 100 } },
+      design: { effects: [shine], finishes: [{ id: 'f', kind: 'varnish', ink: 'Barniz', shape: { element: 'shine' } }] },
+    });
+    const els = cover.template.decoration!.elements as { id: string; resourceId?: string; d?: string }[];
+    expect(els.find((e) => e.id === 'cover-fx-shine')!.resourceId).toBe('cover-clip-shine');
+    expect(els.find((e) => e.id === 'cover-finish-f')!.d).toBe('M 0 0 L 1 0 L 0.5 1 Z');
+    const svg = new TextDecoder().decode(cover.files['cover-clip-shine.svg']);
+    expect(svg).toContain('<clipPath id="shape"');
+    expect(svg).toContain('matrix(40 0 0 20 0 0)');
+    // The square picture fills the 40 × 20 box: 40 wide, cropped top and bottom.
+    expect(svg).toContain('x="0" y="-10" width="40" height="40"');
+    expect(cover.resources.map((r) => r.id)).toContain('cover-clip-shine');
+    expect(cover.clipSkipped).toBeUndefined();
+  });
+
+  it('draws an effect whole when its picture is not at hand, and says so', () => {
+    const cover = coverPage(sheet, { design: { effects: [{ id: 'shine', kind: 'image', resourceId: 'gloss', clip: [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }]], zone: 'front', x: 0, y: 0, width: 10, height: 10 }] } });
+    const els = cover.template.decoration!.elements as { id: string; resourceId?: string }[];
+    expect(els.find((e) => e.id === 'cover-fx-shine')!.resourceId).toBe('gloss');
+    expect(cover.clipSkipped).toEqual(['gloss']);
+  });
 });

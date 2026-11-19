@@ -27,11 +27,17 @@ export const ITEM_LAYERS: readonly ItemLayer[] = ['elements', 'effects', 'logos'
  *  box of colour (`#rrggbb`), its box mm from its zone's top-left corner. */
 export interface CoverElementSetting {
   id: string;
+  /** The name the designer lists it by, the user's own (default: what it
+   *  is, a picture's name). */
+  name?: string;
   /** A picture, a box of colour, or a shape of colour (an outline traced
    *  from a picture, laid in its box). */
   kind: 'image' | 'box' | 'shape';
   /** A shape's outline, in fractions of its box. */
   outline?: CoverOutline;
+  /** An effect's picture cut to an outline (a trace of the gallery),
+   *  filling its box. */
+  clip?: CoverOutline;
   resourceId?: string;
   color?: string;
   zone: CoverZoneName;
@@ -61,6 +67,8 @@ export const FINISH_KINDS: readonly CoverFinishKind[] = ['varnish', 'lamination'
  *  or the shape of an element, effect or logo of the design. */
 export interface CoverFinishSetting {
   id: string;
+  /** The name the designer lists it by (default: its kind). */
+  name?: string;
   kind: CoverFinishKind;
   ink: string;
   shape:
@@ -88,6 +96,7 @@ const ZONE_NAMES: ReadonlySet<string> = new Set(['flapBack', 'back', 'jointBack'
 const HEX = /^#[0-9a-f]{6}$/i;
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const named = (v: unknown): { name?: string } => (typeof v === 'string' && v.trim() ? { name: v.trim() } : {});
 
 /** The stored elements that read: an id, a kind, a zone, a box with a
  *  size; a picture's resource, a box's colour. */
@@ -100,12 +109,15 @@ export function readCoverElements(raw: unknown): CoverElementSetting[] {
     if (e.kind === 'image' && typeof e.resourceId !== 'string') return [];
     if (e.kind !== 'image' && (typeof e.color !== 'string' || !HEX.test(e.color))) return [];
     const outline = e.kind === 'shape' ? readOutline(e.outline) : undefined;
+    const clip = e.kind === 'image' ? readOutline(e.clip) : undefined;
     if (e.kind === 'shape' && !outline) return [];
     return [{
       id: e.id,
       kind: e.kind,
       ...(e.kind === 'image' ? { resourceId: e.resourceId as string } : { color: e.color as string }),
       ...(outline ? { outline } : {}),
+      ...(clip ? { clip } : {}),
+      ...named(e.name),
       zone: e.zone as CoverZoneName,
       x: e.x,
       y: e.y,
@@ -139,12 +151,12 @@ export function readCoverFinishes(raw: unknown): CoverFinishSetting[] {
     if (!isRecord(f) || typeof f.id !== 'string' || !FINISH_KINDS.includes(f.kind as CoverFinishKind)) return [];
     const ink = typeof f.ink === 'string' ? f.ink : '';
     const shape = isRecord(f.shape) ? f.shape : {};
-    if (typeof shape.element === 'string') return [{ id: f.id, kind: f.kind as CoverFinishKind, ink, shape: { element: shape.element } }];
+    if (typeof shape.element === 'string') return [{ id: f.id, ...named(f.name), kind: f.kind as CoverFinishKind, ink, shape: { element: shape.element } }];
     const [box] = readCoverElements([{ id: f.id, kind: 'box', color: '#000000', ...(isRecord(shape.box) ? shape.box : {}) }]);
     if (!box) return [];
     const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height };
     const outline = readOutline(shape.outline);
-    return [{ id: f.id, kind: f.kind as CoverFinishKind, ink, shape: outline ? { outline, box: at } : { box: at } }];
+    return [{ id: f.id, ...named(f.name), kind: f.kind as CoverFinishKind, ink, shape: outline ? { outline, box: at } : { box: at } }];
   });
 }
 

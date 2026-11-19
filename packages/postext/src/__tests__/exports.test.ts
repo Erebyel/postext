@@ -1180,6 +1180,8 @@ describe("package exports", () => {
       "coverElementRect",
       "placeCoverElement",
       "MIRROR_RESOURCE_ID",
+      "clippedEffectId",
+      "clippedPictureSvg",
       "coverPage",
       "coverMarkdown",
       "sheetGuides",

@@ -184,4 +184,33 @@ describe('cover sheets as PDF', () => {
     expect(forms).toBeGreaterThan(0);
     expect(images).toBeGreaterThan(0);
   });
+
+  it('cuts an effect’s picture to its outline, as vectors with the picture inside', async () => {
+    const v = sheetsOf({ id: 'rustica', name: 'Rústica', binding: 'perfect' });
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
+    const cover = coverPage(v.cover, {
+      mirrorPictures: { gloss: { href: `data:image/png;base64,${png}`, width: 1, height: 1 } },
+      design: { effects: [{ id: 'shine', kind: 'image', resourceId: 'gloss', clip: [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0.5, y: 1 }]], zone: 'front', x: 10, y: 10, width: 60, height: 40 }] },
+    });
+    const config: PostextConfig = { page: { ...cover.page, dpi: 150 }, header: { elements: [] }, footer: { elements: [] }, pageTemplates: [cover.template] };
+    const doc = buildDocument({ markdown: coverMarkdown('cover', text, cover.slots), resources: cover.resources }, config);
+    const warnings: { kind: string }[] = [];
+    const bytes = await renderToPdf(doc, { fontProvider, resourceBytes: (id: string) => cover.files[id], onWarning: (w) => void warnings.push(w) });
+    expect(warnings.filter((w) => w.kind === 'missingImage')).toEqual([]);
+    const pdf = await PDFDocument.load(bytes);
+    let images = 0;
+    let clips = 0;
+    for (const [, obj] of pdf.context.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFRawStream)) continue;
+      const sub = obj.dict.lookup(PDFName.of('Subtype'))?.toString();
+      if (sub === '/Image') images++;
+      if (sub === '/Form') {
+        const body = Buffer.from(decodePDFRawStream(obj).decode()).toString('latin1');
+        // The triangle as a clip: three points, closed, then W n.
+        if (/\bW\s+n\b/.test(body) && (body.match(/ l\b/g) ?? []).length >= 2) clips++;
+      }
+    }
+    expect(images).toBeGreaterThan(0);
+    expect(clips).toBeGreaterThan(0);
+  });
 });

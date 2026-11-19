@@ -103,7 +103,7 @@ export function useMirror(
   gallery?: CoverGallery,
 ): { margin: number; pictures: Readonly<Record<string, MirrorPicture>> } | undefined {
   const [pictures, setPictures] = useState<Record<string, MirrorPicture>>({});
-  const key = [design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId)].join('|');
+  const key = [design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId), ...(design?.effects ?? []).filter((e) => e.clip).map((e) => e.resourceId)].join('|');
   const latest = useRef(design);
   latest.current = design;
   useEffect(() => {

@@ -23,12 +23,17 @@ export async function registerCoverImages(files: Record<string, Uint8Array>): Pr
   }));
 }
 
-/** The pictures a cover's mirror bleed draws: the background picture and
- *  the movable elements' that are PNG or JPEG bitmaps (of the cover's
- *  gallery or of the book), as data URIs (an SVG picture is left out of
- *  the mirror). */
+/** The pictures a cover's mirror bleed draws (the background picture and
+ *  the movable elements') and those of the effects cut to an outline, the
+ *  PNG or JPEG bitmaps of the cover's gallery or of the book, as data URIs
+ *  (an SVG picture is left out). */
 export async function loadMirrorPictures(design: CoverDesignSettings | undefined, resources: readonly Resource[], gallery?: CoverGallery): Promise<Record<string, MirrorPicture>> {
-  const ids = new Set([design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId)].filter((id): id is string => !!id));
+  const ids = new Set([
+    design?.image?.resourceId,
+    ...(design?.elements ?? []).map((e) => e.resourceId),
+    // An effect cut to an outline draws its picture inside the cut.
+    ...(design?.effects ?? []).filter((e) => e.clip).map((e) => e.resourceId),
+  ].filter((id): id is string => !!id));
   const out: Record<string, MirrorPicture> = {};
   for (const id of ids) {
     const own = galleryPictureOf(gallery, id);
