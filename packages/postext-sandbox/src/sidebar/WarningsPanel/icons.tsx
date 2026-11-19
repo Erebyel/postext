@@ -23,10 +23,13 @@ export function iconFor(kind: WarningPayload['kind']) {
     case 'cjkLooseLine':
     case 'raggedLine':
     case 'stack':
+    case 'citationBreak':
+    case 'operatorBreak':
     case 'hyphenLadder':
     case 'lastWordDivided':
     case 'hyphenSpacing':
     case 'unbreakableWordOverflow':
+    case 'numberOverflow':
     case 'wordDividedByCharacter':
     case 'wordDividedBySyllable':
     case 'joiningScriptLetterSpacing':
@@ -66,7 +69,10 @@ export function iconFor(kind: WarningPayload['kind']) {
     case 'unclosedCodeBlock':
     case 'strayFence':
     case 'unknownParagraphStyle':
+    case 'chapterStyleUnknown':
+    case 'partStyleMidChapter':
     case 'columnsFlowUnknown':
+    case 'dieCutUnknown':
     case 'templateUnknown':
     case 'slotUnknown':
     case 'slotEmpty':
@@ -172,6 +178,7 @@ export function iconFor(kind: WarningPayload['kind']) {
     case 'unknownConfigValue':
     case 'calloutStyleExtendsUnknown':
     case 'calloutStyleExtendsCycle':
+    case 'chapterStyleBookSetting':
     case 'contentInConfig':
       return FileWarning;
     case 'templateDuplicate':

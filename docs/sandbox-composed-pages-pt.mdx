@@ -7,7 +7,7 @@ export const metadata = {
   lang: 'pt',
   lastUpdated: '2026-10-20',
   readingTime: '21 min',
-  order: 43,
+  order: 44,
   parent: 'sandbox',
   plainSummary: "Esta página reúne o que o Sandbox oferece para as páginas compostas, aquelas cujo texto é despejado em blocos dispostos por um modelo. Os blocos de um modelo são desenhados e movidos direto na página, ligados com linhas, repetidos como cartões numa grade e guardados como conjuntos numa biblioteca de módulos, e os estilos de bloco ficam organizados numa biblioteca. O painel Verificações avisa, em cada idioma do livro, quais páginas compostas têm um texto que não cabe, e oferece botões que corrigem um bloco. Num livro feito antes das páginas compostas, o texto das páginas pode ser levado para o Markdown de uma só vez.",
 };
@@ -53,6 +53,8 @@ A decoração de um modelo de página ou de um módulo (**Decoração**, no pé 
 <Screenshot src="/docs-shots/pt/tree.webp" alt="O painel Design com o módulo Árvore de ideias aberto no cartão do conector, e a página de revisão com uma caixa no alto ligada por linhas com setas a três caixas embaixo." caption="O cartão de um conector e a linha dele da raiz até cada ramo." />
 
 **Formas.** **Adicionar forma** (em todos os lugares de design: modelos, cabeços, designs de título e de parte) escreve uma barra preenchida com a cor principal. O cartão dela oferece cinco formas prontas, cada uma desenhada no seu botão (*Barra*, *Fita*, *Seta*, *Divisa*, *Onda*); um campo **Traçado** que aceita dados de caminho SVG e só é gravado quando é válido (senão, diz em que caractere está o erro); a caixa de visualização, o ajuste (esticar ou manter as proporções), o preenchimento e o contorno com as suas cores, a espessura e o tracejado do contorno; e o tamanho e o lugar de qualquer caixa da decoração.
+
+**Furos de faca.** Na decoração de um modelo de página, **Adicionar furo de faca** escreve um elemento de corte: um furo que a faca corta na folha de cada página em que o modelo é aplicado, e que nunca é pintado. Seu cartão escolhe uma das formas de faca do livro (**Forma de faca**), esticada até a caixa do elemento, ou recebe dados de traçado com sua caixa de visualização e seu ajuste; **Folhas cortadas** e **O texto contorna**, quando não definidos, seguem os da forma. O texto dos quadros ainda não contorna o furo, então mantenha os quadros fora dele. Veja [Elementos de corte num modelo de página](/pt/docs/special-inks-die-cuts#elementos-de-corte-num-modelo-de-página).
 
 **Cantos e lados.** Os estilos de boxe, os estilos de bloco, as caixas da decoração e a caixa de um elemento de texto compartilham duas chaves. **Mesmo raio em todos os cantos**, desligada, dá quatro medidas de canto. **Mesma borda em todos os lados**, desligada, dá a cada lado a sua chave, cor e espessura por cima das da borda inteira, cada uma com o seu botão de redefinir: uma borda só em cima é a borda inteira desligada e a de cima ligada. Uma aba pode ficar **Unida à caixa**, com o raio da curva de junção (por padrão, o raio dos cantos), e ficar numa das quatro posições do pé, além das de cima.
 

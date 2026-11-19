@@ -3,7 +3,7 @@
 // recorded layout still applies (#1276: split out of pagination.ts).
 import { type PostextConfig, type NumeralStyle, type OutlineEntry, formatNumeral, type LayoutContinuation, type Resource } from 'postext';
 import type { ChapterPageNumber, CarriedOutlinePage, OutlinePage, ChapterPages, BookStart, ChapterLayout, Chapter, ChapterPlan } from '../types.js';
-import { ENGINE_KEY, configKeyOf, resourcesKeyOf } from '../layoutKeys.js';
+import { ENGINE_KEY, pagesConfigKeyOf, resourcesKeyOf } from '../layoutKeys.js';
 
 /** The page number `n` resolves to when the chapter's first page is
  *  numbered `start`. */
@@ -104,8 +104,10 @@ export function countersKey(c: LayoutContinuation | undefined): string {
   const numbers = c.resourceNumbers
     ? Object.keys(c.resourceNumbers).sort().map((id) => `${id}=${c.resourceNumbers![id]!.number}`).join(',')
     : '';
+  // The part's chapter style (#1521) sets the chapter's settings: appended
+  // only when set, as below.
   const part = c.part
-    ? `${c.part.number}/${c.part.title}/${Object.entries(c.part.palette ?? {}).sort().map(([k, v]) => `${k}=${v}`).join(',')}`
+    ? `${c.part.number}/${c.part.title}/${Object.entries(c.part.palette ?? {}).sort().map(([k, v]) => `${k}=${v}`).join(',')}${c.part.style ? `/style=${c.part.style}` : ''}`
     : '';
   // A part page closing the chapter before owes its break to this one,
   // which can move its pages. Appended only when set, so the key of every
@@ -129,7 +131,7 @@ export function chapterLayoutIsCurrent(
   return !!layout
     && layout.markdown === chapter.markdown
     && layout.engine === ENGINE_KEY
-    && layout.configKey === configKeyOf(config)
+    && layout.configKey === pagesConfigKeyOf(config)
     && layout.resourcesKey === resourcesKeyOf(resources)
     && layout.continuationKey === continuationKey;
 }

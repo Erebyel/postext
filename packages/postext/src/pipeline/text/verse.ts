@@ -39,7 +39,7 @@ import type { MeasuredBlock, MeasurementCache, MeasureBlockOptions } from '../..
 import { measureRichBlock } from '../../measure/index.js';
 import { cachedMeasureRichBlock } from '../../measure/cache.js';
 import { pickSpanFont, textWidth } from '../../measure/rich.js';
-import { normalSpaceWidthFor } from '../../measure/canvas.js';
+import { measureLanguageKey, measurementGeneration, normalSpaceWidthFor } from '../../measure/canvas.js';
 import { lineBaselineOffset } from '../../measure/vertical.js';
 import { sliceSpan } from '../../parse/links.js';
 import { distributeKashida, writtenText, type KashidaOptions } from '../../measure/rtl/kashida.js';
@@ -124,11 +124,55 @@ interface VerseLayoutInput {
   /** The poem's direction and its frame's. */
   direction: 'ltr' | 'rtl';
   frameDirection: 'ltr' | 'rtl';
+  /** How a hemistich wider than the measure is broken while a line-edge
+   *  rule is avoided (`lineEdgeBreaking`, #1542). */
+  rules?: MeasureBlockOptions;
   cache?: MeasurementCache;
 }
 
-/** Lay a poem out (see the module comment). */
+/** The poem a block was laid out as last, and what it was laid out from
+ *  (#1624). A build sets the same poem several times over, alike: once per
+ *  pass, and before that to see whether it can start under the paragraph
+ *  that introduces it. Setting it is dear (every hemistich is justified,
+ *  kashidas first), and the block is the same object from pass to pass. */
+const verseMemo = new WeakMap<ContentBlock, { key: string; measured: MeasuredBlock }>();
+
+/** Everything {@link layOutVerse} reads, as text: the poem's words and
+ *  attributes, the style's fonts and sizes, the measure, and what the
+ *  measurer answers by (its language, its fonts). */
+function verseKey(input: VerseLayoutInput): string {
+  const { contentBlock, style } = input;
+  return JSON.stringify([
+    contentBlock.spans, contentBlock.verse?.attrs ?? null,
+    style.fontString, style.boldFontString ?? null, style.italicFontString ?? null, style.boldItalicFontString ?? null,
+    style.fontSizePx, style.lineHeightPx, input.measureMaxWidth, input.dpi, input.minWordSpacing,
+    input.kashida ?? null, input.direction, input.frameDirection, input.rules ?? null,
+    measureLanguageKey(), measurementGeneration(),
+  ]);
+}
+
+/** Lay a poem out (see the module comment). The lines are the caller's to
+ *  change: a poem set before comes back as a copy. */
 export function measureVerse(input: VerseLayoutInput): MeasuredBlock {
+  const key = verseKey(input);
+  const held = verseMemo.get(input.contentBlock);
+  if (held?.key === key) return copyOf(held.measured);
+  const measured = layOutVerse(input);
+  verseMemo.set(input.contentBlock, { key, measured: copyOf(measured) });
+  return measured;
+}
+
+/** A copy of plain data (objects, arrays, numbers, strings), down to its
+ *  leaves: what a measured poem is made of. */
+function copyOf<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(copyOf) as T;
+  if (typeof value !== 'object' || value === null) return value;
+  const out: Record<string, unknown> = {};
+  for (const key in value) out[key] = copyOf((value as Record<string, unknown>)[key]);
+  return out as T;
+}
+
+function layOutVerse(input: VerseLayoutInput): MeasuredBlock {
   const { contentBlock, style, measureMaxWidth: measure, direction } = input;
   const settings = verseSettings(contentBlock.verse?.attrs ?? {}, input.dpi, style.fontSizePx);
   const fonts = {
@@ -141,9 +185,9 @@ export function measureVerse(input: VerseLayoutInput): MeasuredBlock {
   const widthOf = (seg: VDTLineSegment, text: string) => textWidth(text, fontOf(seg), false);
   const lineHeight = style.lineHeightPx;
   const options: MeasureBlockOptions = { textAlign: 'left', direction };
-  const measureSpans = (spans: InlineSpan[], width: number): VDTLine[] => (input.cache
-    ? cachedMeasureRichBlock(spans, fonts.normal, fonts.bold, fonts.italic, fonts.boldItalic, width, lineHeight, options, input.cache)
-    : measureRichBlock(spans, fonts.normal, fonts.bold, fonts.italic, fonts.boldItalic, width, lineHeight, options)).lines;
+  const measureSpans = (spans: InlineSpan[], width: number, opts: MeasureBlockOptions = options): VDTLine[] => (input.cache
+    ? cachedMeasureRichBlock(spans, fonts.normal, fonts.bold, fonts.italic, fonts.boldItalic, width, lineHeight, opts, input.cache)
+    : measureRichBlock(spans, fonts.normal, fonts.bold, fonts.italic, fonts.boldItalic, width, lineHeight, opts)).lines;
   const hemistichOf = (line: VDTLine): Hemistich => {
     const segments = line.segments ?? [];
     return {
@@ -233,7 +277,7 @@ export function measureVerse(input: VerseLayoutInput): MeasuredBlock {
   /** The lines of one hemistich set alone: one when it fits the measure,
    *  else broken over the measure; each placed on `side`. */
   const alone = (spans: InlineSpan[], h: Hemistich, side: 'start' | 'end' | 'center', bayt: number, part: 'sadr' | 'ajuz' | 'single', x0: number, x1: number) => {
-    const set = h.width <= measure + 0.01 ? [h] : measureSpans(spans, measure).map(hemistichOf);
+    const set = h.width <= measure + 0.01 ? [h] : measureSpans(spans, measure, { ...options, ...input.rules }).map(hemistichOf);
     for (const piece of set) push(piece.segments, piece.order, place(piece.width, side, x0, x1), piece.text, { bayt, part });
   };
 

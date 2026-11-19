@@ -28,6 +28,7 @@ import { pickMarkStyle } from '../defaults/text/markStyles.js';
 import { measureTextWidth } from '../measure/canvas.js';
 import { fontEm } from '../measure/vertical.js';
 import { dimensionToPx } from '../units.js';
+import { standsAsMade } from '../pipeline/build/passMade.js';
 
 type BlockLike = Parameters<typeof segmentPositions>[1];
 
@@ -215,6 +216,9 @@ export function textLineGroups(doc: VDTDocument): { lines: VDTLine[]; like: Bloc
   const visit = (block: VDTBlock): void => {
     if (seen.has(block)) return;
     seen.add(block);
+    // A block of a page kept from the build before has its marks, lines
+    // and colours (#1639): every reader of these groups writes to them.
+    if (standsAsMade(block)) return;
     if (block.resourceBlock) groups.push(...resourceTexts(block));
     else if (!block.designOverlay) groups.push({ lines: block.lines, like: block });
   };
@@ -242,10 +246,14 @@ export function highlightDocument(doc: VDTDocument): void {
       const bands = lineHighlights(line, like, styles, dpi);
       if (bands.length > 0) line.highlights = bands;
       else delete line.highlights;
-      for (const seg of line.segments) {
+      // A coloured word is a copy: the measurement cache shares a line's
+      // segments with every other copy of the paragraph (#1609).
+      const segments = line.segments;
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i]!;
         if (!seg.mark || seg.kind !== 'text') continue;
         const color = pickMarkStyle(styles, seg.mark.style || undefined)?.color;
-        if (color) seg.color = color.hex;
+        if (color && seg.color !== color.hex) segments[i] = { ...seg, color: color.hex };
       }
     }
   }

@@ -1,20 +1,23 @@
-import { WebGLRenderer, Scene, PerspectiveCamera, Mesh, PlaneGeometry, type Material, BufferGeometry, MeshStandardMaterial, Group, MeshPhysicalMaterial, Texture, BoxGeometry, DirectionalLight, PMREMGenerator, OrthographicCamera, WebGLRenderTarget, Vector2, ShaderMaterial, TextureLoader, Raycaster, SRGBColorSpace, NeutralToneMapping, HalfFloatType, PCFShadowMap, LinearFilter, BufferAttribute, ShadowMaterial, Color, Vector3, LinearMipmapLinearFilter, Plane, DepthTexture, Matrix4, Vector4, type Object3D } from 'three';
+import { WebGLRenderer, Scene, PerspectiveCamera, Mesh, PlaneGeometry, type Material, BufferGeometry, MeshStandardMaterial, Group, MeshPhysicalMaterial, Texture, BoxGeometry, DirectionalLight, PMREMGenerator, OrthographicCamera, WebGLRenderTarget, Vector2, ShaderMaterial, TextureLoader, Raycaster, SRGBColorSpace, NeutralToneMapping, HalfFloatType, PCFShadowMap, LinearFilter, BufferAttribute, ShadowMaterial, Color, Vector3, LinearMipmapLinearFilter, Plane, DepthTexture, type Object3D } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { type FolioConfig, type FolioPaperConfig, type ResolvedFolioConfig, resolveFolioConfig } from 'postext';
-import { BINDINGS, profiles, gutterOcclusion, along, stackGeometry, type Profile } from './bookGeometry.js';
+import { BINDINGS, profiles, gutterOcclusion, along, stackGeometry, type EdgeOutline, type Profile } from './bookGeometry.js';
 import { type EnvironmentKind, type Environment, environment } from './environments.js';
 import { type PaperSpec, paperSpec, pagePaper } from './paper.js';
 import { loadDeskMaps, type DeskMaps } from './deskTextures.js';
 import { VideoAtlas, ATLAS_MAX, MAX_PAGE_VIDEOS } from './videoAtlas.js';
-import { cachedDesk, cachedRelief, type DeskKind } from './procedural.js';
+import { cachedDesk, cachedRelief, deskKind } from './procedural.js';
 import { Loupe, type LoupeView } from './loupe.js';
 import { FOV, NX_OPEN, NX, NY, BLOCK_PAGES, DURATION, BLOCK_DURATION, GAP, GRIP } from './pageFlip/constants.js';
-import { type PageMesh, type Turn, type Surfaces, spreadColumns, column, MAX_PITCH, disposeLeaf, type BoardParts, type Pt, progressFrom, reach, type Airborne, foldOf, layLeaf, pagePlane } from './pageFlip/leaf.js';
+import { type PageMesh, type Turn, type Surfaces, spreadColumns, leafGeometry, setLeafFace, column, MAX_PITCH, disposeLeaf, type BoardParts, type Pt, progressFrom, reach, type Airborne, foldOf, layLeaf, pagePlane } from './pageFlip/leaf.js';
 import { edgeMaterial, pageMaterial, withStockForExtent, edgeUniforms, edgeColorOf, ease, easeOut, smooth, behindUniforms } from './pageFlip/materials.js';
 import { occluded, casterMaterial, casterGeometry, occlusionUniforms, syncCaster } from './pageFlip/occlusion.js';
+import { FinishTextures, dressFinish, type FaceFinish } from './pageFlip/finish.js';
+import { drawMirror } from './pageFlip/mirror.js';
+import { CUT_AIR, CUT_OPEN, boardEdges, casterCut, dressCut, leafCutOf } from './pageFlip/through.js';
 
 export { BLOCK_PAGES } from './pageFlip/constants.js';
 export { withStockForExtent } from './pageFlip/materials.js';
@@ -82,6 +85,9 @@ export interface FlipAppearance {
    *  the right. Fitted to cover the back of the block, centred. A
    *  saddle-stitched book has no spine and shows none. */
   spineImage?: PageSource;
+  /** The leaves' outline past the spine when they are cut to a shape
+   *  (rounded corners, a shaped book): the blocks' sides follow it. */
+  edgeOutline?: EdgeOutline;
 }
 
 /**
@@ -199,6 +205,8 @@ export class PageFlipper {
   private loupe: Loupe | null = null;
   private details = new Map<PageSource, { src: PageSource; tex: Texture | null }>();
   private paper: [number, number, number] = [1, 1, 1];
+  /** The pages' special inks (#1568), by page source. */
+  private finishes = new FinishTextures();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -244,8 +252,8 @@ export class PageFlipper {
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = PCFShadowMap;
     }
-    this.left = new Mesh(this.openGeometry(), pageMaterial(mirror, this.sign));
-    this.right = new Mesh(this.openGeometry(), pageMaterial(mirror, this.sign));
+    this.left = new Mesh(this.openGeometry(), pageMaterial(mirror, this.sign, CUT_OPEN));
+    this.right = new Mesh(this.openGeometry(), pageMaterial(mirror, this.sign, CUT_OPEN));
     for (const m of [this.left, this.right]) {
       m.receiveShadow = m.castShadow = true;
       // A leaf lifting off an open page lies a hair above it: the page
@@ -356,10 +364,10 @@ export class PageFlipper {
           };
     // The desk.
     const old = this.desk.material;
-    if (r.surface.type === "none") {
+    const kind = deskKind(r.surface.type);
+    if (kind === "none") {
       this.desk.material = new ShadowMaterial({ opacity: 0.32, transparent: true, depthWrite: false });
     } else {
-      const kind = r.surface.type;
       const d = cachedDesk(kind);
       const m = occluded(new MeshStandardMaterial({ map: d.color, normalMap: d.normal, roughnessMap: d.roughness, roughness: d.roughnessScale }), this.sign);
       m.userData.tileMm = d.tileMm;
@@ -535,6 +543,34 @@ export class PageFlipper {
     u.uUnderK.value = open ? spec.transmission / 2 : 0;
     u.uTransmit.value = open || mesh === this.blockMesh ? 0 : spec.transmission;
     m.needsUpdate = true;
+    this.dressFinish(mesh);
+  }
+
+  /** A mesh's faces' finish masks, and the clear coat a varnish needs;
+   *  their die-cuts (#1569). */
+  private dressFinish(mesh: PageMesh) {
+    const f = this.finishes;
+    const spec = mesh.material.userData.spec;
+    dressFinish(mesh.material, f.maskOf(mesh.userData.Front), f.maskOf(mesh.userData.Back), spec?.clearcoat ?? 0);
+    // An open page's caster is the book's at rest; a leaf's, its own.
+    const open = mesh === this.left || mesh === this.right;
+    const caster = open ? { shared: this.staticCaster, cut: () => casterMaterial(false, casterCut()) } : { shared: this.leafCaster, cut: () => casterMaterial(true, casterCut()) };
+    dressCut(mesh, f, (spec ?? this.bookSpec).caliperMm * this.pxPerMm(), caster, this.onDesk());
+  }
+
+  /** Nothing lies under the book's outer leaves but the desk: its own
+   *  printed covers stand for the case (or folded sheets have none), so a
+   *  hole through to the end of the book shows the desk (#1586). */
+  private onDesk(): boolean {
+    return !!this.coverSpec || this.resolved.binding.type === "folded";
+  }
+
+  /** The special inks of the pages (#1568): page source → its finish
+   *  mask. Pages left out have none; their textures are freed. */
+  setFinishes(finishes: ReadonlyMap<PageSource, FaceFinish>) {
+    if (!this.finishes.set(finishes)) return;
+    for (const mesh of this.pageMeshes()) this.dressFinish(mesh);
+    this.redraw();
   }
 
   // ── Layout ──
@@ -722,7 +758,7 @@ export class PageFlipper {
             color: this.boardColor(),
           }
         : undefined;
-      const mesh = new Mesh(stackGeometry(p, side, W, H, Math.round(n * half)), bands ? edgeMaterial(this.sign, bands, this.edges.color) : this.edges);
+      const mesh = new Mesh(stackGeometry(p, side, W, H, Math.round(n * half), this.appearance.edgeOutline), bands ? edgeMaterial(this.sign, bands, this.edges.color) : this.edges);
       mesh.castShadow = mesh.receiveShadow = true;
       this.stacks.push(mesh);
       this.stage.add(mesh);
@@ -801,6 +837,11 @@ export class PageFlipper {
       this.shadowScene.add(c);
       return c;
     });
+    // The open pages' casters drop holes that go through to the desk.
+    this.left.userData.caster = this.staticCasters[0];
+    this.right.userData.caster = this.staticCasters[1];
+    this.dressFinish(this.left);
+    this.dressFinish(this.right);
     occlusionUniforms.uOccRadius.value = 0.14 * W;
     this.layoutLight();
   }
@@ -859,8 +900,9 @@ export class PageFlipper {
       this.desk.geometry = new PlaneGeometry(size, size);
     }
     const dm = this.desk.material as MeshStandardMaterial;
-    if (dm.map && this.resolved.surface.type !== "none") {
-      const tile = ((dm.userData.tileMm as number | undefined) ?? cachedDesk(this.resolved.surface.type as DeskKind).tileMm) * k;
+    const desk = deskKind(this.resolved.surface.type);
+    if (dm.map && desk !== "none") {
+      const tile = ((dm.userData.tileMm as number | undefined) ?? cachedDesk(desk).tileMm) * k;
       for (const t of [dm.map, dm.normalMap, dm.roughnessMap, dm.aoMap]) t?.repeat.set(size / tile, size / tile);
     }
     // The camera, tilted about the book's horizontal axis and turned round
@@ -1207,6 +1249,7 @@ export class PageFlipper {
     if (mesh.userData[face] === src) return;
     mesh.userData[face] = src;
     this.dressVideo(mesh);
+    if (face !== "Under") this.dressFinish(mesh);
     u[`uHas${face}`].value = 0;
     u[`u${face}`].value = null;
     if (src === "") u[`uHas${face}`].value = 2;
@@ -1215,6 +1258,7 @@ export class PageFlipper {
       if (!tex || mesh.userData[face] !== src) return;
       u[`u${face}`].value = tex;
       u[`uHas${face}`].value = 1;
+      if (face !== "Under") this.dressFinish(mesh);
       this.redraw();
     };
     const tex = this.ready.get(src);
@@ -1236,10 +1280,8 @@ export class PageFlipper {
 
   /** A leaf's mesh, its pages not yet assigned. */
   private leafMesh(): PageMesh {
-    const geometry = new PlaneGeometry(1, 1, NX, NY);
-    spreadColumns(geometry, NX);
-    geometry.setAttribute("ao", new BufferAttribute(new Float32Array(geometry.attributes.position.count).fill(1), 1));
-    const mesh: PageMesh = new Mesh(geometry, pageMaterial(this.sign < 0, this.sign));
+    const geometry = leafGeometry();
+    const mesh: PageMesh = new Mesh(geometry, pageMaterial(this.sign < 0, this.sign, CUT_AIR));
     mesh.material.userData.uniforms.uPaper.value.setRGB(...this.paper, SRGBColorSpace);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.frustumCulled = false;
@@ -1312,13 +1354,11 @@ export class PageFlipper {
   private boardParts(mesh: PageMesh): BoardParts {
     let parts = mesh.userData.board as BoardParts | undefined;
     if (!parts) {
-      const geometry = new PlaneGeometry(1, 1, NX, NY);
-      spreadColumns(geometry, NX);
-      geometry.setAttribute("ao", new BufferAttribute(new Float32Array(geometry.attributes.position.count).fill(1), 1));
-      const back = new Mesh(geometry, mesh.material);
+      const back = new Mesh(leafGeometry(), mesh.material);
       back.castShadow = back.receiveShadow = true;
       back.frustumCulled = false;
-      const slab = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({ roughness: 0.8 }));
+      const edges = boardEdges(leafCutOf(mesh));
+      const slab = new Mesh(edges.geometry, edges.material);
       slab.castShadow = slab.receiveShadow = true;
       mesh.add(back, slab);
       parts = { back, slab };
@@ -1729,6 +1769,8 @@ export class PageFlipper {
         const lay = (geometry: BufferGeometry, face: number) => layLeaf(geometry, fold, forward, W, H, Math.min(lift, 0.6), book, 1, q, 0, now, { thick, face });
         const { phi, pivot } = lay(mesh.geometry, 1);
         lay(parts.back.geometry, -1);
+        setLeafFace(mesh.geometry, 1);
+        setLeafFace(parts.back.geometry, -1);
         parts.slab.position.set((W / 2) * Math.cos(phi), 0, pivot + (W / 2) * Math.sin(phi));
         parts.slab.rotation.set(0, -phi, 0);
         parts.slab.scale.set(W, H, thick * 0.97);
@@ -1736,6 +1778,7 @@ export class PageFlipper {
         parts.back.visible = parts.slab.visible = true;
       } else {
         layLeaf(mesh.geometry, fold, forward, W, H, lift, book, spec.rigidity, q, flutter, now);
+        setLeafFace(mesh.geometry, 0);
         const parts = mesh.userData.board as BoardParts | undefined;
         if (parts) parts.back.visible = parts.slab.visible = false;
       }
@@ -1761,6 +1804,8 @@ export class PageFlipper {
       const lay = (geometry: BufferGeometry, face: number) => layLeaf(geometry, null, turn.forward, W, H, 0.5, book, 1, q, 0, 0, { thick, face });
       const { phi, pivot } = lay(mesh.geometry, 1);
       lay(parts.back.geometry, -1);
+      setLeafFace(mesh.geometry, 1);
+      setLeafFace(parts.back.geometry, -1);
       parts.slab.position.set((W / 2) * Math.cos(phi), 0, pivot + (W / 2) * Math.sin(phi));
       parts.slab.rotation.set(0, -phi, 0);
       parts.slab.scale.set(W, H, thick * 0.97);
@@ -2009,58 +2054,9 @@ export class PageFlipper {
 
   /** Draws the leaves in the air as `plane` (an open page's) mirrors them. */
   private drawMirror(target: WebGLRenderTarget, plane: Plane) {
-    const cam = this.mirrorCamera;
-    // The eye mirrored in the plane, turned round its up axis so it is
-    // still a camera (no mirror in it): its picture is the reflection
-    // turned left for right, and its frustum the main one turned so too.
-    const { x, y, z } = plane.normal;
-    const d = -plane.constant;
-    const reflect = new Matrix4().set(
-      1 - 2 * x * x, -2 * x * y, -2 * x * z, 2 * d * x,
-      -2 * y * x, 1 - 2 * y * y, -2 * y * z, 2 * d * y,
-      -2 * z * x, -2 * z * y, 1 - 2 * z * z, 2 * d * z,
-      0, 0, 0, 1,
-    );
-    cam.matrix.copy(reflect).multiply(this.camera.matrixWorld).multiply(new Matrix4().makeScale(-1, 1, 1));
-    cam.updateMatrixWorld(true);
-    const p = cam.projectionMatrix.copy(this.camera.projectionMatrix);
-    p.elements[8] *= -1;
-    // Its near plane laid along the page (an oblique frustum): nothing
-    // under the page shows in its mirror.
-    const near = new Plane(plane.normal.clone(), plane.constant + 0.2).applyMatrix4(cam.matrixWorldInverse);
-    const clip = new Vector4(near.normal.x, near.normal.y, near.normal.z, near.constant);
-    const e = p.elements;
-    const q = new Vector4((Math.sign(clip.x) + e[8]) / e[0], (Math.sign(clip.y) + e[9]) / e[5], -1, (1 + e[10]) / e[14]);
-    clip.multiplyScalar(2 / clip.dot(q));
-    e[2] = clip.x;
-    e[6] = clip.y;
-    e[10] = clip.z + 1;
-    e[14] = clip.w;
-    cam.projectionMatrixInverse.copy(p).invert();
-    // Only the leaves in the air (and the light on them).
     const keep = new Set<Object3D>([this.key, this.key.target, ...this.leaves.values()]);
     if (this.blockMesh) keep.add(this.blockMesh);
-    const hidden: Object3D[] = [];
-    for (const c of this.stage.children) {
-      if (keep.has(c) || !c.visible) continue;
-      c.visible = false;
-      hidden.push(c);
-    }
-    // The key's shadow map as the main view drew it last: the leaves'
-    // own faces under them are not lit by the key anyway.
-    const shadows = this.renderer.shadowMap.autoUpdate;
-    this.renderer.shadowMap.autoUpdate = false;
-    // The picture behind the leaves lies on the main view's screen, not
-    // this one's.
-    const behind = behindUniforms.uBehindOn.value;
-    behindUniforms.uBehindOn.value = 0;
-    this.renderer.setRenderTarget(target);
-    this.renderer.clear();
-    this.renderer.render(this.scene, cam);
-    this.renderer.setRenderTarget(null);
-    this.renderer.shadowMap.autoUpdate = shadows;
-    behindUniforms.uBehindOn.value = behind;
-    for (const c of hidden) c.visible = true;
+    drawMirror({ renderer: this.renderer, scene: this.scene, camera: this.camera, mirror: this.mirrorCamera, stage: this.stage, keep }, target, plane);
   }
 
   /** Back to a transparent canvas (the DOM spread shows), unless leaves
@@ -2092,6 +2088,7 @@ export class PageFlipper {
     cancelAnimationFrame(this.still);
     cancelAnimationFrame(this.orbitFrame);
     for (const tex of this.ready.values()) tex.dispose();
+    this.finishes.dispose();
     this.shadowTarget?.dispose();
     this.composer.dispose();
     this.loupe?.dispose();
@@ -2108,6 +2105,7 @@ export class PageFlipper {
     this.pmrem?.dispose();
     for (const mesh of this.leaves.values()) disposeLeaf(mesh);
     if (this.blockMesh) disposeLeaf(this.blockMesh);
+    for (const mesh of [this.left, this.right]) for (const key of ["cutDepth", "cutCaster"]) (mesh.userData[key] as { dispose(): void } | undefined)?.dispose();
     for (const mesh of [this.left, this.right, this.desk, ...this.stacks]) {
       mesh.geometry.dispose();
       (mesh.material as Material).dispose();

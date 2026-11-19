@@ -267,7 +267,8 @@ Postext Markdown is **not CommonMark**. These habits break a port:
   since configVersion 6); an italic run in an italic heading comes out upright.
 - The containers are `:::callout`, `:::paragraphs`, `:::part`, `:::columns`
   (in a box, or in the running text from postext 1.25), `:::paper` (a run of
-  pages on another paper stock, for the Folio viewer), `:::exercise` (with
+  pages on another paper stock, for the Folio viewer), `:::diecut{die=…}` (pages
+  cut by a die of `dieCuts.shapes`, postext ≥ 1.84), `:::exercise` (with
   `:::solution` and `:::hint` inside; `[[answer]]` blanks are read only
   there) and, on composed pages, `:::frame`. The directives are
   `:::pagebreak`, `:::numbering`, `:::columnbreak`, `:::space`, `:::toc`,
@@ -418,7 +419,10 @@ Arabic and right-to-left traps (postext ≥ 1.15; playbooks F7–F8; configurati
   from an LTR book keeps working. Header/footer slots stay physical.
 - **Words are never cut, hyphenated or letter-spaced.** No `letterSpacing` on
   Arabic styles (`joiningScriptLetterSpacing`); a word wider than a narrow
-  cell overflows (`unbreakableWordOverflow`): widen the cell.
+  cell overflows (`unbreakableWordOverflow`): widen the cell. So does a number
+  in any book (≥ 1.82, `numberOverflow`, which names the table cell, caption
+  or note): never divided as a word; widen the column, set the table smaller,
+  or group its digits with no-break spaces (U+202F), where it may turn over.
 - **Emphasis**: keep `*…*`; it prints bold (Arabic is never slanted). Do not
   set `emphasis: 'italic'`.
 - **Notes «(١)»**: `[^id]` markers before the following punctuation, and
@@ -864,6 +868,13 @@ list deliberate deviations.
 - Print set-up: `inventory.py` reports a source PDF's PDF/X version, output condition and bleed
   with a `suggested_config` (`print`, `page.cutLines`); `render.mjs` prints PREFLIGHT lines for a
   book set up for print (`--preflight` forces them). See configuration.md §21.
+- Special inks and die-cuts (postext ≥ 1.84): `inventory.py` lists a source's spot plates
+  (`spot_plates`, PDF Separations or IDML spot swatches) with the finish each name suggests, flags
+  die-maker plates and layers (CutContour, Die, Troquel), and suggests `print.inks[].finish` and
+  `print.dieLine.ink`. Confirm each finish with the printer; put it on the palette colour's
+  `spot.finish` or in `print.inks`. A die is config: its shape goes in `dieCuts.shapes`, and the
+  Markdown only names it (`:::diecut{die=window}`) or a page template places it (`kind: 'cut'`).
+  See sources.md, "Special inks and die-cuts", and configuration.md §19i.
 - Comic pictures: `scripts/comic_panels.py grid|check|contact` (read and check
   anchors and safe areas, compare pages); give every panel picture its
   `width`/`height` and `altText`.

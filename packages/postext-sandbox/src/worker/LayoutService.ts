@@ -375,7 +375,6 @@ export function createLayoutService(options?: {
     const span = perfSpan('worker.build', {
       client: request.priority,
       markdownKb: Math.round(request.content.markdown.length / 1024),
-      contentKb: perfSizeKb(request.content),
     });
     let stats: BuildStats | null = null;
     try {
@@ -390,6 +389,7 @@ export function createLayoutService(options?: {
         onStats: (s: BuildStats) => { stats = s; },
         resourcesKey: request.content.resources ? resourcesKeyOf(request.content.resources) : undefined,
         cacheKey: request.cacheKey,
+        ...(request.tapesKey !== undefined && !request.warmOnly ? { tapesKey: request.tapesKey } : {}),
       };
       const build = (): Promise<VDTDocument> => exclusive(() => askWorker('build', () => worker().build(request.content, request.config, buildOptions)));
       at('the worker\'s layout');
@@ -415,15 +415,30 @@ export function createLayoutService(options?: {
         doc = await build();
       }
       const built = stats as BuildStats | null;
-      span.end({
+      span.end(() => ({
         warm: !!request.warmOnly,
         pages: doc?.pages.length,
+        // Read once the page is idle (#1644): the sizes cost as much as a
+        // short build.
+        contentKb: perfSizeKb(request.content),
         docKb: doc ? perfSizeKb(doc) : 0,
         cached: built?.cached ?? false,
         workerMs: built?.totalMs,
         passes: built?.passes.length,
         passMs: built?.passes.map((p) => Math.round(p.ms)).join('/'),
-      });
+        // A build from the layout before it (#1640): the block each pass
+        // started from, where it rejoined, the pages kept and taken.
+        ...(built?.tapes ? {
+          from: built.tapes.startedAt.join('/'),
+          rejoined: built.tapes.rejoinedAt.map((b) => b ?? '-').join('/'),
+          kept: built.tapes.pagesKept.join('/'),
+          taken: built.tapes.pagesTaken.join('/'),
+          again: built.tapes.builtAgain,
+          // The pages that crossed from the worker (#1642); absent when the
+          // whole document did.
+          ...(built.pagesSent !== undefined ? { sent: built.pagesSent } : {}),
+        } : {}),
+      }));
       if (doc) {
         // Laid out without a face it asked for: said of the document, so
         // nobody takes its pages for the chapter's.

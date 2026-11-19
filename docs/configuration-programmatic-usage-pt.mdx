@@ -149,6 +149,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>Os parágrafos são compostos como texto corrido.</td>
     </tr>
     <tr>
+      <td><code>chapterStyleUnknown</code>, <code>partStyleMidChapter</code></td>
+      <td><a href="/pt/docs/configuration-styles#estilos-de-capítulo">Estilos de capítulo</a></td>
+      <td>—</td>
+    </tr>
+    <tr>
       <td><code>unknownCalloutType</code></td>
       <td><code>:::callout{'{'}type{'}'}</code> não cita nenhum dos <code>calloutStyles</code>; só é gerado quando há algum configurado.</td>
       <td>O boxe recebe o primeiro estilo de boxe.</td>
@@ -389,8 +394,8 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>A lista é dividida onde a coluna termina.</td>
     </tr>
     <tr>
-      <td><code>stack</code></td>
-      <td>Duas linhas seguidas de um parágrafo, na mesma coluna, que terminam (<code>edge: 'end'</code>) ou começam (<code>'start'</code>) com a mesma palavra ou os mesmos <code>bodyText.stackMinCharacters</code> caracteres: <code>text</code> é o que repetem, como a primeira linha o imprime, e <code>lines</code> as duas linhas. Com <code>bodyText.stacks: 'warn'</code> todas são assinaladas; com <code>'avoid'</code>, as que o algoritmo manteve. Um por repetição; aponta para as duas linhas, com a página delas. Desde postext 1.73.</td>
+      <td><code>stack</code>, <code>citationBreak</code>, <code>operatorBreak</code></td>
+      <td>Duas linhas seguidas de um parágrafo, na mesma coluna, que terminam (<code>edge: 'end'</code>) ou começam (<code>'start'</code>) com a mesma palavra ou os mesmos <code>bodyText.stackMinCharacters</code> caracteres (<code>stack</code>, desde postext 1.73); uma linha que começa com uma citação numerada depois de uma palavra, ou com um pedaço dela (<code>citationBreak</code>, 1.79); uma linha que termina ou começa com um sinal solto entre espaços, <code>=</code> ou <code>±</code> (<code>operatorBreak</code>, 1.79). <code>text</code> é o que se repete, a citação ou o sinal, e <code>lines</code> as duas linhas. Com <code>'warn'</code> (<code>bodyText.stacks</code>, <code>citationBreaks</code>, <code>operatorBreaks</code>) todos são informados; com <code>'avoid'</code>, os que a quebra de linha manteve. Um por quebra; aponta para as duas linhas, com a sua página.</td>
       <td>As linhas são compostas como estão.</td>
     </tr>
     <tr>
@@ -410,7 +415,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
     </tr>
     <tr>
       <td><code>tocGroupSplit</code></td>
-      <td>Um bloco do sumário que deve ficar junto (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), aberto por <code>title</code>, composto em <code>columns</code> colunas: ele é mais alto que uma coluna inteira, ou a coluna em que começa é curta (sob um boxe de página inteira, ao lado de um flutuante). Um por bloco; aponta para a diretiva <code>:::toc</code>, com a página em que o bloco começa. Para eliminá-lo, liste menos níveis (<code>levels="1"</code>), abra os blocos com um nível inferior (<code>toc.groups.head: 2</code>) ou deixe as entradas menores ou mais compactas. Desde o postext 1.34.</td>
+      <td>Um bloco do sumário que deve ficar junto (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), aberto por <code>title</code>, composto em <code>columns</code> colunas: ele é mais alto que uma coluna inteira, ou a coluna em que começa é curta (sob um boxe de página inteira, ao lado de um flutuante). Um por bloco; aponta para a diretiva <code>:::toc</code>, com a página em que o bloco começa. Desde o postext 1.34.</td>
       <td>O bloco é dividido; com <code>toc.groups.continuation</code>, cada coluna em que ele continua abre com a linha de cabeça e a marca de continuação.</td>
     </tr>
     <tr>
@@ -441,7 +446,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
   </tbody>
 </table>
 
-A tabela lista os tipos que qualquer documento pode gerar. Os tipos próprios de uma funcionalidade são descritos junto com ela: os de quadrinhos (`comicPanelCount`, `comicBalloonOverflow`…) na página [Quadrinhos](/pt/docs/comics), os de vídeos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) em [Imagens, tabelas e vídeos](/pt/docs/document-format-resources), os de citações e do índice remissivo (`unknownCitationKey`, `referencesUnreadable`, `indexMark`…) em [Notas e referências](/pt/docs/document-format-notes-references), os de texto chinês, japonês e árabe (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading`…) nas páginas dessas escritas, e os do quebrador de linhas (`raggedLine`, `unbreakableWordOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) em [Hifenização e justificação](/pt/docs/justification).
+A tabela lista os tipos que qualquer documento pode gerar. Os tipos próprios de uma funcionalidade são descritos junto com ela: os de quadrinhos (`comicPanelCount`, `comicBalloonOverflow`…) na página [Quadrinhos](/pt/docs/comics), os de vídeos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) em [Imagens, tabelas e vídeos](/pt/docs/document-format-resources), os de citações e do índice remissivo (`unknownCitationKey`, `referencesUnreadable`, `indexMark`…) em [Notas e referências](/pt/docs/document-format-notes-references), os de texto chinês, japonês e árabe (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading`…) nas páginas dessas escritas, e os do quebrador de linhas (`raggedLine`, `unbreakableWordOverflow`, `numberOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) em [Hifenização e justificação](/pt/docs/justification).
 
 Os avisos sobre um recurso (o estilo de tabela, a grade, uma referência dentro da legenda, da nota ou das células) apontam para a primeira inserção ou referência do recurso no texto, e cada um aparece uma vez por recurso. Só são verificados os recursos que o documento usa: um capítulo de um livro sinaliza as tabelas que cita, não todas as tabelas do livro.
 
@@ -796,7 +801,7 @@ const { bytes: book } = await createBundle(importBundleInput(result));
 
 - **`idmlToPostext(bytes, options)`** é síncrona. `layout` é `'pages'` (páginas compostas que seguem o original página por página), `'flow'` (um livro de texto corrido) ou `'auto'` (o padrão: o importador escolhe e dá a sua `reason`). `linkBytes(link)` fornece os bytes de uma imagem vinculada (`link.name`, `link.uri`); as incorporadas são lidas do pacote, e os vínculos que ficam sem bytes são listados em `missingLinks`. O resultado traz `chapters` (`{ title, markdown }`), `config` (só o que o documento define), `resources` com os seus `files`, as `fonts` de que o livro precisa (só os nomes: um `.idml` não leva arquivos de fonte) e `report`: um `verdict` (`faithful`, `approximate` ou `lossy`) e `findings`, cada um com `severity` (`info`, `warning`, `loss`), `message`, `count` e `examples`. **`importBundleInput(result)`** é a entrada de `createBundle` de `postext/bundle`.
 - As linhas que o original termina com quebras de linha forçadas continuam sendo as linhas do livro: o importador ativa `bodyText.justifyHardBreaks`. Um livro exportado do Postext volta com as mesmas linhas. Um documento feito no InDesign é lido com perdas, que o relatório lista. A linha de comando importa com [`postext import-idml`](/pt/docs/command-line#import-idml); o Sandbox, pelo menu **Novo** do [painel Livros](/pt/docs/sandbox-books-saving#importar-um-documento-do-indesign), e a [skill para agentes](/pt/docs/skill) continua sendo o caminho recomendado para reproduzir o layout de um livro do InDesign: [InDesign: importar, exportar e portar](/pt/docs/indesign) compara os dois caminhos. `spreads` também é uma opção da linha de comando (`--spreads`) desde o postext 1.78.
-- **`readIdml(bytes)`** e **`inspectIdml(doc)`** são o leitor tipado em separado: o pacote como um `IdmlDocument` e um resumo dele (páginas, matérias, fontes, estilos em uso, imagens).
+- **`readIdml(bytes)`** e **`inspectIdml(doc)`** são o leitor tipado em separado: o pacote como um `IdmlDocument` e um resumo dele (páginas, matérias, fontes, estilos em uso, imagens). **`openIdmlArchive(zip)`** lê um pacote compactado.
 
 ## Executar a diagramação em um Web Worker
 

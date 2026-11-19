@@ -347,7 +347,13 @@ the bundle).
 - The other way round, `postext idml my-book -o book.idml` (postext ≥ 1.71; in code `idmlDocument`
   from the `postext-idml` package, which postext ≥ 1.76 needs in place of the old `postext/idml`
   subpath) writes the laid-out pages as an InDesign package: page items for rules, boxes and
-  pictures, one story per composed-page frame (`next` chains share one), callout styles as paragraph
+  pictures, the running text of the pages laid out in columns as one story threaded through a
+  frame per column with the boxes of the flow anchored in it (≥ 1.85.0; `--text frames` gives each
+  block its own frame and story), running heads and folios on master spreads (≥ 1.86.0: the folio
+  as InDesign's current page number, `{chapterTitle}` as a running-header text variable, a master
+  per set of heads, the chapter openers' named Opener; a head with `{attr.x}` or another
+  placeholder stays on its page), the boxes floated into a side column (glosses) anchored in the
+  thread at a custom position, one story per composed-page frame (`next` chains share one), callout styles as paragraph
   styles, authored CMYK colours as swatches, form-field chips as InDesign form fields. From 1.76
   the pages stand in facing spreads for a book with mirrored margins (else one page per spread),
   every line ends where Postext ended it (`--lines keep`, the default; `--lines reflow` leaves the
@@ -359,8 +365,22 @@ the bundle).
   studio, not as a way to check the port.
 - `postext-idml` also reads: `idmlToPostext(bytes, { layout })` returns chapters, configuration,
   resources and a report (verdict, findings with counts) of what Postext has no equivalent for. It
-  is deterministic and brings a book that Postext exported back with the same lines; a document made
-  in InDesign comes through with the losses the report lists. `postext import-idml file.idml -o book/
+  is deterministic and brings a book that Postext exported back faithful: a flowing book as a
+  flowing book (postext ≥ 1.85.0: the export threads the running text through a frame per column
+  and labels the line breaks it kept, so the paragraphs, boxes and captions read as written; the
+  column guides carry a column-and-a-half page's main and side columns, read back as `oneAndHalf`;
+  from 1.86.0 the running heads and folios come back from the masters as the book's header and
+  footer, the openers' own included, and the glosses as `span="side"` callouts before the paragraph
+  they face; shapes drawn on the pages are left out as the `pageArtInFlow` loss, so redraw them in
+  the design; with 1.85.x the heads were the `runningHeadsOnPages` loss), a
+  book exported with `--text frames` as composed pages with the same lines (≥ 1.84.0: its
+  character styles, boxes and tints come back); a document made in InDesign comes through with
+  the losses the report lists.
+  The importer also cuts a text frame behind a Jump Object or Jump to Next Column wrap into chained
+  frames above and below the object (≥ 1.82.2), splits a package's font collections (`.ttc`,
+  `.otc`) into the single faces the text uses (≥ 1.83), and in `--layout flow` sets a page with no
+  running text (cover, divider) as a composed page and an opener's band, kicker and title as a
+  heading design (≥ 1.83.1; `composedPagesInFlow`, `openerDesigns`). `postext import-idml file.idml -o book/
   --report` runs it from the command line and prints the report: a first import to start from, which
   the port then corrects. For a port, keep to the steps below.
 - `idml_extract.py roles book.idml > map.json` lists the paragraph styles in
@@ -575,6 +595,40 @@ says about it:
   editions are CC BY 4.0 (design) over a public-domain text.
 - **Orthography**: keep the edition's spelling (فى, الامر, مائة, missing hamzas) and its digits; type Arabic
   punctuation (، ؛ ؟) where the source has it. Never run NFC/NFD over vocalised text you keep.
+
+## Special inks and die-cuts
+
+Postext ≥ 1.84 prints a fifth ink with its finish and cuts holes and shaped edges
+(configuration.md, "Special inks" and "Die-cuts"). Where the source tells you about them:
+
+- **PDF**: the spot plates are Separation colour spaces, and `inventory.py` lists them as
+  `spot_plates`, each with the finish its name suggests (the engine's `guessInkFinish`, ported in
+  `ink_finishes.py`): `Gold`, `Silver`, `PANTONE 871`–`877 C`, the 8000s and 10000s are metallic;
+  `PANTONE 801`–`814 C` and `Fluo …` fluorescent; `Opaque white`, `White` white; `Varnish`,
+  `Spot UV`, `Barniz UVI` varnish; `Hot foil`, `Dorure`, `烫金` foil. A plate named `CutContour`,
+  `Die`, `Dieline`, `Troquel`, `Stanzform` and the like is the die-maker's, not an ink
+  (`dieLine: true`); so is an optional-content layer of that name (`die_line_layers`).
+- **IDML**: spot swatches in `Resources/Graphic.xml` (`Model="Spot"`) and the layers in
+  `designmap.xml` are read the same way; the die line is often a layer called Die, Troquel or
+  Stanzform with one path per hole.
+- **Printer's specification**: the finish, the sheen and the press order come from it, not from the
+  name. Ask for it when a plate's name is a bare Pantone number.
+
+What to write:
+
+- A special ink is a spot colour of the palette with `spot.finish` (`{ "kind": "metallic" }`, `"foil"`,
+  `"fluorescent"`, `"white"`, `"varnish"`, and `sheen` for varnish, foil and metallic), or an entry
+  of `print.inks` in a plates job. `suggested_config.print.inks` from the inventory is a draft:
+  confirm each guess before copying it.
+- A die line becomes geometry in `dieCuts.shapes` (one die per hole or shaped edge, measured on the
+  trimmed page from the die-line PDF or the layer's paths: `rect`, `roundRect`, `circle`,
+  `ellipse` or `path` with `d` and `viewBox`), placed by `dieCuts.pages`, a `:::diecut{die=…}`
+  fence or a `cut` element of a page template. Rounded corners and a shaped book are
+  `dieCuts.corners` and `dieCuts.outline`. Keep the plate's name in `print.dieLine.ink` so the
+  printer's workflow finds it. The Markdown never carries the shape: `:::diecut` only names a die
+  the config defines (`lint_project.py` flags an unknown die and any other attribute).
+- Do not reproduce the die-line plate or layer as artwork, and do not paint a varnish or foil area
+  as a colour in a figure: the finish is the spot colour's, the area is the text or box that uses it.
 
 ## Content you must not copy blindly
 

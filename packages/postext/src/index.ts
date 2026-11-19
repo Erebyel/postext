@@ -2,32 +2,26 @@ export { createLayout } from './createLayout.js';
 export { registerCodeHighlighter, highlightCode, builtinCodeLanguage } from './code/highlight.js';
 export { fencedCodeLines } from './parse/codeFence.js';
 export type { CodeHighlighter, CodeToken } from './code/highlight.js';
-export { buildDocument, resolveJumpMarks, BuildCancelledError, continuationAfter, contentOutline, pageFenceIds, laterPageIdsOf, computeOutline, computeOutlineFor, outlineFromDoc, outlineKey, sameOutline, hasTocDirective, hasIndexDirective, tocOutline, indexOutline, anchorOutline, hasAnchors, locateAnchors, duplicateAnchors, mergeCarriedOutline, carriedPlaces } from './pipeline/index.js';
+export { buildDocument, resolveJumpMarks, BuildCancelledError, continuationAfter, contentOutline, pageFenceIds, laterPageIdsOf, computeOutline, computeOutlineFor, outlineFromDoc, outlineKey, sameOutline, hasTocDirective, hasIndexDirective, tocOutline, indexOutline, anchorOutline, hasAnchors, locateAnchors, duplicateAnchors, mergeCarriedOutline, carriedPlaces, createLayoutTapes, type LayoutTapes, type LayoutTapeStats } from './pipeline/index.js';
 export type { CarriedPlace } from './pipeline/index.js';
 export type { BuildDocumentOptions } from './pipeline/index.js';
 export type { ConfigOverride } from './defaults/configLayers.js';
 export { formatFootnoteNumber, footnoteFormatOf, footnoteSymbol, DEFAULT_FOOTNOTE_SYMBOLS } from './pipeline/references/footnotes.js';
 export type { FootnoteFormat } from './pipeline/references/footnotes.js';
-export { renderToCanvas, renderPage, renderPageToCanvas, registerResourceImage, unregisterResourceImage, clearResourceImages, getResourceImage, registerVerticalAlternates, unregisterVerticalAlternates, loadVerticalAlternates, verticalTwinName, VERTICAL_ALTERNATE_SAMPLE } from './canvas-backend/index.js';
-export type { RenderPageOptions, ResourceImageSource, RegisterResourceImageOptions, VerticalAlternatesFace } from './canvas-backend/index.js';
-export { renderToHtml, renderToHtmlIndexed, anchoredResourceIds, HTML_TEXT_RESET, tintHex, tintFilterElement } from './html-backend/html-backend.js';
+export { renderToCanvas, renderPage, renderPageToCanvas, composeThrough, cutDieShapes, registerResourceImage, unregisterResourceImage, clearResourceImages, getResourceImage, registerVerticalAlternates, unregisterVerticalAlternates, loadVerticalAlternates, verticalTwinName, VERTICAL_ALTERNATE_SAMPLE, renderFinishMask, applyFinishPreview, finishMaskSvg, type RenderPageOptions, type ResourceImageSource, type RegisterResourceImageOptions, type VerticalAlternatesFace, type FinishMask, type FinishMaskOptions, type FinishMaskPass, type FinishMaskCanvas, type FinishPreviewMode, type ComposeThroughOptions, type PageImageSource } from './canvas-backend/index.js';
+export { renderToHtml, renderToHtmlIndexed, anchoredResourceIds, HTML_TEXT_RESET, tintHex, tintFilterElement, renderHtmlBook, htmlBookFiles, htmlFontFaceRule, redistributableFaces, fontNoteWarning, clearVarnishPaints } from './html-backend/html-backend.js';
 export { renderComicHtml, comicPanelSvg } from './html-backend/htmlComic.js';
 export type { ComicHtmlPaint, ComicPanelSvgOptions } from './html-backend/htmlComic.js';
-export type { RenderHtmlOptions, HtmlRenderIndex, HtmlRenderIndexPage } from './html-backend/html-backend.js';
+export type { RenderHtmlOptions, HtmlRenderIndex, HtmlRenderIndexPage, RenderHtmlBookOptions, HtmlBookFace, HtmlBookFile, HtmlBookFontNote, HtmlBookWarning } from './html-backend/html-backend.js';
 export { dimensionToPx } from './units.js';
 export { computePageTextExtent } from './vdt.js';
 export { columnRuleSegments, footnoteRuleSegments, pageColumnRule, type FootnoteRuleSegment, type ColumnRuleSegment } from './paint/columnRule.js';
 export { cropMarkSegments } from './paint/cropMarks.js';
 export * from './color/index.js';
 export * from './production/index.js';
-export { preflightDocument, placedImageResolutions } from './checks/preflight.js';
-export type { PreflightIssue, PreflightKind, PreflightOptions, PreflightSeverity, PlacedImageResolution } from './checks/preflight.js';
+export { preflightDocument, placedImageResolutions, type PreflightIssue, type PreflightKind, type PreflightOptions, type PreflightSeverity, type PlacedImageResolution } from './checks/preflight.js';
 export {
-  contrastDocument,
-  contrastPairs,
-  contrastMedia,
-  contrastRatio,
-  contrastThreshold,
+  contrastDocument, contrastPairs, contrastMedia, contrastRatio, contrastThreshold,
   relativeLuminance,
   isLargeText,
   blendColors,
@@ -68,20 +62,20 @@ export { balancingOnByDefault, avoidWidowsByDefault, avoidOrphansByDefault } fro
 export { renderTemplateNumber } from './pipeline/resources/resourceNumbering.js';
 export { bandOutline, dashedPieces, outlineToSvgPath, type BandShape, type OutlineCommand } from './marks/markGeometry.js';
 export { findLooseLines, drawLooseLines, lineLooseness, lineWordSpacing, type LooseLine, type FindLooseLinesOptions, type DrawLooseLinesOptions } from './checks/looseLines.js';
-export { findStacks, findHyphenFaults, type Stack, type StackRange, type FindStacksOptions, type HyphenFault, type FindHyphenFaultsOptions } from './checks/compositionRules.js';
+export { findStacks, findHyphenFaults, findSpaceBreaks, type Stack, type StackRange, type FindStacksOptions, type HyphenFault, type FindHyphenFaultsOptions, type SpaceBreakFault, type FindSpaceBreaksOptions } from './checks/compositionRules.js';
 export { primaryFontFamily } from './measure/font.js';
 export { buildFontString, setSymbolFont, symbolFont, withSymbolFont, measureBlock, measureRichBlock, measureGlyphWidth, initHyphenator, clearMeasurementCache, createMeasurementCache, cachedMeasureBlock, cachedMeasureRichBlock, setCjkLineBreak, getCjkLineBreak, setCjkComposition, getCjkComposition, cjkCompositionOf, punctuationAdvance, punctuationSide, PLAIN_CJK_COMPOSITION } from './measure/index.js';
 export type { CjkComposition, PunctuationSide } from './measure/index.js';
 export type { BreakTrace, LineInsetStep, LineWidthStep, MeasuredBlock, MeasureBlockOptions, MeasurementCache } from './measure/index.js';
-export { hyphenateText, hyphenateByDictionary, setHyphenationLocale, setHyphenationRules, normalizeHyphenationExceptions, HYPHENATION_LOCALES, matchHyphenationLocale, setHyphenationLimits, hyphenationLanguageLimits } from './hyphenation/hyphenate.js';
-export type { HyphenationRules } from './hyphenation/hyphenate.js';
+export { hyphenateText, hyphenateByDictionary, setHyphenationLocale, setHyphenationRules, normalizeHyphenationExceptions, normalizeExceptionsByLanguage, HYPHENATION_LOCALES, matchHyphenationLocale, setHyphenationLimits, hyphenationLanguageLimits, ALL_LANGUAGES_KEY, parseHyphenationExceptionsFile, formatHyphenationExceptionsFile, mergeHyphenationExceptions, mergeHyphenationExceptionsFile, hyphenationExceptionsFor, withHyphenationExceptions } from './hyphenation/hyphenate.js';
+export type { HyphenationRules, HyphenationExceptionsFile, HyphenationExceptionsMerge, HyphenationExceptionsFileMerge } from './hyphenation/hyphenate.js';
 export { DOCUMENT_LANGUAGES, isCjkLanguage, isJapaneseLanguage, isUnhyphenatedLanguage, localeScript, chineseScriptOf, cjkRegionOf, stringsKeyOf, sameContentLocale, matchContentLocale, canonicalLocaleTag, renderLangOf, documentLanguageOf, shapingLanguageOf, shapingTagOf, stringsFor, directionOf, comicsLocaleDirection, defaultNumeralsFor } from './hyphenation/locale.js';
 export type { DocumentLanguage } from './hyphenation/locale.js';
 export { parseMarkdown } from './parse/index.js';
 export { addRow, addColumn, removeRow, removeColumn, mergeCells, unmergeCell, setCellContent, setCellImage, setCellBackground, setAlignment, parseTSV, tableGridIssues, transposeTable } from './table/index.js';
 export type { CellPos, CellRange, ParseTSVOptions, TableGridIssue } from './table/index.js';
 export { collectContentWarnings, formatWarning } from './pipeline/contentWarnings.js';
-export { collectHeadingDesignCuts } from './pipeline/sections/headingDesignCuts.js';
+export { collectHeadingDesignCuts, type HeadingDesignCut } from './pipeline/sections/headingDesignCuts.js';
 export { normalizeSafeArea, resourceSafeArea, safeAreaHeightRange, safeAreaSource, uncroppedPictureBox, resourceCrop } from './pipeline/resources/safeArea.js';
 export {
   parseComicSplit, serializeComicSplit, moveComicSplitLine, splitComicCell, mergeComicCells, comicSplitLines, comicSplitLeaves, comicSplitListAt, COMIC_MIN_CELL_PERCENT,
@@ -117,13 +111,13 @@ export type { ExerciseGridInfo, ExerciseRecord, ExerciseSlot, ExerciseSlotKind }
 export type { QrMatrix, QrErrorCorrection } from './video/qr.js';
 export { parseVideoUrl, videoWatchUrl, resourceVideoLink, videoEmbedUrl, videoEmbedAllow, videoElementAttributes, mediaFragment, videoMimeType, videoFormatOfUrl, resourceVideoFormat, isHlsMimeType, HLS_MIME_TYPE, youtubePosterUrls } from './video/url.js';
 export type { ParsedVideoUrl } from './video/url.js';
-export type { HeadingDesignCut } from './pipeline/sections/headingDesignCuts.js';
 export { extractFrontmatter, metadataText } from './parse/frontmatter.js';
 export type { FrontmatterError, ParsedFrontmatter } from './parse/frontmatter.js';
 export { styledLinkOf, lineLinkUnderlines } from './marks/linkUnderline.js';
 export { BOOK_PAGE_KEYS, BOOK_WIDE_KEYS, BOOK_OWN_KEYS, isBookWideKey, isBookOwnKey, isBookPageKey, DEFAULT_PAGE_CONFIG, DEFAULT_CUT_LINES, DEFAULT_PAGE_NUMBERING, PAGE_SIZE_PRESETS, resolvePageConfig, DEFAULT_LAYOUT_CONFIG, DEFAULT_FLOAT_MIN_SCALE, MAX_PIN_PAGE_OFFSET, DEFAULT_MAX_TOP_FRACTION, DEFAULT_TEXT_WRAP, DEFAULT_COLUMN_RULE, DEFAULT_COLUMN_BALANCING, resolveLayoutConfig, stripLayoutDefaults, DEFAULT_BODY_TEXT_CONFIG, DEFAULT_HYPHENATION_CONFIG, DEFAULT_BLOCKQUOTE_CONFIG, DEFAULT_VERSE_CONFIG, resolveVerseConfig, stripVerseDefaults, resolveBodyTextConfig, stripBodyTextDefaults, hyphenationEqual, DEFAULT_HEADINGS_CONFIG, resolveHeadingsConfig, stripHeadingsDefaults, resolveTableStyleConfig, stripTableStyleDefaults, resolveTableStylesConfig, stripTableStylesDefaults, pickTableStyle, defaultTableContinuationStrings, resolveCaptionStyleConfig, stripCaptionStyleDefaults, mergeCaptionStyle, defaultCaptionLabels, DEFAULT_DIAGRAM_STYLE_CONFIG, resolveDiagramStyleConfig, stripDiagramStyleDefaults, DEFAULT_SCORE_STYLE_CONFIG, resolveScoreStyleConfig, resolveScoreStylesConfig, pickScoreStyle, stripScoreStyleDefaults, stripScoreStylesDefaults, DEFAULT_VIDEO_STYLE_CONFIG, DEFAULT_VIDEO_PLAYER_OPTIONS, resolveVideoStyleConfig, resolveVideoPlayerOptions, stripVideoStyleDefaults, DEFAULT_PARAGRAPH_STYLES, resolveParagraphStylesConfig, stripParagraphStylesDefaults, DEFAULT_CALLOUT_STYLES, DEFAULT_CALLOUT_STYLE_STATIC, resolveCalloutStylesConfig, stripCalloutStylesDefaults, inheritCalloutStyles, calloutStyleChain, DEFAULT_CHIP_STYLES, DEFAULT_CHIP_STYLE_STATIC, resolveChipStylesConfig, stripChipStylesDefaults, pickChipStyle, DEFAULT_CHARACTER_STYLES, DEFAULT_CHARACTER_STYLE_STATIC, resolveCharacterStylesConfig, stripCharacterStylesDefaults, pickCharacterStyle, DEFAULT_MARK_STYLES, DEFAULT_MARK_STYLE_STATIC, resolveMarkStylesConfig, stripMarkStylesDefaults, pickMarkStyle, DEFAULT_UNORDERED_LISTS_STATIC, resolveUnorderedListsConfig, stripUnorderedListsDefaults, DEFAULT_ORDERED_LISTS_STATIC, resolveOrderedListsConfig, stripOrderedListsDefaults, DEFAULT_MATH_CONFIG, resolveMathConfig, stripMathDefaults, dimensionsEqual, colorsEqual, resolveColorValue, paletteTintHex, tintedEntryValue, tintPaperOf, applyPaletteToConfig, applyPaletteToResolvedConfig, DEFAULT_COLOR_PALETTE, DEFAULT_MAIN_COLOR, DEFAULT_MAIN_COLOR_ID, DEFAULT_MAIN_COLOR_NAME, DEFAULT_MAIN_COLOR_HEX, cloneDefaultColorPalette, isDefaultColorPalette, stripPageDefaults, stripConfigDefaults, DEFAULT_DEBUG_CONFIG, FIT_MARKS_MODES, resolveDebugConfig, stripDebugDefaults, DEFAULT_CANVAS_VIEWER_CONFIG, CANVAS_VIEWER_MAX_GAP, resolveCanvasViewerConfig, stripCanvasViewerDefaults, DEFAULT_HTML_VIEWER_CONFIG, resolveHtmlViewerConfig, stripHtmlViewerDefaults, mergeConfigOverrides, applyHtmlViewerOverrides, mergeConfigLayers, diffConfigLayers, leastConfigOverride, commonConfig, overridePaths, sameConfig, REMOVE_ENTRY, DEFAULT_PDF_GENERATION_CONFIG, resolvePdfGenerationConfig, stripPdfGenerationDefaults, FOLIO_PAPER_STOCKS, FOLIO_MAX_TILT, DEFAULT_FOLIO_CONFIG, isNewspaperSizePreset, folioDefaultsFor, folioForTrim, resolveFolioConfig, stripFolioDefaults, wrapFolioYaw, DEFAULT_HEADER_FOOTER_SLOT, DEFAULT_HEADER_SLOT, DEFAULT_FOOTER_SLOT, DEFAULT_TEXT_ELEMENT, DEFAULT_RULE_ELEMENT, resolveHeaderFooterConfig, stripHeaderFooterDefaults, defaultResourceTypes, defaultVideoResourceType, defaultExampleResourceType, effectiveResourceTypes, DEFAULT_PARTS_CONFIG, resolvePartsConfig, stripPartsDefaults, DEFAULT_HEADING_STYLES, resolveHeadingStylesConfig, stripHeadingStylesDefaults, DEFAULT_TOC_CONFIG, resolveTocConfig, stripTocDefaults, DEFAULT_FOOTNOTES_CONFIG, resolveFootnotesConfig, stripFootnotesDefaults, parseFootnoteNumberFormat, DEFAULT_LINE_NUMBERS_CONFIG, resolveLineNumbersConfig, stripLineNumbersDefaults, defaultLineNumbersRestart, DEFAULT_CODE_STYLE, DEFAULT_CODE_TOKENS, CODE_TOKEN_KINDS, CODE_OVERFLOWS, resolveCodeStyleConfig, resolvedCodeStyle, stripCodeStyleDefaults, resolveCrossRefsConfig, stripCrossRefsDefaults, DEFAULT_CITATIONS_CONFIG, resolveCitationsConfig, stripCitationsDefaults, DEFAULT_LINKS_CONFIG, DEFAULT_LINK_STYLE_OUTPUTS, LINK_STYLE_OUTPUTS, resolveLinksConfig, resolveLinkStyleConfig, linkStyleFor, stripLinksDefaults, DEFAULT_INDEX_CONFIG, resolveIndexConfig, stripIndexDefaults, DEFAULT_CJK_CONFIG, resolveCjkConfig, stripCjkDefaults, defaultCjkLineBreak, defaultCjkPunctuationWidth, defaultCjkCompression, defaultCjkEmphasis, defaultCjkBookTitleMark, defaultCjkBookTitleBrackets, defaultCjkEmphasisMark, defaultCjkWarichuBrackets, defaultCjkHangingPunctuation, defaultCjkSpaceAfterQuestion, defaultCjkParagraphStartBracket, defaultCjkRubyOverhang, defaultCjkRubyAlign, defaultCjkLatinSpacingEdge } from './defaults/index.js';
 // Exercises (#1226): the styles and book settings as the engine resolves them.
-export { DEFAULT_EXERCISE_STYLES, exerciseWords, resolveExerciseStylesConfig, resolveExercisesConfig, stripExerciseStylesDefaults, stripExercisesDefaults, CHAPTER_STYLE_KEY, blankChapterFrontmatter, chapterConfig, chapterConfigOf, chapterStyleOf } from './defaults/index.js';
+export { DEFAULT_EXERCISE_STYLES, exerciseWords, resolveExerciseStylesConfig, resolveExercisesConfig, stripExerciseStylesDefaults, stripExercisesDefaults, CHAPTER_STYLE_KEY, blankChapterFrontmatter, chapterConfig, chapterConfigOf, chapterStyleOf, chapterStyleIdOf, openingPart, bookSettingsOf } from './defaults/index.js';
+export { partPageAttr } from './pipeline/sections/parts.js';
 export type { ExerciseWords, ResolvedExerciseStyle, ResolvedExerciseNumber, ResolvedExercisesConfig } from './defaults/index.js';
 export type {
   ExerciseNumberShape,
@@ -151,7 +145,7 @@ export type {
   ChipUnderline,
   FigureStyle,
 } from './types.js';
-export { DEFAULT_PRINT_CONFIG, DEFAULT_PRINT_BLACK_CONFIG, DEFAULT_PRINT_PREFLIGHT_CONFIG, DEFAULT_RICH_BLACK, resolvePrintConfig, resolvePrintBlackConfig, resolvePrintPreflightConfig, resolvePrintInks, resolvePrintPlates, resolvePrintImageColor, stripPrintDefaults, profileInkLimit } from './defaults/index.js';
+export { DEFAULT_PRINT_CONFIG, DEFAULT_PRINT_BLACK_CONFIG, DEFAULT_PRINT_PREFLIGHT_CONFIG, DEFAULT_RICH_BLACK, resolvePrintConfig, resolvePrintBlackConfig, resolvePrintPreflightConfig, resolvePrintInks, resolvePrintPlates, resolvePrintImageColor, stripPrintDefaults, profileInkLimit, resolveInkFinish, resolvePrintDieLine, DEFAULT_PRINT_DIE_LINE, resolveDieCutsConfig, stripDieCutsDefaults } from './defaults/index.js';
 export { DEFAULT_CHECKS_CONFIG, DEFAULT_CONTENT_IN_CONFIG_CHECK, resolveChecksConfig, resolveContentInConfigCheck, stripChecksDefaults } from './defaults/index.js';
 export { DEFAULT_CONTRAST_CONFIG, DEFAULT_CONTRAST_REVERSED_TEXT_CONFIG, CONTRAST_LEVELS, CONTRAST_MODES, resolveContrastConfig, resolveContrastReversedTextConfig, stripContrastDefaults } from './defaults/index.js';
 export type { FolioPaperStock } from './defaults/index.js';
@@ -163,6 +157,7 @@ export { layoutDesignSlot } from './design/layout.js';
 export { pathMarkerOutline, pathSvgData, markerSvgData, markerSvgElement, colorWithOpacity, quadToCubic, pathInkBox, pathHit, offsetPathBlock, translatedPathBlock, pathBlockColors, recolorPathBlock } from './design/pathBlock.js';
 export type { PathMarkerOutline } from './design/pathBlock.js';
 export { parseSvgPath, arcToCubics } from './design/svgPath.js';
+export { pathBounds, flattenPath, mirrorPath, dieMetricsOf, dieShapePath, dieShapeInBox, leafOutline, leafSide, pageBeneath, parsePageList, buildDieCuts, seeThrough, traceDiePaths, dieCutPath2D, type DieCutMetrics, type DiePlacement, type SeeThroughLayer, type PathSink } from './dieCut/index.js';
 export type { SvgPathParse } from './design/svgPath.js';
 export { facingSide, CONNECTOR_ROUTINGS, CONNECTOR_CAPS, CONNECTOR_SIDES, DEFAULT_CONNECTOR_WIDTH, connectorPaintsOver } from './design/connector.js';
 export type { ConnectorRect } from './design/connector.js';
@@ -173,7 +168,7 @@ export { classifyPages } from './pipeline/pages/pageRoles.js';
 export { migrateLegacyHeaderFooterConfig, isLegacyHeaderFooterSlot, resolveDesignSlot, stripDesignSlotDefaults, defaultTextOverflow, DEFAULT_BOX_ELEMENT } from './defaults/structure/headerFooter.js';
 export type { DesignSlotKind } from './defaults/structure/headerFooter.js';
 export type {
-  PostextContent,
+  PostextContent, BookChapterRange,
   LayoutContinuation,
   OutlineEntry,
   HeadingStyleConfig,
@@ -201,6 +196,7 @@ export type {
   ResolvedDesignImageElement,
   DesignPathElement,
   ResolvedDesignPathElement,
+  DesignCutElement, ResolvedDesignCut,
   HeadingCounters,
   ResourceNumberEntry,
   DocumentMetadata,
@@ -477,7 +473,8 @@ export type {
   ResolvedPdfGenerationConfig,
   PdfXStandard,
   PrintRenderingIntent,
-  CmykPercent, SpotColor,
+  CmykPercent, SpotColor, ResolvedSpotColor, InkFinish, InkFinishKind, InkSheen, PrintDieLineConfig, ResolvedPrintDieLineConfig,
+  DieShape, DieCutPlacement, DieCutsConfig, ResolvedDieShape, ResolvedDieCutsConfig,
   PrintBlackConfig,
   ResolvedPrintBlackConfig, PrintInk, ResolvedPrintInk, PrintPlatesConfig, ResolvedPrintPlatesConfig, PrintImageColorConfig, ResolvedPrintImageColorConfig,
   PrintPreflightConfig,
@@ -654,6 +651,7 @@ export type {
   VDTComicSplitter,
   VDTComicBalloon,
   VDTComicPage,
+  VDTDieCut,
   VDTComposedPage,
   VDTFrame,
   VDTFigureLabel,
@@ -828,11 +826,11 @@ export { invalidateConfig } from './pipeline/config.js';
 export { stableStringify, stableHash, hashString, hashStringWide } from './util/stableHash.js';
 export { registerSvgImage, prepareSvgMarkup, decodeSvgImage } from './svg/image.js';
 export type { RegisterSvgImageOptions, PrepareSvgOptions } from './svg/image.js';
-
+export * from './designs/index.js'; // Designs (#1523): the parts of a book's design, saved, applied and taken back.
 // `.postext` bundles. The `postext/bundle` subpath carries the same API plus
 // the low-level manifest helpers.
-export { openBundle, createBundle, buildBundle, createBundleLayoutCache, loadBundleFonts, registerBundleImages, bundleImageUrl, bundleVideoUrl, bundleResourceBytes, bundlePreviewBytes, bundleFontProvider, bundleSvgFontProvider, svgInlinesFonts, readBundle, traceBundleContours, planBundle, resolveBundleFiles, openBundleZip, zipBundle, isBundleManifest, pickBundleMeta, POSTEXT_EXTENSION } from './bundle/index.js';
-export type { PostextBundle, OpenBundleOptions, CreateBundleInput, CreateBundleLocale, CreatedBundle, BundleFileData, BuildBundleOptions, BundleLayoutCache, BundleLayoutStats, BundleSource, BundleFontProviderOptions, BundleFontRequest, LoadBundleFontsOptions, BundleImageOptions, BundleManifest, BundleManifestV1, BundleManifestV2, BundleStart, BundleChapter, BundleFontFile, ReadBundleOptions, ReadBundleResult, ZipBundleOptions } from './bundle/index.js';
+export { openBundle, createBundle, createDesignBundle, openDesignBundle, buildBundle, buildBundleParallel, layOutChapter, createBundleLayoutCache, loadBundleFonts, registerBundleImages, bundleImageUrl, bundleVideoUrl, bundleResourceBytes, bundlePreviewBytes, bundleFontProvider, bundleSvgFontProvider, svgInlinesFonts, readBundle, traceBundleContours, planBundle, resolveBundleFiles, openBundleZip, zipBundle, isBundleManifest, pickBundleMeta, POSTEXT_EXTENSION } from './bundle/index.js';
+export type { PostextBundle, OpenBundleOptions, CreateBundleInput, DesignBundleInput, OpenedDesign, OpenDesignOptions, BundleDesignSpec, CreateBundleLocale, CreatedBundle, BundleFileData, BuildBundleParallelOptions, ChapterLayoutJob, ChapterLayoutContext, ChapterPageHint, ChapterRecord, BuildBundleOptions, BundleLayoutCache, BundleLayoutStats, BundleSource, BundleFontProviderOptions, BundleFontRequest, LoadBundleFontsOptions, BundleImageOptions, BundleManifest, BundleManifestV1, BundleManifestV2, BundleStart, BundleChapter, BundleFontFile, ReadBundleOptions, ReadBundleResult, ZipBundleOptions } from './bundle/index.js';
 
 // Citations (#267–#272): the engine registry and the data model a citation
 // processor (`postext-citeproc`) implements.

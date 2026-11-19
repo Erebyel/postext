@@ -10,6 +10,7 @@ import type {
   DesignBoxElement,
   DesignImageElement,
   DesignPathElement,
+  DesignCutElement,
   ResolvedDesignElement,
   ResolvedDesignSlot,
 } from 'postext';
@@ -23,6 +24,7 @@ import { BoxElementEditor } from './BoxElementEditor.js';
 import { ImageElementEditor } from './ImageElementEditor.js';
 import { PathElementEditor } from './PathElementEditor.js';
 import { ConnectorElementEditor, type ConnectorHost } from './ConnectorElementEditor.js';
+import { CutElementEditor } from './CutElementEditor.js';
 import { elementKindLabel } from './elementKind.js';
 import { PATH_PRESETS } from './shapeEdits.js';
 import { newConnector } from '../../../../templates/connectorEdits.js';
@@ -55,7 +57,7 @@ interface SlotEditorProps {
   textOverDefault?: boolean;
 }
 
-function generateId(kind: 'text' | 'rule' | 'box' | 'image' | 'path' | 'connector', used: Set<string>): string {
+function generateId(kind: 'text' | 'rule' | 'box' | 'image' | 'path' | 'connector' | 'cut', used: Set<string>): string {
   let i = 1;
   while (used.has(`${kind}${i}`)) i++;
   return `${kind}${i}`;
@@ -64,6 +66,7 @@ function generateId(kind: 'text' | 'rule' | 'box' | 'image' | 'path' | 'connecto
 export function SlotEditor({ slotKey, raw, resolved, onUpdate, extraPlaceholders, configPath, frames, connectorHost, textOverDefault }: SlotEditorProps) {
   const labels = useSandboxLabels();
   const bodyTextRaw = useSandboxSelector((s) => s.config.bodyText);
+  const firstDie = useSandboxSelector((s) => s.config.dieCuts?.shapes?.[0]?.id);
   // Running heads and a page template's decoration read the page fence's
   // attributes (#1087): an element drawn only where the page says so.
   const fenceConditions = slotKey === 'header' || slotKey === 'footer' || connectorHost !== undefined;
@@ -144,6 +147,20 @@ export function SlotEditor({ slotKey, raw, resolved, onUpdate, extraPlaceholders
     append(newConnector(generateId('connector', existingIds), (frames ?? []).filter((f) => f.kind === 'frame').map((f) => f.name)));
   };
 
+  /** A die-cut hole (#1565): the book's first die shape stretched to a
+   *  box, or the box itself while the book has none. A page template's
+   *  decoration only: it cuts the leaf of a composed page. */
+  const addCut = () => {
+    const id = generateId('cut', existingIds);
+    const template: DesignCutElement = {
+      kind: 'cut',
+      id,
+      ...(firstDie ? { die: firstDie } : {}),
+      placement: { anchor: { to: 'page', edge: 'top-left' }, offset: { x: { value: 30, unit: 'mm' }, y: { value: 30, unit: 'mm' } }, size: { width: { value: 30, unit: 'mm' }, height: { value: 30, unit: 'mm' } } },
+    };
+    append(template);
+  };
+
   /** The fore-edge heads of a vertical book, at 80 % of the body size
    *  (see `foreEdgeElements`). */
   const addForeEdge = () => {
@@ -159,7 +176,7 @@ export function SlotEditor({ slotKey, raw, resolved, onUpdate, extraPlaceholders
   /** `reserve` is left out of the element unless it is switched off. */
   const setReserve = (index: number, reserve: boolean) => {
     const next = { ...currentRaw[index]! };
-    if (next.kind === 'connector') return;
+    if (next.kind === 'connector' || next.kind === 'cut') return;
     if (reserve) delete next.reserve;
     else next.reserve = false;
     updateAt(index, next);
@@ -276,6 +293,14 @@ export function SlotEditor({ slotKey, raw, resolved, onUpdate, extraPlaceholders
                   frames={frames as FrameTarget[] | undefined}
                   onChange={(next) => updateAt(idx, next)}
                 />
+              ) : rawEl.kind === 'cut' ? (
+                <CutElementEditor
+                  raw={rawEl}
+                  slotKind={slotKey}
+                  siblings={siblings}
+                  frames={frames as FrameTarget[] | undefined}
+                  onChange={(next) => updateAt(idx, next)}
+                />
               ) : rawEl.kind === 'connector' ? (
                 <ConnectorElementEditor
                   raw={rawEl}
@@ -288,7 +313,7 @@ export function SlotEditor({ slotKey, raw, resolved, onUpdate, extraPlaceholders
               {fenceConditions && (
                 <FenceConditionFields raw={rawEl} attributes={fenceAttributes} onChange={(next) => updateAt(idx, next)} />
               )}
-              {(slotKey === 'heading' || slotKey === 'box') && rawEl.kind !== 'connector' && (
+              {(slotKey === 'heading' || slotKey === 'box') && rawEl.kind !== 'connector' && rawEl.kind !== 'cut' && (
                 <ToggleSwitch
                   label={labels.headerFooterElementReserve}
                   checked={rawEl.reserve !== false}
@@ -313,6 +338,9 @@ export function SlotEditor({ slotKey, raw, resolved, onUpdate, extraPlaceholders
         <AddButton label={labels.headerFooterAddPath} onClick={addPath} />
         {/* Connectors join frames: a page template's decoration only. */}
         {frames && frames.length > 0 && <AddButton label={labels.headerFooterAddConnector} onClick={addConnector} />}
+        {/* A die-cut hole cuts the leaf of a composed page: a page
+            template's decoration only. */}
+        {connectorHost !== undefined && <AddButton label={labels.headerFooterAddCut} onClick={addCut} />}
       </div>
       {slotKey === 'header' && (
         <div className="mt-2 flex gap-2">

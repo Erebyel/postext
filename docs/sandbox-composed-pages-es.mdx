@@ -7,7 +7,7 @@ export const metadata = {
   lang: 'es',
   lastUpdated: '2026-10-20',
   readingTime: '21 min',
-  order: 43,
+  order: 44,
   parent: 'sandbox',
   plainSummary: "Esta página explica lo que ofrece el Sandbox para las páginas compuestas, aquellas cuyo texto se reparte en marcos colocados según una plantilla. Los marcos de una plantilla se dibujan y se mueven directamente sobre la página; puedes unirlos con líneas, repetir una tarjeta en una rejilla y guardar bloques en una biblioteca de módulos, y los estilos de marco se ordenan en otra biblioteca. El panel Revisión te dice, en cada idioma del libro, qué páginas compuestas tienen texto que no cabe, y ofrece botones que arreglan el marco. En un libro hecho antes de que existieran las páginas compuestas, el texto de sus páginas se puede pasar al Markdown de una sola vez.",
 };
@@ -53,6 +53,8 @@ La decoración de una plantilla de página o de un módulo (**Decoración**, al 
 <Screenshot src="/docs-shots/es/tree.webp" alt="El panel Diseño con el módulo Árbol de ideas abierto en la tarjeta de su conector, y la página de repaso con una caja arriba unida por líneas con flecha a tres cajas de abajo." caption="La tarjeta de un conector, y su línea de la raíz a cada rama." />
 
 **Formas.** **Añadir forma** (en todos los huecos de diseño: plantillas, titulillos, diseños de encabezado y de parte) escribe una barra rellena con el color principal. Su tarjeta ofrece cinco formas predefinidas, cada una dibujada en su botón (*Barra*, *Cinta*, *Flecha*, *Galón*, *Onda*); un campo **Trazado** que acepta datos de trazado SVG y solo se escribe cuando se puede leer (si no, indica en qué carácter falla); la caja de visualización, el ajuste (estirar o mantener las proporciones), el relleno y el contorno con sus colores, el grosor del contorno y su discontinuo, y el tamaño y el sitio, como cualquier caja de la decoración.
+
+**Huecos troquelados.** En la decoración de una plantilla de página, **Añadir hueco troquelado** escribe un elemento de corte: un hueco que el troquel corta en la hoja de cada página a la que se aplica la plantilla, y que nunca se pinta. Su tarjeta elige una de las formas de troquel del libro (**Forma de troquel**), estirada hasta la caja del elemento, o toma datos de trazado con su caja de vista y su ajuste; **Hojas que corta** y **El texto lo rodea** toman, si no se fijan, los valores de la forma. El texto de los marcos todavía no rodea el hueco, así que deja los marcos fuera de él. Véase [Elementos de corte en una plantilla de página](/es/docs/special-inks-die-cuts#elementos-de-corte-en-una-plantilla-de-página).
 
 **Esquinas y lados.** Los estilos de recuadro, los estilos de marco, las cajas de decoración y la caja de un elemento de texto comparten dos interruptores. **Mismo radio en todas las esquinas**, desactivado, da cuatro radios de esquina. **Mismo borde en todos los lados**, desactivado, da a cada lado su propio interruptor, color y grosor por encima de los del borde entero, cada uno con su botón de restablecer: un borde solo arriba es el borde entero desactivado y el de arriba activado. Una pestaña puede ir **Unida a la caja**, con su radio de acuerdo (por defecto, el radio de las esquinas), y colocarse en una de cuatro posiciones al pie además de las de arriba.
 

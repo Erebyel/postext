@@ -7,7 +7,7 @@ export const metadata = {
   lang: 'it',
   lastUpdated: '2026-10-20',
   readingTime: '21 min',
-  order: 43,
+  order: 44,
   parent: 'sandbox',
   plainSummary: "Questa pagina raccoglie ciò che la Sandbox offre per le pagine composte, quelle in cui il testo si distribuisce tra riquadri disposti da un modello. I riquadri di un modello si disegnano e si spostano direttamente sulla pagina, si uniscono con delle linee, una scheda si ripete in una griglia, i blocchi si conservano in una raccolta di moduli, e gli stili dei riquadri si riordinano in una raccolta. Il pannello Verifiche segnala, in ogni lingua del libro, quali pagine composte hanno un testo che non ci sta, e offre pulsanti che sistemano un riquadro. In un libro creato prima che esistessero le pagine composte, il testo delle pagine si può spostare nel Markdown in un solo passaggio.",
 };
@@ -53,6 +53,8 @@ La decorazione di un modello di pagina o di un modulo (**Decorazione**, in fondo
 <Screenshot src="/docs-shots/it/tree.webp" alt="Il pannello Grafica con il modulo Tree of ideas aperto sulla scheda del connettore, e la pagina di ripasso con un riquadro in alto unito da linee con frecce a tre riquadri più in basso." caption="La scheda di un connettore, e la sua linea dalla radice a ogni ramo." />
 
 **Forme.** **Aggiungi forma** (in ogni spazio di grafica: modelli, testatine, grafiche dei titoli e delle parti) scrive una barra piena del colore principale. La sua scheda offre cinque forme pronte, ciascuna disegnata sul suo pulsante (*Barra*, *Nastro*, *Freccia*, *Gallone*, *Onda*); un campo **Tracciato** che accetta i dati di un tracciato SVG e si scrive solo quando sono validi (altrimenti dice a quale carattere c’è l’errore); il riquadro di visualizzazione, l’adattamento (allungare o mantenere le proporzioni), riempimento e contorno con i loro colori, spessore e tratteggio del contorno; e la misura e la posizione di qualsiasi riquadro della decorazione.
+
+**Fori fustellati.** Nella decorazione di un modello di pagina, **Aggiungi foro fustellato** scrive un elemento di fustella: un foro che la fustella taglia nel foglio di ogni pagina a cui si applica il modello, e che non viene mai dipinto. La sua scheda sceglie una delle forme di fustella del libro (**Forma di fustella**), stirata sul riquadro dell’elemento, oppure prende dati di tracciato con il loro riquadro di visualizzazione e l’adattamento; **Fogli tagliati** e **Il testo la evita**, se non impostati, prendono quelli della forma. Il testo delle cornici non evita ancora il foro: tieni le cornici lontane. Vedi [Elementi di fustella in un modello di pagina](/it/docs/special-inks-die-cuts#elementi-di-fustella-in-un-modello-di-pagina).
 
 **Angoli e lati.** Gli stili dei riquadri, gli stili delle cornici, i riquadri della decorazione e il riquadro di un elemento di testo hanno in comune due interruttori. **Stesso raggio su ogni angolo**, disattivato, dà quattro raggi d’angolo. **Stesso bordo su ogni lato**, disattivato, dà a ogni lato un interruttore, un colore e uno spessore propri, che prevalgono su quelli del bordo intero, ciascuno con il suo ripristino: un bordo solo in alto è il bordo intero disattivato e quello in alto attivo. Una linguetta può essere **Unita al riquadro**, con il suo raggio di raccordo (per impostazione predefinita quello degli angoli), e stare in una delle quattro posizioni al piede oltre che in quelle in alto.
 

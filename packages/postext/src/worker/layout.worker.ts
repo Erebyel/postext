@@ -8,7 +8,7 @@
  * @module
  */
 
-import { buildDocumentAsync, BuildCancelledError } from '../pipeline/index.js';
+import { buildDocumentAsync, BuildCancelledError, createLayoutTapes, type LayoutTapes } from '../pipeline/index.js';
 import type { BuildPassInfo } from '../pipeline/build.js';
 import { initMathEngine, isMathReady } from '../math/index.js';
 import { contentHasScore, initMusicEngine, isMusicReady } from '../music/index.js';
@@ -22,6 +22,7 @@ import { createFontGenerations, installFontGenerations } from './fontGenerations
 import { forgetFontCoverage, installGlyphProbe, registerFontCoverage } from '../fonts/glyphFallback.js';
 import type { PostextContent, Resource } from '../types.js';
 import type { VDTDocument } from '../vdt.js';
+import { makeDocumentPatch, sentWhole, type SentDocument } from './docPatch.js';
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -58,6 +59,16 @@ function docCachePut(key: string, doc: VDTDocument): void {
     const oldest = docCache.keys().next().value;
     if (oldest !== undefined) docCache.delete(oldest);
   }
+}
+
+/** The tapes of the document being edited (`tapesKey` in the protocol,
+ *  #1640): one document's at a time. */
+let heldTapes: { key: string; tapes: LayoutTapes; sent?: SentDocument } | null = null;
+let docSeq = 0;
+
+function tapesOf(key: string): LayoutTapes {
+  if (heldTapes?.key !== key) heldTapes = { key, tapes: createLayoutTapes() };
+  return heldTapes.tapes;
 }
 
 /** The resource list of the last build that carried one, by fingerprint. */
@@ -250,31 +261,51 @@ async function runBuild(msg: BuildRequest): Promise<void> {
         return;
       }
     }
-    // Progress goes out at most every PROGRESS_INTERVAL_MS, plus on every
-    // new page, so a long build paints a moving bar without flooding the
-    // main thread.
+    // Progress goes out at most every PROGRESS_INTERVAL_MS, so a long
+    // build paints a moving bar without flooding the main thread. A message
+    // per new page was several hundred per build of a long chapter, a
+    // fifth of the build's time on this thread and as many tasks on the
+    // main one (#1623).
     let lastProgressAt = 0;
-    let lastPages = -1;
     const passes: BuildPassInfo[] = [];
     const startedAt = performance.now();
     const doc = await buildDocumentAsync(content, msg.config, measurementCache, {
+      ...(msg.tapesKey !== undefined && msg.wantDoc !== false ? { tapes: tapesOf(msg.tapesKey) } : {}),
       shouldCancel: () => cancelRequestedFor === msg.id,
       onPass: (info) => { passes.push(info); },
       onProgress: (progress) => {
         const now = Date.now();
-        if (progress.pages === lastPages && now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+        if (now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
         lastProgressAt = now;
-        lastPages = progress.pages;
         post({ kind: 'progress', id: msg.id, progress });
       },
     });
     if (cancelRequestedFor === msg.id) {
       post({ kind: 'cancelled', id: msg.id });
     } else {
-      if (msg.cacheKey) docCachePut(msg.cacheKey, doc);
+      // A document built with tapes is not kept: the next build of its
+      // chapter moves the places in the source of its pages in place.
+      if (msg.cacheKey && msg.tapesKey === undefined) docCachePut(msg.cacheKey, doc);
       const totalMs = performance.now() - startedAt;
       const missing = missingFonts(doc);
-      post({ kind: 'built', id: msg.id, doc: msg.wantDoc === false ? null : doc, stats: { passes, totalMs, ...(missing ? { missingFonts: missing } : {}) } });
+      const held = msg.tapesKey !== undefined && heldTapes?.key === msg.tapesKey && msg.wantDoc !== false ? heldTapes : undefined;
+      const stats = { passes, totalMs, ...(missing ? { missingFonts: missing } : {}), ...(held ? { tapes: held.tapes.stats } : {}) };
+      if (!held) {
+        post({ kind: 'built', id: msg.id, doc: msg.wantDoc === false ? null : doc, stats });
+      } else {
+        // A document of a chapter being edited goes out as it differs from
+        // the one the client holds, when that is the one last sent (#1642).
+        const before = held.sent;
+        const seq = ++docSeq;
+        if (before && msg.haveDoc === before.seq) {
+          const patch = makeDocumentPatch(doc, before);
+          held.sent = { seq, pages: [...doc.pages], blocks: [...doc.blocks] };
+          post({ kind: 'built', id: msg.id, doc: null, patch, docSeq: seq, stats: { ...stats, pagesSent: patch.pages.filter((page) => typeof page !== 'number').length } });
+        } else {
+          held.sent = sentWhole(doc, seq);
+          post({ kind: 'built', id: msg.id, doc, docSeq: seq, stats });
+        }
+      }
     }
   } catch (err) {
     if (err instanceof BuildCancelledError) {

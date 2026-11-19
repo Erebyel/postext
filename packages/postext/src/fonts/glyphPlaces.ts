@@ -5,7 +5,7 @@
 import type { VDTDocument } from '../vdt.js';
 import { fontStringFamilies, parseFontString, type FontFaceRequest } from '../measure/fontString.js';
 import { faceRequestKey, GLYPH_PROBE_FAMILY, isGenericFamily } from './faces.js';
-import { addLines, defaultSources, GLYPH_FALLBACK_LISTED, SKIPPED, symbolFontHas, type Add, type GlyphFallbackOptions } from './glyphFallback.js';
+import { addLines, defaultSources, GLYPH_FALLBACK_LISTED, skippedChar, symbolFontHas, type Add, type GlyphFallbackOptions } from './glyphFallback.js';
 
 /** Characters a face lacks, in one block of one page: where a
  *  `glyphFallback` names a face, this says which paragraph sets them. The
@@ -36,17 +36,72 @@ export const GLYPH_FALLBACK_PLACES = 200;
  * coverage. The `symbolFont` (`options.symbolFont`) draws a character in
  * its regular face too, the one every output loads.
  */
-export function glyphFallbackPlaces(doc: VDTDocument, options: Pick<GlyphFallbackOptions, 'hasGlyph' | 'skip' | 'symbolFont'> = {}): GlyphFallbackPlace[] {
+export function glyphFallbackPlaces(doc: VDTDocument, options: Pick<GlyphFallbackOptions, 'hasGlyph' | 'skip' | 'symbolFont' | 'reading'> = {}): GlyphFallbackPlace[] {
   const sources = options.hasGlyph ? { hasGlyph: options.hasGlyph } : defaultSources();
   if (!sources) return [];
   const { hasGlyph } = sources;
   const symbols = options.symbolFont?.trim().toLowerCase();
-  const lacks = new Map<string, boolean>();
-  const lacking = (face: FontFaceRequest, key: string, ch: string): boolean => {
-    const k = `${key}|${ch}`;
-    let v = lacks.get(k);
-    if (v === undefined) lacks.set(k, (v = hasGlyph(face.family, face.weight, face.style, ch) === false));
-    return v;
+  // Every text of the document comes through here, most of them many
+  // times (#1606): a font shorthand is parsed once, and the characters a
+  // face lacks in a text are found once, whichever blocks set it.
+  interface Checked {
+    face: FontFaceRequest; key: string; rest: string[]; lacks: Map<string, boolean>; texts: Map<string, readonly string[]>;
+    /** The texts the caller's reading found in this shorthand, when the
+     *  face has every character of them: none lacks anything (#1635). */
+    whole?: ReadonlySet<string>;
+  }
+  const NONE: readonly string[] = [];
+  const fonts = new Map<string, Checked | null>();
+  const faces = new Map<string, Pick<Checked, 'lacks' | 'texts'>>();
+  // The shorthand asked last: a block's words ask the same one (#1635).
+  let lastFont: string | undefined;
+  let lastChecked: Checked | null = null;
+  const checked = (font: string): Checked | null => {
+    if (font === lastFont) return lastChecked;
+    lastFont = font;
+    return (lastChecked = checkedOf(font));
+  };
+  const checkedOf = (font: string): Checked | null => {
+    let c = fonts.get(font);
+    if (c !== undefined) return c;
+    const face = parseFontString(font);
+    c = null;
+    if (face && !isGenericFamily(face.family) && face.family !== GLYPH_PROBE_FAMILY) {
+      const key = faceRequestKey(face);
+      if (!options.skip?.has(key)) {
+        let shared = faces.get(key);
+        if (!shared) faces.set(key, (shared = { lacks: new Map(), texts: new Map() }));
+        c = { face, key, rest: fontStringFamilies(font).slice(1).filter((f) => f.toLowerCase() !== face.family.toLowerCase()), ...shared };
+        const chars = options.reading?.chars.get(font);
+        const texts = options.reading?.texts.get(font);
+        if (chars && texts && !lacksAny(c, chars)) c.whole = texts;
+      }
+    }
+    fonts.set(font, c);
+    return c;
+  };
+  /** Whether the face lacks one of `chars`. */
+  const lacksAny = (c: Checked, chars: Iterable<string>): boolean => {
+    for (const ch of chars) {
+      let v = c.lacks.get(ch);
+      if (v === undefined) c.lacks.set(ch, (v = !skippedChar(ch) && hasGlyph(c.face.family, c.face.weight, c.face.style, ch) === false));
+      if (v) return true;
+    }
+    return false;
+  };
+  /** The characters of `text` its face lacks, each once, in its order. */
+  const lackingIn = (c: Checked, text: string): readonly string[] => {
+    let found = c.texts.get(text);
+    if (found !== undefined) return found;
+    let list: string[] | undefined;
+    for (const ch of text) {
+      let v = c.lacks.get(ch);
+      if (v === undefined) c.lacks.set(ch, (v = !skippedChar(ch) && hasGlyph(c.face.family, c.face.weight, c.face.style, ch) === false));
+      if (v && !list?.includes(ch)) (list ??= []).push(ch);
+    }
+    found = list ?? NONE;
+    c.texts.set(text, found);
+    return found;
   };
   const draws = (family: string, face: FontFaceRequest, ch: string): boolean =>
     family.toLowerCase() === symbols
@@ -61,16 +116,13 @@ export function glyphFallbackPlaces(doc: VDTDocument, options: Pick<GlyphFallbac
       const found = new Map<string, Found>();
       const add: Add = (font, text) => {
         if (!font || !text) return;
-        const face = parseFontString(font);
-        if (!face || isGenericFamily(face.family) || face.family === GLYPH_PROBE_FAMILY) return;
-        const key = faceRequestKey(face);
-        if (options.skip?.has(key)) return;
-        for (const ch of text) {
-          if (SKIPPED.test(ch) || !lacking(face, key, ch)) continue;
-          let e = found.get(key);
-          if (!e) found.set(key, (e = { face, chars: [], rest: fontStringFamilies(font).slice(1).filter((f) => f.toLowerCase() !== face.family.toLowerCase()) }));
-          if (!e.chars.includes(ch)) e.chars.push(ch);
-        }
+        const c = checked(font);
+        if (!c || c.whole?.has(text)) return;
+        const lacking = lackingIn(c, text);
+        if (lacking.length === 0) return;
+        let e = found.get(c.key);
+        if (!e) found.set(c.key, (e = { face: c.face, chars: [], rest: c.rest }));
+        for (const ch of lacking) if (!e.chars.includes(ch)) e.chars.push(ch);
       };
       addLines(block.lines, block.fontString, block.boldFontString, block.italicFontString, block.boldItalicFontString, add);
       const rb = block.resourceBlock;

@@ -65,6 +65,18 @@ export function formatWarning(w: LayoutWarning | ContentWarning | ConfigWarning 
     case 'unknownParagraphStyle':
       text = `Unknown paragraph style "${w.style}" — the paragraphs are set as body text`;
       break;
+    case 'chapterStyleUnknown':
+      text = w.source === 'part'
+        ? `The part names the chapter style "${w.style}", which the book does not define — its chapters are set in the book's settings`
+        : `The chapter names the chapter style "${w.style}", which the book does not define — it is set in the book's settings`;
+      break;
+    case 'partStyleMidChapter':
+      text = w.source === 'section'
+        ? (w.style
+          ? `The line ::section{style="${w.style}"} of postext 1.78 is no longer read — the text after it stays in the chapter, in the chapter's settings; make that text a chapter of its own inside :::part{style="${w.style}"}, or give that chapter chapterStyle: ${w.style} in its front matter`
+          : 'The line ::section of postext 1.78 is no longer read — the chapter goes on in its own settings; the line can go')
+        : `The part with the chapter style "${w.style}" stands after text of its chapter — the style starts with the next chapter; open a chapter with the fence to set it from there`;
+      break;
     case 'unknownCalloutType':
       text = `Unknown callout type "${w.type}" — the box takes the first callout style`;
       break;
@@ -192,6 +204,11 @@ export function formatWarning(w: LayoutWarning | ContentWarning | ConfigWarning 
     case 'columnsFlowUnknown':
       text = `Unknown flow "${w.value}" for :::columns — the group fills its columns in turn ("snake"), or stream by stream ("parallel") when it sets breaks`;
       break;
+    case 'dieCutUnknown':
+      text = w.die
+        ? `:::diecut names the die "${w.die}", which dieCuts.shapes does not have${w.known.length > 0 ? ` (it has ${w.known.map((k) => `"${k}"`).join(', ')})` : ''} — its pages are set on their own and nothing cuts them`
+        : `:::diecut names no die (die="…") — its pages are set on their own and nothing cuts them`;
+      break;
     case 'paperAttributeInvalid':
       text = `:::paper ${w.key}="${w.value}" is not a value it reads — dropped, the pages keep the document's paper for it`;
       break;
@@ -295,6 +312,9 @@ export function formatWarning(w: LayoutWarning | ContentWarning | ConfigWarning 
     case 'unbreakableWordOverflow':
       text = `The line "${w.text}" holds an Arabic-script word wider than the line — such a word is never divided, so it runs past the measure`;
       break;
+    case 'numberOverflow':
+      text = `${snippetPlace(w)}The number "${w.text}" is wider than its line — a number is never divided as a word, so it runs past the measure: widen the column, set the text smaller, or group its digits with no-break spaces`;
+      break;
     case 'wordDividedByCharacter':
       text = `The line "${w.text}" ends in a word wider than the whole line, cut between two of its letters with no hyphen to fit — give the text more room or a smaller size`;
       break;
@@ -354,7 +374,13 @@ export function formatWarning(w: LayoutWarning | ContentWarning | ConfigWarning 
       text = `The last word of a paragraph is divided ("${w.word}") — with bodyText.hyphenation.lastWord: "avoid" the line breaker keeps it whole where the word spacing allows`;
       break;
     case 'stack':
-      text = `Two lines in a row ${w.edge === 'end' ? 'end' : 'start'} on "${w.text}", a stack. With bodyText.stacks: "avoid" the line breaker sets the paragraph otherwise where the word spacing allows`;
+      text = `${snippetPlace(w)}Two lines in a row ${w.edge === 'end' ? 'end' : 'start'} on "${w.text}", a stack. With bodyText.stacks: "avoid" the line breaker sets the paragraph otherwise where the word spacing allows`;
+      break;
+    case 'citationBreak':
+      text = `${snippetPlace(w)}A line starts with the citation "${w.text}" — with bodyText.citationBreaks: "avoid" the line breaker keeps it with the word before it where the word spacing allows`;
+      break;
+    case 'operatorBreak':
+      text = `${snippetPlace(w)}A line ${w.edge === 'end' ? 'ends on' : 'starts with'} "${w.text}", set between spaces — with bodyText.operatorBreaks: "avoid" the line breaker keeps it with its terms where the word spacing allows`;
       break;
     case 'shortListSplit':
       text = `A list of ${w.items} ${w.items === 1 ? 'item' : 'items'} is cut between two columns — bodyText.shortListSplit: "avoid" sets a short list whole when a column can hold it`;
@@ -492,6 +518,9 @@ export function formatWarning(w: LayoutWarning | ContentWarning | ConfigWarning 
     case 'calloutStyleExtendsUnknown':
       text = `${w.path}: no box style has the id "${w.value}"${w.suggestion ? ` (did you mean "${w.suggestion}"?)` : ''} — the style stands alone`;
       break;
+    case 'chapterStyleBookSetting':
+      text = `${w.path}: a chapter style cannot change ${w.value}, which the whole book shares — its chapters keep the book's`;
+      break;
     case 'calloutStyleExtendsCycle':
       text = `${w.path}: the box styles extend each other in a loop (${w.value}) — the style stands alone`;
       break;
@@ -539,4 +568,12 @@ export function formatWarning(w: LayoutWarning | ContentWarning | ConfigWarning 
       text = `Warning "${(w as { kind: string }).kind}"`;
   }
   return text + where(w);
+}
+
+/** Where a fault of the line-edge rules lies when it is in a resource's
+ *  caption, note or table cell (#1542): `In the caption of "fig": `. */
+function snippetPlace(w: { resourceId?: string; part?: 'caption' | 'note' | 'cell'; cell?: { row: number; col: number } }): string {
+  if (w.resourceId === undefined || w.part === undefined) return '';
+  const part = w.part === 'cell' ? `cell ${(w.cell?.row ?? 0) + 1}, ${(w.cell?.col ?? 0) + 1} of the table` : `the ${w.part} of`;
+  return `In ${part} "${w.resourceId}": `;
 }

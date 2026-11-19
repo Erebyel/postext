@@ -10,7 +10,7 @@ import { type ContentBlock, spaceDirectiveLines } from '../../../../parse/index.
 import type { Resource, ResolvedCalloutStyleConfig } from '../../../../types.js';
 import type { ParagraphContainerPlan } from '../../../callouts/paragraphContainers.js';
 import { type PlannedCallout, pickCalloutStyle } from '../../../callouts/calloutLayout.js';
-import type { PartPlan } from '../../../sections/parts.js';
+import { partHasPage, type PartPlan } from '../../../sections/parts.js';
 import type { PlannedComposedPage } from '../../../composedPages/composedLayout.js';
 import { type PlacementCursor, currentColumn, advanceToNextPageBoundary, enforcePageParity, advanceToNextColumn, createPartPage } from '../../../blocks/placement.js';
 import type { ComicPageSource } from '../../../../comics/types.js';
@@ -194,15 +194,16 @@ export function createBlockDispatch(deps: BlockDispatchDeps) {
     // the next chapter's own parity rule) starts clean. A part page counts
     // as content even with an empty body — its opener design fills it — so
     // consecutive parts never share a page.
-    // `parts.page: false`: a part opens no page and its body is not set —
-    // it only takes effect (running heads, palette) from the next content.
+    // `parts.page: false` (or `page=false` on the fence): a part opens no
+    // page and its body is not set — it only takes effect (running heads,
+    // palette) from the next content.
     if (state.skipPartUntil !== null) {
       if (blockTurn.blockIdx >= state.skipPartUntil) state.skipPartUntil = null;
       return 'continue';
     }
-    if (!resolved.parts.page && rawBlock.type === 'containerStart' && rawBlock.containerName === 'part') {
+    if (rawBlock.type === 'containerStart' && rawBlock.containerName === 'part') {
       const plan = partPlan.byStart.get(blockTurn.blockIdx);
-      if (plan) {
+      if (plan && !partHasPage(plan, resolved.parts.page)) {
         const end = [...partPlan.byEnd].find(([, p]) => p === plan)?.[0] ?? blockTurn.blockIdx;
         const marks = (doc.partMarks ??= []);
         if (!marks.some((m) => m.afterContentIndex === end)) marks.push({ afterContentIndex: end, number: plan.number, title: plan.title, ...(plan.palette && Object.keys(plan.palette).length > 0 ? { palette: plan.palette } : {}) });
@@ -260,8 +261,9 @@ export function createBlockDispatch(deps: BlockDispatchDeps) {
     // starts on a fresh page, and so does what follows it. The closing
     // break waits for the next placed block (a run that ends the document
     // leaves no empty page behind). The pages get their `paper` once laid
-    // out (`stampPagePaper`).
-    if ((rawBlock.type === 'containerStart' || rawBlock.type === 'containerEnd') && rawBlock.containerName === 'paper') {
+    // out (`stampPagePaper`). A `:::diecut` run (#1565) is set the same
+    // way: a die cuts whole pages (`stampDieCuts`).
+    if ((rawBlock.type === 'containerStart' || rawBlock.type === 'containerEnd') && (rawBlock.containerName === 'paper' || rawBlock.containerName === 'diecut')) {
       if (rawBlock.type === 'containerStart') {
         state.pendingPaperBreak = false;
         breakForPaper(blockTurn.blockIdx);

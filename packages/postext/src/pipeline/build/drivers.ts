@@ -13,7 +13,7 @@ import { hasExercises } from '../../exercises/model.js';
 import { validateConfigCache, resolveAllConfig } from '../config.js';
 import { resolveDebugConfig } from '../../defaults/output/debug.js';
 import { defaultFontSet, fontFallbacks, documentFontFaces, faceRequestKey } from '../../fonts/faces.js';
-import { glyphFallbacks } from '../../fonts/glyphFallback.js';
+import { glyphFallbacks, glyphSourcesReady, readDocumentTexts } from '../../fonts/glyphFallback.js';
 import { glyphFallbackPlaces } from '../../fonts/glyphPlaces.js';
 import { syncFontSet } from '../../fonts/fontSet.js';
 import { hasAnchorRefs, printsAnchorPages, anchorTargetsOf } from '../references/crossRefs.js';
@@ -25,7 +25,7 @@ import { codeOverflowWarnings } from '../code/codeLines.js';
 import { lineNumberWarnings } from '../text/lineNumbers.js';
 import { connectorAnchorUnknownWarnings, pageFurnitureWarnings } from '../pages/headerFooter.js';
 import { drainPasses } from '../columns/bandCaps.js';
-import { collectContentWarnings, locateContentWarnings, cjkLooseLineWarnings, raggedLineWarnings, stackWarnings, hyphenRuleWarnings, wordOverflowWarnings, designTruncationWarnings } from '../contentWarnings.js';
+import { collectContentWarnings, locateContentWarnings, cjkLooseLineWarnings, raggedLineWarnings, stackWarnings, spaceBreakWarnings, hyphenRuleWarnings, wordOverflowWarnings, designTruncationWarnings } from '../contentWarnings.js';
 import { annotateDocument } from '../../marks/cjkMarks.js';
 import { annotateArabicMarks } from '../../marks/arabicMarks.js';
 import { overlineEmphasis } from '../../marks/emphasisOverline.js';
@@ -38,9 +38,12 @@ import { buildDocumentBalanced } from './balanced.js';
 import { withIndexMarks } from './pageMarks.js';
 import { type CitingPageSlot, type BuildDocumentOptions, BuildCancelledError } from './passTypes.js';
 import { indexWarnings, joiningSpacingWarnings, dropCapWarningsByDoc, floatShrinkWarningsByDoc, textWrapWarningsByDoc, compositionWarningsByDoc, composedWarningsByDoc, afterTextWarnings, unplacedByDoc } from './warnings.js';
-import { chapterConfigOf, sectionBreaks, sectionConfig, type SectionBreak } from '../../defaults/chapterStyles.js';
-import { mergeSectionDocuments, nextSectionContinuation, sectionRanges, sectionSource } from './sectionMerge.js';
+import { chapterConfig, chapterConfigOf } from '../../defaults/chapterStyles.js';
+import { chapterRuns, mergeRunDocuments, nextRunContinuation, runSource, type ChapterRun } from './bookChapters.js';
 import { continuationAfter } from '../continuation.js';
+import { perfLap } from '../../util/perfTap.js';
+import { abandonLayoutTapes, beginLayoutTapes, forgetLayoutTapes } from './passReuse.js';
+import { afterMarks, beforeMarks, settleMoves } from './passMade.js';
 
 /** Passes a document printing its own contents gets at most, beyond the
  *  first, for the page labels it prints to settle. */
@@ -110,28 +113,61 @@ export async function buildDocumentAsync(
   }
 }
 
-/** The build as a generator: one `yield` after every placement pass. */
+/** The build as a generator: one `yield` after every placement pass. With
+ *  tapes (`options.tapes`, #1639), a build that does not reach its end
+ *  leaves them as the build before left them. */
 export function* buildDocumentGen(
   content: PostextContent,
   config?: PostextConfig,
   cache?: MeasurementCache,
   options?: BuildDocumentOptions,
 ): Generator<void, VDTDocument, void> {
+  if (!options?.tapes) return yield* buildDocumentSteps(content, config, cache, options);
+  beginLayoutTapes(options.tapes);
+  let ended = false;
+  try {
+    let doc: VDTDocument;
+    try {
+      doc = yield* buildDocumentSteps(content, config, cache, options);
+    } catch (error) {
+      // A step after the placing wrote to a page kept from the build
+      // before (it is frozen): the build is done again from nothing.
+      if (!(error instanceof TypeError)) throw error;
+      forgetLayoutTapes(options.tapes, error);
+      doc = yield* buildDocumentSteps(content, config, cache, options);
+    }
+    ended = true;
+    return doc;
+  } finally {
+    if (!ended) abandonLayoutTapes(options.tapes);
+  }
+}
+
+function* buildDocumentSteps(
+  content: PostextContent,
+  config?: PostextConfig,
+  cache?: MeasurementCache,
+  options?: BuildDocumentOptions,
+): Generator<void, VDTDocument, void> {
+  const lap = perfLap();
   // Faces that arrived since the last build drop what was measured in
   // their families, and a config changed in place resolves again (#629).
   const fontSet = options?.fontSet === undefined ? defaultFontSet() : options.fontSet;
   if (fontSet) syncFontSet(fontSet);
   // A chapter in a style of the book's (`chapterStyle:` in its front
-  // matter) is laid out with that style over the book's settings.
-  const styles = config?.chapterStyles;
-  if (config) config = chapterConfigOf(config, content.markdown);
+  // matter, or the `style` of the part it opens or belongs to) is laid
+  // out with that style over the book's settings.
+  // A whole book in one document sets each chapter in its own style
+  // (`content.chapters`): chapters of one style together, from a new page.
+  const runs = config?.chapterStyles?.length && content.chapters?.length ? chapterRuns(content.markdown, content.chapters, config, content.continuation) : undefined;
+  const book = config;
+  if (config) config = runs ? chapterConfig(config, runs[0]?.style) : chapterConfigOf(config, content.markdown, content.continuation?.part?.style);
   validateConfigCache(config);
-  // Sections in a style of their own (`::section{style="…"}`), each from a
-  // new page.
-  const breaks = config ? sectionBreaks(content.markdown) : [];
-  const doc = breaks.length > 0
-    ? yield* buildSections(content, config!, styles, breaks, cache, options)
-    : yield* buildDocumentRounds(content, config, cache, options);
+  lap('build.before');
+  const doc = runs && runs.length > 1 ? yield* buildChapterRuns(content, book!, runs, cache, options) : yield* buildDocumentRounds(content, config, cache, options);
+  // The warnings below read the book's settings and where each chapter lies.
+  lap('build.rounds');
+  if (runs && runs.length > 1) config = book;
   // Boxes printed upside down (#1229): their blocks learn the point they
   // turn about.
   markTurnedBoxes(doc);
@@ -140,13 +176,13 @@ export function* buildDocumentGen(
   // `doc.warnings`, whose entries keep their postext 1.4 shape.
   const bookAnchors = content.outline ? new Set(anchorOutline(content.outline).map((e) => e.anchorId!)) : undefined;
   const bookCitationKeys = content.citations ? new Set(content.citations.items.map((i) => i.id)) : undefined;
-  const found = [...collectContentWarnings(content.markdown, config, content.resources ?? [], bookAnchors, bookCitationKeys), ...(indexWarnings.get(doc) ?? [])];
+  const found = [...collectContentWarnings(content.markdown, config, content.resources ?? [], bookAnchors, bookCitationKeys, content.chapters),...(indexWarnings.get(doc) ?? [])];
   const located = found.length > 0 ? locateContentWarnings(doc, found) : [];
   // Justified CJK lines the composer could not fill within its tracking
   // cap; words of a joining script that run past their line, and styles
   // whose letter-spacing such words do not take.
   // Line numbers set over a float of the side column (#621).
-  const loose = [...cjkLooseLineWarnings(doc), ...raggedLineWarnings(doc), ...stackWarnings(doc), ...hyphenRuleWarnings(doc), ...wordOverflowWarnings(doc), ...(joiningSpacingWarnings.get(doc) ?? []), ...(dropCapWarningsByDoc.get(doc) ?? []), ...lineNumberWarnings(doc), ...codeOverflowWarnings(doc), ...(floatShrinkWarningsByDoc.get(doc) ?? []), ...(textWrapWarningsByDoc.get(doc) ?? []), ...(compositionWarningsByDoc.get(doc) ?? []), ...(composedWarningsByDoc.get(doc) ?? [])];
+  const loose = [...cjkLooseLineWarnings(doc), ...raggedLineWarnings(doc), ...stackWarnings(doc), ...spaceBreakWarnings(doc), ...hyphenRuleWarnings(doc), ...wordOverflowWarnings(doc), ...(joiningSpacingWarnings.get(doc) ?? []), ...(dropCapWarningsByDoc.get(doc) ?? []), ...lineNumberWarnings(doc), ...codeOverflowWarnings(doc), ...(floatShrinkWarningsByDoc.get(doc) ?? []), ...(textWrapWarningsByDoc.get(doc) ?? []), ...(compositionWarningsByDoc.get(doc) ?? []), ...(composedWarningsByDoc.get(doc) ?? [])];
   // Side boxes and side floats set on pages after the text, and what the
   // layout could place nowhere (#639).
   loose.push(...afterTextWarnings(doc), ...(unplacedByDoc.get(doc) ?? []));
@@ -169,8 +205,11 @@ export function* buildDocumentGen(
     for (const b of page.floats ?? []) if (b.comic) strips.add(b);
     for (const b of strips) loose.push(...comicPageLayoutWarnings(b.comic!).map((w) => ({ ...w, pageIndex: page.index })));
   }
+  lap('post.warnings');
   // Chinese marks placed where the lines are painted (#193), and the
   // paragraphs whose leading is too tight for their marks or readings.
+  settleMoves(doc.pages);
+  beforeMarks(doc.pages);
   const annotations = annotateDocument(doc, doc.config?.cjk);
   // Arabic vowel marks (#376): how far each vocalised line's ink reaches,
   // for the column clip, and the paragraphs whose marks meet a
@@ -189,6 +228,8 @@ export function* buildDocumentGen(
   markLineDocument(doc);
   // The lines under the links (`links.style`, #1402).
   underlineDocumentLinks(doc);
+  afterMarks(doc.pages);
+  lap('post.marks');
   // Faces the text was set in that the font set could not give (#629).
   const checkFonts = resolveDebugConfig(config?.debug).warnings.missingFont;
   const fallbacks: ContentWarning[] = fontSet && checkFonts
@@ -201,52 +242,24 @@ export function* buildDocumentGen(
     // What the document's symbol font draws is drawn as it asked (#1460):
     // no family is advised for it, and its places say who draws it.
     const symbolFont = config?.symbolFont?.trim() || undefined;
-    for (const g of glyphFallbacks(doc, { skip, symbolFont })) fallbacks.push({ kind: 'glyphFallback', ...g });
+    // The document is read once for both (#1635), where there is
+    // something to check it against.
+    const reading = glyphSourcesReady() ? readDocumentTexts(doc) : undefined;
+    for (const g of glyphFallbacks(doc, { skip, symbolFont, reading })) fallbacks.push({ kind: 'glyphFallback', ...g });
     // And where: the paragraph each is set in.
-    for (const g of glyphFallbackPlaces(doc, { skip, symbolFont })) fallbacks.push({ kind: 'glyphFallbackAt', ...g });
+    for (const g of glyphFallbackPlaces(doc, { skip, symbolFont, reading })) fallbacks.push({ kind: 'glyphFallbackAt', ...g });
   }
   if (located.length > 0 || loose.length > 0 || annotations.length > 0 || harakat.length > 0 || fallbacks.length > 0) {
     doc.contentWarnings = [...located, ...loose, ...annotations, ...harakat, ...fallbacks];
   }
+  lap('post.fonts');
   // Config values the build replaced (an unknown number format, a font
   // stack, a side column no column width can take): walked once per build,
   // not per pass — they belong to no page.
   const configWarnings = collectConfigWarnings(config, { resources: content.resources, metadata: doc.metadata });
   if (configWarnings.length > 0) doc.configWarnings = configWarnings;
+  lap('post.config');
   return doc;
-}
-
-/** A chapter set in sections (`::section{style="…"}`): each section laid
- *  out from a new page in its style, after the ones before it, and the
- *  documents joined into the chapter's. */
-function* buildSections(
-  content: PostextContent,
-  config: PostextConfig,
-  styles: PostextConfig['chapterStyles'],
-  breaks: readonly SectionBreak[],
-  cache?: MeasurementCache,
-  options?: BuildDocumentOptions,
-): Generator<void, VDTDocument, void> {
-  const md = content.markdown;
-  const bodyStart = md.length - extractFrontmatter(md).content.length;
-  const ranges = sectionRanges(md, breaks, bodyStart);
-  if (ranges.length === 0) return yield* buildDocumentRounds(content, config, cache, options);
-  const docs: VDTDocument[] = [];
-  let continuation = content.continuation;
-  let metadata = content.metadata;
-  for (const [i, range] of ranges.entries()) {
-    const sectionCfg = range.inherit ? config : sectionConfig(config, styles, range.style);
-    const markdown = sectionSource(md, range.from, range.to);
-    const { jumps: _jumps, ...rest } = continuation ?? {};
-    void _jumps;
-    // The stories sent to the chapter arrive at its first section.
-    const sent = i === 0 ? continuation : Object.keys(rest).length > 0 ? rest : undefined;
-    const doc = yield* buildDocumentRounds({ ...content, markdown, ...(metadata ? { metadata } : {}), ...(sent ? { continuation: sent } : {}) }, sectionCfg, cache, options);
-    docs.push(doc);
-    if (i === 0) metadata = doc.metadata;
-    continuation = nextSectionContinuation(doc, continuationAfter({ markdown, resources: content.resources }, sectionCfg, sent), content);
-  }
-  return mergeSectionDocuments(docs);
 }
 
 /** {@link buildDocumentGen} before the document-wide warnings: the
@@ -287,6 +300,44 @@ function* buildDocumentRounds(
     }
   }
   return withIndexMarks(yield* buildDocumentNumbered(content, config, cache, options, 0, citing), content);
+}
+
+/** A whole book whose chapters are set in more than one style: each run
+ *  of chapters of one style laid out in it, after the runs before it, and
+ *  the documents joined (`bookChapters.ts`). A book printing its contents
+ *  or its index is laid out again while the page labels they print move. */
+function* buildChapterRuns(
+  content: PostextContent,
+  book: PostextConfig,
+  runs: readonly ChapterRun[],
+  cache?: MeasurementCache,
+  options?: BuildDocumentOptions,
+): Generator<void, VDTDocument, void> {
+  const resolved = resolveAllConfig(chapterConfig(book, runs[0]!.style));
+  const parsed = parseMarkdownMemo(extractFrontmatter(content.markdown).content, codeParseOptions(resolved));
+  const lists = content.outline === undefined && (hasTocDirective(parsed) || hasIndexDirective(parsed) || hasAnchorRefs(parsed, new Set((content.resources ?? []).map((r) => r.id))));
+  let outline = lists ? ownOutline(parsed, resolved, content.continuation) : content.outline;
+  const { chapters: _chapters, ...rest } = content;
+  void _chapters;
+  for (let round = 0; ; round++) {
+    const docs: VDTDocument[] = [];
+    let continuation = content.continuation;
+    for (const run of runs) {
+      const config = chapterConfig(book, run.style);
+      const markdown = runSource(content.markdown, run);
+      // The stories sent to the book arrive at its first run: the
+      // continuation of a later one carries none (`nextRunContinuation`).
+      const sent = continuation;
+      const doc = yield* buildDocumentRounds({ ...rest, markdown, ...(docs[0] ? { metadata: docs[0].metadata } : {}), ...(outline ? { outline } : {}), ...(sent ? { continuation: sent } : {}) }, config, cache, options);
+      docs.push(doc);
+      continuation = nextRunContinuation(doc, continuationAfter({ markdown, ...(content.resources ? { resources: content.resources } : {}) }, config, sent), content);
+    }
+    const doc = mergeRunDocuments(docs);
+    if (!lists || round >= MAX_TOC_ROUNDS) return doc;
+    const after = outlineFromDoc(doc, outline!);
+    if (sameOutline(after, outline!)) return doc;
+    outline = after;
+  }
 }
 
 /** A document's own outline, its exercises' anchors named as a reference

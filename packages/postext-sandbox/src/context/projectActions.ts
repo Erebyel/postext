@@ -2,7 +2,7 @@
 // stays readable. Everything here runs against the live state through the
 // `deps` accessors; the provider owns the refs and hands them in.
 
-import { clearMeasurementCache, type PostextConfig } from 'postext';
+import { applyDesign, clearMeasurementCache, type PostextConfig } from 'postext';
 import { isBundleManifest, pickBundleMeta } from 'postext/bundle';
 import { setCustomFonts } from '../controls/fonts/fontLoader.js';
 import { invalidateResourceImage } from '../controls/media/resourceImages.js';
@@ -30,6 +30,7 @@ import { recordSharedConfig, initialSharedConfig } from '../editions/configLayer
 import { bundleCoverImage } from '../covers/renderCover.js';
 import { bookOfState, newRecord, ownEditions, copyThumbnail, adoptPresetThumbnail, withEditionsOf, ownContent, adoptLoadedPreset, storeThumbnail, bookFromLoaded, presetThumbnailBytes, PRESET_THUMBNAIL_ID, storedCurrentLayouts, localizedOf, BUNDLE_COVER_ID } from './projectActions/copies.js';
 import type { ProjectActionDeps, ProjectActions } from './projectActions/types.js';
+import { cancelCompileFor, startCompile } from '../export/compileStore.js';
 
 export type { ProjectActionDeps, DuplicateSource, ProjectActions } from './projectActions/types.js';
 
@@ -126,14 +127,15 @@ export function createProjectActions(deps: ProjectActionDeps): ProjectActions {
 
   const copyName = (name: string): string => deps.labels().projectCopySuffix.replace('__name__', name);
 
-  const create: ProjectActions['create'] = ({ from, name }) =>
+  const create: ProjectActions['create'] = ({ from, name, design }) =>
     run(async () => {
       const s = deps.getState();
       const id = generateProjectId();
       if (from === 'blank') {
+        const blank = createBlankBookConfig(s.locale);
         const content: ProjectContent = {
           ...singleChapterBook('', generateChapterId(), deps.labels().chapterUntitled.replace('__n__', '1')),
-          config: withDefaultResourceTypes(createBlankBookConfig(s.locale), s.locale),
+          config: withDefaultResourceTypes(design ? applyDesign(blank, design) : blank, s.locale),
           resources: [],
         };
         return persistNew(newRecord(content, { name: name ?? deps.labels().projectUntitled, locale: s.locale }, id));
@@ -226,6 +228,7 @@ export function createProjectActions(deps: ProjectActionDeps): ProjectActions {
 
   const remove: ProjectActions['remove'] = (id, opts = {}) =>
     run(async () => {
+      cancelCompileFor(id);
       const wasActive = !opts.offScreen && deps.getState().activeProjectId === id;
       if (wasActive) {
         deps.discardWorkingSave();
@@ -482,6 +485,14 @@ export function createProjectActions(deps: ProjectActionDeps): ProjectActions {
       }
     });
 
+  // Not run(): the other books stay at hand while one compiles.
+  const compile: ProjectActions['compile'] = async (id, format, opts = {}) => {
+    const s = deps.getState();
+    if (s.activeProjectId === id) await deps.flushWorkingSave();
+    const name = s.projects.find((p) => p.id === id)?.name ?? '';
+    return startCompile({ projectId: id, format, ...(opts.locale ? { locale: opts.locale } : {}), uiLocale: s.locale, epubLayout: opts.epubLayout ?? s.epubLayout }, name);
+  };
+
   const setThumbnail: ProjectActions['setThumbnail'] = (id, file) =>
     run(async () => {
       // The reader's choice: no cover is taken from the first page in its
@@ -561,5 +572,5 @@ export function createProjectActions(deps: ProjectActionDeps): ProjectActions {
       applyRecord({ ...merged, config }, parts);
     });
 
-  return { activate, create, duplicate, rename, remove, importBundle, importBundleBytes, switchEdition, addEdition, exportProject, setThumbnail, adoptGeneratedThumbnail, renameFrameInEditions, resetToSource };
+  return { activate, create, duplicate, rename, remove, importBundle, importBundleBytes, switchEdition, addEdition, exportProject, compile, setThumbnail, adoptGeneratedThumbnail, renameFrameInEditions, resetToSource };
 }

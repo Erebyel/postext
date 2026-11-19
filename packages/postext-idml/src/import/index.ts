@@ -14,8 +14,12 @@ import { Context } from './context.js';
 import { decideLayout, mainStory } from './decide.js';
 import type { MasterWords } from './design.js';
 import { joinContinued } from './fidelity/continued.js';
+import { rejoinThreads } from './fidelity/keptThread.js';
 import { indexDestinations } from './fidelity/crossref.js';
 import { layoutFlow } from './flow.js';
+import { readDieCuts } from './finishes/dieCuts.js';
+import { carryFonts } from './fonts.js';
+import { printInks } from './finishes/inks.js';
 import { calloutStyles } from './objects.js';
 import { layoutPages } from './pages.js';
 import { runningHeads } from './fidelity/masters.js';
@@ -26,7 +30,7 @@ import { tableStyles } from './tables.js';
 import type { IdmlImportOptions, IdmlImportResult, ImportedFont } from './types.js';
 import { italicOf, pt, weightOf } from './values.js';
 
-export type { IdmlImportOptions, IdmlImportResult, IdmlLink, ImportedFont, ImportFinding, ImportReport, FindingSeverity, StyleMapping } from './types.js';
+export type { IdmlFontFile, IdmlImportOptions, IdmlImportResult, IdmlLink, ImportedFont, ImportFinding, ImportReport, FindingSeverity, StyleMapping } from './types.js';
 export { captionLabel } from './pictures.js';
 export { escapeStory, guardBlockStart } from './escape.js';
 
@@ -84,14 +88,21 @@ export function idmlToPostext(input: Uint8Array | ArrayBuffer | IdmlDocument, op
   const doc = isDocument(input) ? input : readIdml(input);
   const ctx = new Context(doc, options);
   for (const w of doc.warnings) ctx.rep.add(`reader.${w.code}`, 'warning', w.message, w.part);
+  // The die line first: its paths are no artwork of the pages (#1576).
+  const die = readDieCuts(ctx);
 
   const stories = joinContinued(ctx, selectStories(ctx));
   const main = mainStory(stories);
+  // (The layout is read from the frames, not from the paragraphs' looks.)
+  const { layout, reason } = decideLayout(ctx, stories, main);
+  // In a flowing book the lines a Postext export kept read as the
+  // paragraphs it wrote (#1559); composed pages keep them, so the frames
+  // set the same lines.
+  if (layout === 'flow') rejoinThreads(ctx, stories);
   ctx.looks.classify(countLooks(ctx, stories, main));
   indexDestinations(ctx, stories);
-  const { layout, reason } = decideLayout(ctx, stories, main);
   const styles = styleConfig(ctx);
-  const config: PostextConfig = { ...pageConfig(ctx), ...styles };
+  const config: PostextConfig = { ...pageConfig(ctx, layout), ...styles };
 
   let chapters: IdmlImportResult['chapters'] = [];
   let templates = 0;
@@ -108,6 +119,11 @@ export function idmlToPostext(input: Uint8Array | ArrayBuffer | IdmlDocument, op
     const r = layoutFlow(ctx, stories, main, words);
     chapters = r.chapters;
     void r.labels;
+    // A cover set as a composed page, an opener drawn by its heading's
+    // design (#1556).
+    if (r.templates.length) config.pageTemplates = r.templates;
+    templates = r.templates.length;
+    if (r.headingStyles.length) config.headingStyles = [...(config.headingStyles ?? []), ...r.headingStyles];
     if (main?.story.orientation === 'vertical') (config.layout ??= {}).writingMode = 'vertical-rl';
   };
   // A readable package always gives a book: what the chosen layout
@@ -138,6 +154,7 @@ export function idmlToPostext(input: Uint8Array | ArrayBuffer | IdmlDocument, op
   const tables = tableStyles(ctx);
   if (tables.length) config.tableStyles = tables;
   if (ctx.markStyles.size) config.markStyles = [...ctx.markStyles.values()];
+  if (ctx.characterStyles.size) config.characterStyles = [...ctx.characterStyles.values()];
   // Resource types: pictures and tables print no label unless a caption
   // of the document typed one.
   if (ctx.resources.length) {
@@ -160,6 +177,13 @@ export function idmlToPostext(input: Uint8Array | ArrayBuffer | IdmlDocument, op
   }
   const palette = ctx.palette.list();
   if (palette.length) config.colorPalette = palette;
+  // Special inks and the die line (#1576).
+  const inks = printInks(doc, ctx.rep);
+  if (inks.length || die.dieLine) config.print = { ...(inks.length ? { inks } : {}), ...(die.dieLine ? { dieLine: die.dieLine } : {}) };
+  if (die.dieCuts) {
+    config.dieCuts = die.dieCuts;
+    if (layout === 'flow' && die.dieCuts.pages?.length) ctx.rep.add('dieCutsInFlow', 'warning', 'Die-cuts are placed by page number: the pages of a flowing book may not fall where the document\'s did', undefined, die.dieCuts.pages.length);
+  }
 
   // The language most of the text is set in.
   const known = [...ctx.languages].filter(([tag]) => !tag.startsWith('?')).sort((a, b) => b[1] - a[1]);
@@ -186,6 +210,10 @@ export function idmlToPostext(input: Uint8Array | ArrayBuffer | IdmlDocument, op
   else if (ctx.hasIndexMarks && !chapters.some((c) => /^:::index$/m.test(c.markdown))) ctx.rep.add('indexNotPrinted', 'info', 'The text carries index marks and the document has no generated index story: add a chapter with :::index to print one', undefined);
 
   const fonts = fontsOf(ctx);
+  if (options.fontFiles?.length) {
+    const custom = carryFonts(ctx, fonts, options.fontFiles);
+    if (custom.length) config.customFonts = custom;
+  }
   const report = ctx.rep.build({ pages: allPages(ctx).length, ...ctx.counts, templates });
   if (options.onWarning) {
     for (const f of report.findings) {

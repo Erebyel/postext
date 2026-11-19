@@ -3,11 +3,11 @@
 export const metadata = {
   title: 'WebMCP: um agente trabalhando no Sandbox',
   sidebarTitle: 'WebMCP',
-  description: 'O que um agente de IA no navegador pode fazer no Sandbox com as 55 ferramentas WebMCP que ele oferece (olhar as páginas, mudar qualquer ajuste, editar o texto, adicionar imagens, tabelas e fontes, rodar as verificações, exportar) e como chamar cada uma, com argumentos e respostas reais',
+  description: 'O que um agente de IA no navegador pode fazer no Sandbox com as 64 ferramentas WebMCP que ele oferece (olhar as páginas, mudar qualquer ajuste, editar o texto, adicionar imagens, tabelas e fontes, rodar as verificações, exportar) e como chamar cada uma, com argumentos e respostas reais',
   lang: 'pt',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '13 min',
-  order: 52,
+  order: 53,
   plainSummary: "Esta página é para quem quer que um assistente de inteligência artificial trabalhe por você em um livro no Sandbox. Enquanto o Sandbox está aberto, ele entrega ao assistente um conjunto de ferramentas para olhar qualquer página, mudar o design, editar o texto, adicionar imagens e tabelas, encontrar problemas e salvar arquivos. Você pede com suas próprias palavras, por exemplo “aumente um pouco a letra e confira se o livro continua cabendo em 40 páginas”, e o assistente usa as ferramentas e mostra as páginas para você. Tudo fica no seu navegador. A página explica como conectar um assistente, o que ele pode fazer e como cada ferramenta é chamada.",
 };
 
@@ -24,7 +24,7 @@ interface: ele lê o livro, pede uma imagem da página 12, define
 páginas e volta ao valor anterior. Ele faz o que você faz a olho, com o seu
 livro e no seu navegador.
 
-São 55 ferramentas com nomes que começam por `sandbox_`, registradas enquanto
+São 64 ferramentas com nomes que começam por `sandbox_`, registradas enquanto
 o Sandbox está na tela, e 8 ferramentas do site, `site_*`, em todas as páginas
 do postext.dev. Esta página as organiza pelo que você pediria a um agente e
 mostra a chamada de cada uma.
@@ -336,6 +336,8 @@ valor deles. Para mudá-los também, abra cada um (`sandbox_open_book` com
 deixa de ser próprio da edição. Num livro em um só idioma, `scope: "all"` é
 recusado, porque todos os ajustes dele são próprios.
 
+Um livro cujos capítulos não são todos iguais tem [estilos de capítulo](/pt/docs/configuration-styles#estilos-de-capítulo). `sandbox_chapter_styles` lista esses estilos com os ajustes que cada um muda e os capítulos compostos nele, e diz de onde vem o estilo de cada capítulo: do preâmbulo dele (`chapter`), da linha `:::part` com que ele começa (`part`) ou da parte a que pertence (`partBefore`). Também cria, renomeia e remove estilos. `sandbox_get_config` e `sandbox_set_config` aceitam `chapterStyle`: com ele, leem e gravam os ajustes desse estilo, como faz o painel Design enquanto o estilo está escolhido. Um caminho que o livro inteiro compartilha (`page.width`, `locale`, as fontes, a impressão) é gravado no livro, e `notes` avisa. `sandbox_set_chapter_style` dá a um capítulo o seu estilo gravando a linha `chapterStyle:` dele, e `style: null` tira a linha. Para compor todos os capítulos de uma parte em um estilo, escreva `style="…"` na linha `:::part` da parte com `sandbox_edit_text`.
+
 As fontes também são ajustes: `sandbox_list_fonts` com `search: "Garamond"`
 encontra famílias no catálogo aberto, e escrever o nome em um ajuste
 `fontFamily` a carrega.
@@ -545,7 +547,7 @@ O que o agente muda, você vê. Para chamar a sua atenção para algo:
 
 `sandbox_set_view` também escolhe o visualizador (`canvas`, `pdf`, `folio`,
 `html`, `epub`, `scorm`), o modo Conteúdo ou Design (`mode`), o painel lateral, capítulo ou livro inteiro, o zoom, o
-tamanho da letra do leitor, a simulação de impressão e o grupo do painel Design, e na aba SCORM
+tamanho da letra do leitor, a simulação de impressão, as linhas de faca (`dieLines`) e a vista das tintas especiais (`finishes`: `flat`, `sheen` ou `map`) do Canvas, o grupo do painel Design, e na aba SCORM
 o conteúdo (`scormLayout`), a versão (`scormVersion`) e os capítulos e
 seções que o pacote leva (`scormPick`, ids da lista `contents` da aba).
 `sandbox_go_to_page` vira as páginas por `step`, `page`, `position`, um trecho
@@ -597,6 +599,7 @@ A resposta avisa quando um balão cai sobre um rosto ou sai do quadro. Veja
   { "format": "pdf", "scope": "book", "deliver": "data" }
   ```
 
+- **Um livro a partir do painel Livros.** `sandbox_export` com `format` `pdf`, `epub` ou `html` e `book: { "kind": "project", "id": "…", "language": "en" }` grava um projeto como faz **Baixar em …** da sua linha (desde o postext 1.81): o livro inteiro nesse idioma, diagramado à parte do livro na tela, que é salvo antes e fica como está. `html` sem `book` grava o projeto na tela. A resposta traz o arquivo, suas páginas, o idioma gravado e os avisos; `epubLayout` escolhe a apresentação de um EPUB.
 - **Importar um arquivo `.postext`** com `sandbox_import_book` (`inspect: true`
   diz quais idiomas ele traz sem importá-lo).
 - **Fazer um livro a partir de um documento do InDesign** com
@@ -605,6 +608,10 @@ A resposta avisa quando um balão cai sobre um rosto ou sai do quadro. Veja
   e por quê, o veredito, os achados, as fontes de que o livro precisa e as
   imagens vinculadas que ainda faltam. `layout` escolhe `pages` ou `flow`, e
   `links` entrega as imagens vinculadas, cada uma associada pelo `fileName`.
+  `file` também pode ser um pacote do InDesign compactado: as imagens
+  vinculadas e as fontes dele entram no livro (`linksFromPackage`,
+  `fontsFromPackage`), e `document` nomeia o IDML a importar quando ele traz
+  vários (`documents`, na resposta, lista todos).
 - **Trazer um manuscrito do Word** com `sandbox_import_word`. Execute-a
   primeiro com `dryRun: true`: ela não muda nada e responde com o relatório de
   qualidade, cada estilo do Word com aquilo em que se tornaria e os capítulos
@@ -638,6 +645,8 @@ A resposta avisa quando um balão cai sobre um rosto ou sai do quadro. Veja
   capítulos e os recursos num só passo, que `sandbox_undo` desfaz inteiro.
   `sandbox_import_word` recusa um arquivo assim e indica esta ferramenta. Desde
   o postext 1.68.
+
+- **Projetos gráficos.** `sandbox_list_designs` lista a galeria do painel Design (projetos salvos, os que vêm com o Sandbox e os dos livros de exemplo) com suas partes. `sandbox_save_design` salva o projeto de um livro, `sandbox_try_design` experimenta um no livro na tela e `sandbox_end_design_trial` o mantém ou descarta (Descartar traz de volta só o que o projeto substituiu), `sandbox_apply_design` aplica um de uma vez ou como estilo de capítulo, `sandbox_import_design` e `sandbox_export_design` leem e escrevem arquivos de projeto, e `sandbox_delete_design` exclui um salvo. Todas aceitam `parts`, os grupos do painel Design, e respondem com os estilos que o texto nomeia e que faltam ao projeto.
 
 ### Perguntas e mensagens
 
@@ -733,7 +742,9 @@ cada uma vêm com `postextWebMcp.listTools()`.
   `sandbox_manage_chapters`, `sandbox_remove_chapter`.
 - **O design**: `sandbox_get_config`, `sandbox_set_config`,
   `sandbox_find_setting`, `sandbox_reset_to_original`,
-  `sandbox_frame_styles`, `sandbox_merge_styles`.
+  `sandbox_frame_styles`, `sandbox_merge_styles`,
+  `sandbox_chapter_styles`, `sandbox_set_chapter_style`.
+- **Projetos gráficos**: `sandbox_list_designs`, `sandbox_save_design`, `sandbox_try_design`, `sandbox_end_design_trial`, `sandbox_apply_design`, `sandbox_import_design`, `sandbox_export_design`, `sandbox_delete_design`.
 - **Desfazer**: `sandbox_undo`.
 - **Como é mostrado**: `sandbox_set_view`, `sandbox_go_to_page`,
   `sandbox_run_viewer`.

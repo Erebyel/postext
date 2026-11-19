@@ -25,6 +25,8 @@ import {
   type CreateBundleInput,
 } from 'postext/bundle';
 import { CliError, UsageError, type Options } from './args';
+import { applyCompositionConvention, applyDesignFile, parseDesignParts } from './design';
+import { applyExceptionFiles, parseExceptionsSpec } from './hyphenation';
 import { fontBytes, readFontMeta } from './fonts';
 import type { Reporter } from './log';
 
@@ -400,9 +402,29 @@ export async function loadBook(inputs: readonly string[], opts: Options, reporte
     // Loose Markdown: warnings name the files given, not the bundle's paths.
     if (kind === 'markdown') book.chapters = book.chapters.map((c, i) => ({ ...c, file: looseFiles[i] ?? c.file }));
   }
+  // A design file over the book's settings (#1523), before --config and --set.
+  const designPath = opts.string('design');
+  const designParts = parseDesignParts(opts.string('design-parts'), 'design-parts');
+  if (designParts && !designPath) throw new UsageError('--design-parts goes with --design');
+  if (designPath) {
+    await applyDesignFile(book, designPath, designParts, warn);
+    book.watchPaths.push(designPath);
+  }
+  // A language's composition rules (#1540), over the design.
+  const composition = opts.string('composition');
+  if (composition) applyCompositionConvention(book, composition);
   // --config over a book's own settings (loose Markdown has it already).
   const configPath = opts.string('config');
   if (configPath && kind !== 'markdown') book.config = deepMerge(book.config, readConfigFile(configPath));
+  // Exception files (#1530) after --config, before --set.
+  const exceptionFiles = opts.list('hyphenation-exceptions');
+  if (exceptionFiles.length > 0) {
+    const applied = applyExceptionFiles(book.config, exceptionFiles, warn);
+    book.config = applied.config;
+    reporter.detail(`Words kept whole: ${applied.added} added, ${applied.replaced} replaced`);
+    reporter.data.hyphenationExceptions = { added: applied.added, replaced: applied.replaced };
+    book.watchPaths.push(...exceptionFiles.map((spec) => parseExceptionsSpec(spec).path));
+  }
   const sets = opts.list('set');
   if (sets.length > 0) book.config = applySet(book.config, sets);
   if (book.chapters.length === 0) throw new CliError('The book has no chapters');

@@ -2,6 +2,7 @@ import { FORCED_BREAK } from './hardBreaks.js';
 import { type LayoutCursor, layoutNextLine } from '@chenglou/pretext';
 import { type VDTLine, createBoundingBox } from '../vdt.js';
 import { hyphenateTextKeepingCompounds, hyphenateText, withoutEdgeSoftHyphens } from '../hyphenation/hyphenate.js';
+import { ruledSpaces } from '../knuthPlass/spaceBreaks.js';
 import { pretextSegmentsToItems, computeBreakpoints, reconstructPretextLines } from '../knuthPlass/index.js';
 import { type MeasureBlockOptions, type MeasuredBlock, lineStartAt, maxLineIndent, maxLineInset, SOFT_HYPHEN, lineWidthFunction, uniformMeasureFrom, markInsetLines, lineWidthAt } from './types.js';
 import { withLineEndHyphen, endsInsideGeminate, GEMINATE_DOT } from './geminate.js';
@@ -21,6 +22,7 @@ import { needsBidi } from '../writing/bidi.js';
 import { getMeasureScriptContext, faceReadsScript } from './script.js';
 import { prepareInLanguage } from './pretextLanguage.js';
 import { UNIT_SQUARE_RE, holdsLetterlessWord, holdsLetterlessPiece, FIGURE_SPACE, hasOverwideGluedGroup, hasOverwideMixedWord, hasOverwideJoiningWord, hasOverwideCompoundPart, measuresWordsWhole } from './plain/overwide.js';
+import { hasOverwideNumber } from './rich/numbers.js';
 import { geminateDotWidth, getHyphenWidth, hasOverfullLine, throughGeminate, extractSegments, findLastTextSegmentIndex, geminateDotRoom } from './plain/segments.js';
 
 export { hasOverfullLine, computeJustifiedSpaceRatio } from './plain/segments.js';
@@ -125,6 +127,11 @@ export function measureBlock(
   if (joiningScriptIn(text) && (text.includes(SOFT_HYPHEN) || hasOverwideJoiningWord(text, font, Math.min(maxWidthPx, ...(options?.restWidths ?? []).map((s) => s.maxWidthPx)) - widestIndent))) {
     return measureRichBlock([{ text, bold: false, italic: false }], font, font, font, font, maxWidthPx, lineHeightPx, options);
   }
+  // A number wider than the line stays whole (#1549): pretext would cut it
+  // between two digits.
+  if (hasOverwideNumber(text, font, Math.min(maxWidthPx, ...(options?.restWidths ?? []).map((s) => s.maxWidthPx)) - widestIndent)) {
+    return measureRichBlock([{ text, bold: false, italic: false }], font, font, font, font, maxWidthPx, lineHeightPx, options);
+  }
   // A hyphen repeated at the start of the line after a compound's break
   // (`repeatHyphen`) is measured by the word-by-word breaker; pretext's
   // cannot add it.
@@ -155,8 +162,12 @@ export function measureBlock(
     return measureRichBlock([{ text, bold: false, italic: false }], font, font, font, font, maxWidthPx, lineHeightPx, options);
   }
 
+  const ragged = textAlign !== 'justify';
+  /** Knuth–Plass breaks this paragraph: the text library is asked for its
+   *  segments and their widths alone (#1614). */
+  const optimal = options?.optimal === true && (!ragged || options.optimalRagged === true);
   // Measured in the document's language, like every other text (#764).
-  const prepared = prepareInLanguage(processedText, font);
+  let prepared = prepareInLanguage(processedText, font, optimal);
   const normalSpaceWidth = textAlign === 'justify' ? normalSpaceWidthFor(font) : 0;
 
   // Knuth-Plass optimal line breaking path (text with words set without
@@ -164,8 +175,7 @@ export function measureBlock(
   // fullwidth sign in Latin text is no reason). Ragged text takes it too
   // with `optimalRagged`: its word spaces keep their width and each line
   // gets the ragged stretch instead.
-  const ragged = textAlign !== 'justify';
-  if (options?.optimal && (!ragged || options.optimalRagged)) {
+  if (options && optimal) {
     const maxStretchRatio = ragged ? 1 : options.maxStretchRatio ?? 1.5;
     const minShrinkRatio = ragged ? 1 : options.minShrinkRatio ?? 0.8;
     // The runt threshold counts word spaces on ragged text too.
@@ -178,7 +188,7 @@ export function measureBlock(
     const hardHyphens = ragged || options.breakAfterHyphens === true || keepCompounds;
     const dotWidth = geminateDotWidth(text, font);
     const hyphenWidth = getHyphenWidth(font);
-    const items = pretextSegmentsToItems(prepared, hyphenWidth, spaceWidth, maxStretchRatio, minShrinkRatio, options.breakAfterDashes === true, hardHyphens, ragged || keepCompounds ? 1 : 2, dotWidth, options.stacks !== undefined);
+    const items = pretextSegmentsToItems(prepared, hyphenWidth, spaceWidth, maxStretchRatio, minShrinkRatio, options.breakAfterDashes === true, hardHyphens, ragged || keepCompounds ? 1 : 2, dotWidth, options.stacks !== undefined, measuringVertically() ? undefined : options.spaceBreaks);
     const lineWidthFn = lineWidthFunction(maxWidthPx, options);
     const lineIndentFn = indentOf;
     const runtPenalty = options.runtPenalty ?? 0;
@@ -225,6 +235,14 @@ export function measureBlock(
     // Fallback to greedy if K-P produced no breaks, or a line past the
     // measure (a word wider than it: the greedy breaker divides it)
   }
+  // The line-edge rules avoided (#1542): the word-by-word breaker keeps
+  // them where it can (`rich/greedyRules.ts`); pretext's cannot.
+  if (options?.stacks || (options?.spaceBreaks && !measuringVertically() && ruledSpaces(text, { citations: options.spaceBreaks.citations > 0, operators: options.spaceBreaks.operators > 0 }).length > 0)) {
+    return measureRichBlock([{ text, bold: false, italic: false }], font, font, font, font, maxWidthPx, lineHeightPx, { ...options, optimal: false });
+  }
+
+  // The library breaks the lines after all: prepared in full for it.
+  if (optimal) prepared = prepareInLanguage(processedText, font);
 
   const lines: VDTLine[] = [];
   const baselineOffset = lineBaselineOffset(lineHeightPx, font);

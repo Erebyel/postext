@@ -3,11 +3,11 @@
 export const metadata = {
   title: 'WebMCP: ein Agent bei der Arbeit in der Sandbox',
   sidebarTitle: 'WebMCP',
-  description: 'Was ein KI-Agent im Browser mit den 55 WebMCP-Werkzeugen der Sandbox tun kann – Seiten ansehen, jede Einstellung ändern, den Text bearbeiten, Bilder, Tabellen und Schriften hinzufügen, die Prüfungen ausführen, exportieren – und wie jedes Werkzeug aufgerufen wird, mit echten Argumenten und Antworten',
+  description: 'Was ein KI-Agent im Browser mit den 64 WebMCP-Werkzeugen der Sandbox tun kann – Seiten ansehen, jede Einstellung ändern, den Text bearbeiten, Bilder, Tabellen und Schriften hinzufügen, die Prüfungen ausführen, exportieren – und wie jedes Werkzeug aufgerufen wird, mit echten Argumenten und Antworten',
   lang: 'de',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '12 min',
-  order: 52,
+  order: 53,
   plainSummary: "Diese Seite ist für alle, die einen KI-Helfer für sich an einem Buch in der Sandbox arbeiten lassen möchten. Solange die Sandbox geöffnet ist, gibt sie dem Helfer eine Reihe von Werkzeugen: um jede Seite anzusehen, die Gestaltung zu ändern, den Text zu bearbeiten, Bilder und Tabellen hinzuzufügen, Probleme zu finden und Dateien zu speichern. Sie bitten mit Ihren eigenen Worten, zum Beispiel „mach die Schrift etwas größer und prüf, ob das Buch noch auf 40 Seiten passt“, und der Helfer setzt die Werkzeuge ein und zeigt Ihnen die Seiten. Alles bleibt in Ihrem Browser. Die Seite erklärt, wie Sie einen Helfer verbinden, was er tun kann und wie jedes Werkzeug aufgerufen wird.",
 };
 
@@ -24,7 +24,7 @@ Oberfläche: Er liest das Buch, fordert ein Bild von Seite 12 an, setzt
 gewachsen ist, und nimmt die Änderung zurück. Er tut, was Sie mit dem Auge tun,
 und er tut es mit Ihrem Buch, in Ihrem Browser.
 
-Solange die Sandbox auf dem Bildschirm ist, sind 55 Werkzeuge registriert,
+Solange die Sandbox auf dem Bildschirm ist, sind 64 Werkzeuge registriert,
 deren Namen mit `sandbox_` beginnen; dazu kommen auf jeder Seite von
 postext.dev 8 Werkzeuge der Website, `site_*`. Diese Seite ordnet sie nach den
 Aufgaben, die Sie einem Agenten stellen würden, und zeigt für jedes den Aufruf.
@@ -345,6 +345,8 @@ ihren Wert behalten. Um auch sie zu ändern, öffnen Sie jede einzeln
 eigener Wert der Ausgabe mehr. In einem Buch in nur einer Sprache wird
 `scope: "all"` abgewiesen, da alle seine Einstellungen seine eigenen sind.
 
+Ein Buch, dessen Kapitel nicht alle gleich aussehen, hat [Kapitelstile](/de/docs/configuration-styles#kapitelstile). `sandbox_chapter_styles` listet sie mit den Einstellungen, die jeder ändert, und den Kapiteln, die darin gesetzt sind, und sagt, woher der Stil jedes Kapitels kommt: aus seinem Front Matter (`chapter`), aus der Zeile `:::part`, mit der es beginnt (`part`), oder aus dem Teil, zu dem es gehört (`partBefore`). Es legt Stile auch an, benennt sie um und entfernt sie. `sandbox_get_config` und `sandbox_set_config` nehmen `chapterStyle`: Damit lesen und schreiben sie die Einstellungen dieses Stils, wie das Design-Bedienfeld, solange der Stil gewählt ist. Ein Pfad, den das ganze Buch teilt (`page.width`, `locale`, die Schriften, der Druck), wird in das Buch geschrieben, und `notes` sagt es. `sandbox_set_chapter_style` gibt einem Kapitel seinen Stil, indem es dessen Zeile `chapterStyle:` schreibt; `style: null` nimmt die Zeile heraus. Um alle Kapitel eines Teils in einem Stil zu setzen, schreibt man `style="…"` mit `sandbox_edit_text` in die Zeile `:::part` des Teils.
+
 Auch Schriften sind Einstellungen: `sandbox_list_fonts` mit
 `search: "Garamond"` findet Familien im offenen Katalog, und wenn Sie den Namen in eine
 Einstellung `fontFamily` schreiben, wird die Schrift geladen.
@@ -562,7 +564,7 @@ Was der Agent ändert, sehen Sie. Um Sie auf etwas hinzuweisen:
 `sandbox_set_view` wählt außerdem den Betrachter (`canvas`, `pdf`, `folio`,
 `html`, `epub`, `scorm`), den Modus Inhalt oder Gestaltung (`mode`), das seitliche
 Bedienfeld, Kapitel oder ganzes Buch, den Zoom,
-die Schriftgröße für den Leser, die Druckvorschau und die Gruppe des Bedienfelds
+die Schriftgröße für den Leser, die Druckvorschau, die Stanzlinien (`dieLines`) und die Ansicht der Spezialfarben (`finishes`: `flat`, `sheen` oder `map`) im Canvas, die Gruppe des Bedienfelds
 Gestaltung sowie im Tab SCORM den Inhalt (`scormLayout`), die Version
 (`scormVersion`) und die Kapitel und Abschnitte, die das Paket aufnimmt
 (`scormPick`, IDs aus den `contents` des Tabs). `sandbox_go_to_page` blättert über `step`, `page`, `position`, eine
@@ -618,6 +620,7 @@ ihrem Panel herausragt. Das Format beschreibt [Comics](/de/docs/comics).
   { "format": "pdf", "scope": "book", "deliver": "data" }
   ```
 
+- **Ein Buch aus dem Bücher-Panel.** `sandbox_export` mit `format` `pdf`, `epub` oder `html` und `book: { "kind": "project", "id": "…", "language": "en" }` schreibt ein Projekt so, wie es **Als … herunterladen** in seiner Zeile tut (seit postext 1.81): das ganze Buch in dieser Sprache, getrennt vom Buch auf dem Bildschirm umbrochen, das vorher gespeichert wird und bleibt, wie es ist. `html` ohne `book` schreibt das Projekt auf dem Bildschirm. Die Antwort nennt die Datei, ihre Seiten, die geschriebene Sprache und die Warnungen; `epubLayout` wählt die Darstellung eines EPUB.
 - **Eine `.postext`-Datei importieren** mit `sandbox_import_book`
   (`inspect: true` sagt, welche Sprachen sie enthält, ohne sie zu importieren).
 - **Ein Buch aus einem InDesign-Dokument anlegen** mit `sandbox_import_idml`.
@@ -626,7 +629,11 @@ ihrem Panel herausragt. Das Format beschreibt [Comics](/de/docs/comics).
   Grund dafür, dem Urteil, den Befunden, den Schriften, die das Buch braucht,
   und den verknüpften Bildern, die noch fehlen. `layout` wählt `pages` oder
   `flow`, und `links` übergibt die verknüpften Bilder, jedes über seinen
-  `fileName` zugeordnet.
+  `fileName` zugeordnet. `file` kann auch ein gezipptes InDesign-Paket sein:
+  Seine verknüpften Bilder und Schriften gehen in das Buch ein
+  (`linksFromPackage`, `fontsFromPackage`), und `document` nennt die zu
+  importierende IDML, wenn es mehrere enthält (`documents` in der Antwort
+  listet sie auf).
 - **Ein Word-Manuskript übernehmen** mit `sandbox_import_word`. Führen Sie es
   zuerst mit `dryRun: true` aus: Es ändert nichts und antwortet mit dem
   Qualitätsbericht, mit jeder Word-Formatvorlage und dem, was daraus würde, und
@@ -661,6 +668,8 @@ ihrem Panel herausragt. Das Format beschreibt [Comics](/de/docs/comics).
   Kapitel und Ressourcen, den `sandbox_undo` ganz zurücknimmt.
   `sandbox_import_word` lehnt eine solche Datei ab und nennt dieses Werkzeug.
   Seit postext 1.68.
+
+- **Gestaltungen.** `sandbox_list_designs` listet die Galerie des Bedienfelds Gestaltung (gespeicherte Gestaltungen, die mitgelieferten und die der Beispielbücher) mit ihren Teilen. `sandbox_save_design` speichert die Gestaltung eines Buchs, `sandbox_try_design` probiert eine am Buch auf dem Bildschirm aus und `sandbox_end_design_trial` behält oder verwirft sie (Verwerfen bringt nur zurück, was die Gestaltung ersetzt hat), `sandbox_apply_design` wendet eine sofort oder als Kapitelstil an, `sandbox_import_design` und `sandbox_export_design` lesen und schreiben Gestaltungsdateien, und `sandbox_delete_design` löscht eine gespeicherte. Alle nehmen `parts`, die Gruppen des Bedienfelds Gestaltung, und antworten mit den Stilen, die der Text verwendet und die der Gestaltung fehlen.
 
 ### Rückfragen und Hinweise
 
@@ -761,7 +770,9 @@ und das Schema jedes Werkzeugs liefert `postextWebMcp.listTools()`.
   `sandbox_manage_chapters`, `sandbox_remove_chapter`.
 - **Die Gestaltung**: `sandbox_get_config`, `sandbox_set_config`,
   `sandbox_find_setting`, `sandbox_reset_to_original`,
-  `sandbox_frame_styles`, `sandbox_merge_styles`.
+  `sandbox_frame_styles`, `sandbox_merge_styles`,
+  `sandbox_chapter_styles`, `sandbox_set_chapter_style`.
+- **Gestaltungen**: `sandbox_list_designs`, `sandbox_save_design`, `sandbox_try_design`, `sandbox_end_design_trial`, `sandbox_apply_design`, `sandbox_import_design`, `sandbox_export_design`, `sandbox_delete_design`.
 - **Rückgängig**: `sandbox_undo`.
 - **Die Anzeige**: `sandbox_set_view`, `sandbox_go_to_page`,
   `sandbox_run_viewer`.

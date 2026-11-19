@@ -12,6 +12,7 @@ import { parseAttrBlobStrict, parseDirectiveAttrs, scanDirectiveAttrs } from './
 import { fixMathSourceMap } from './inlineMath.js';
 import { buildBlockMapping } from './sourceMapping.js';
 import { attachIndexMarks, extractIndexMarks, remapParseOffsets } from './indexMarks.js';
+import { blankSectionBreaks } from './blockParser/sectionBreaks.js';
 import { joinEastAsianLines } from './softBreaks.js';
 import { codeFenceOpen } from './codeFence.js';
 import { createVerseParsing } from './blockParser/verse.js';
@@ -82,7 +83,7 @@ export function headingAttrTokens(blob: string, spaced: boolean): ReturnType<typ
 }
 /** Set of fenced-container names recognized today. A `:::name` line whose
  *  name is a known container opens a block that runs until a bare `:::`. */
-export const KNOWN_CONTAINERS: ReadonlySet<ContainerName> = new Set(['callout', 'paragraphs', 'part', 'columns', 'paper', 'frame', 'module', 'exercise', 'solution', 'hint']);
+export const KNOWN_CONTAINERS: ReadonlySet<ContainerName> = new Set(['callout', 'paragraphs', 'part', 'columns', 'paper', 'diecut', 'frame', 'module', 'exercise', 'solution', 'hint']);
 
 /** Absolute source range of each attribute value of a blob that starts at
  *  `blobStart` (a flag: its key). A repeated key keeps the last, as
@@ -223,11 +224,39 @@ function parseMemoLookup(markdown: string, options?: ParseOptions): { blocks: Co
   }
   const result = parseMarkdownWithIssues(markdown, options);
   memo.set(markdown, result);
-  if (memo.size > PARSE_MEMO_SLOTS) {
-    const oldest = memo.keys().next().value;
-    if (oldest !== undefined) memo.delete(oldest);
-  }
+  if (_memoHolds === 0) trimParseMemo(memo);
   return result;
+}
+
+/** Drop the texts least recently read beyond the memo's slots. */
+function trimParseMemo(memo: Map<string, unknown>): void {
+  while (memo.size > PARSE_MEMO_SLOTS) {
+    const oldest = memo.keys().next().value;
+    if (oldest === undefined) break;
+    memo.delete(oldest);
+  }
+}
+
+/** Builds holding the memo open ({@link holdParseMemo}). */
+let _memoHolds = 0;
+
+/**
+ * Keep every text the parse memo reads until the returned function is
+ * called (#1604). A whole book is read chapter by chapter several times
+ * over before it is laid out (its contents flags, its citations, its
+ * counters, its outline), and a memo of a few slots parsed every chapter
+ * again on each of those sweeps. When the last hold is released the memo
+ * goes back to its few slots, so a long-lived worker keeps no more than it
+ * did.
+ */
+export function holdParseMemo(): () => void {
+  _memoHolds++;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--_memoHolds === 0) for (const memo of _parseMemos.values()) trimParseMemo(memo);
+  };
 }
 
 /** @internal Number of inputs the parse memo keeps (tests). */
@@ -257,9 +286,12 @@ export function parseMarkdown(markdown: string, options?: ParseOptions): Content
  * are taken out first and attached to the blocks holding them
  * (`ContentBlock.indexMarks`); every source offset still points into
  * `markdown`. `options` picks how code is read (#624): fences on, indented
- * code off by default.
+ * code off by default. A `::section` line of postext 1.78 is read as a
+ * blank line (see `sectionBreaks.ts`).
  */
-export function parseMarkdownWithIssues(markdown: string, options?: ParseOptions): { blocks: ContentBlock[]; issues: ParseIssue[] } {
+export function parseMarkdownWithIssues(source: string, options?: ParseOptions): { blocks: ContentBlock[]; issues: ParseIssue[] } {
+  // 1.78's `::section{style="…"}` lines read as blank (#1532).
+  const markdown = blankSectionBreaks(source);
   const marks = extractIndexMarks(markdown, { fences: options?.fences !== false });
   if (!marks) return attachInlineCode(attachDirections(attachContainerAnchors(attachEquationAnchors(parseBlocks(markdown, options), markdown))), markdown);
   const result = parseBlocks(marks.text, options);

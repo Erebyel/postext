@@ -11,13 +11,15 @@
  * helpers return 0, spans are no-ops.
  */
 
+import { hasWindow } from '../env/window.js';
+
 const STORAGE_KEY = 'postextPerf';
 
 let enabled: boolean | null = null;
 
 export function perfEnabled(): boolean {
   if (enabled !== null) return enabled;
-  if (typeof window === 'undefined') return (enabled = false);
+  if (!hasWindow()) return (enabled = false);
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY) === '1';
     const query = /[?&]perf(=1|&|$)/.test(window.location.search);
@@ -42,8 +44,11 @@ export function setPerfEnabled(on: boolean): void {
 export type PerfDetail = Record<string, string | number | boolean | null | undefined>;
 
 export interface PerfSpan {
-  /** Close the span; `extra` is merged into the detail of the row. */
-  end(extra?: PerfDetail): number;
+  /** Close the span; `extra` is merged into the detail of the row. Given
+   *  as a function, it is read once the page is idle and the row written
+   *  then: a reading that costs (a document's size) is neither counted in
+   *  the span nor in the way of the work after it (#1644). */
+  end(extra?: PerfDetail | (() => PerfDetail)): number;
 }
 
 const NOOP_SPAN: PerfSpan = { end: () => 0 };
@@ -72,6 +77,13 @@ export function perfMark(name: string, detail?: PerfDetail): void {
   log(name, 0, detail);
 }
 
+/** Run `work` once the page has nothing else to do. */
+function whenIdle(work: () => void): void {
+  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+  if (idle) idle(work, { timeout: 1000 });
+  else setTimeout(work, 0);
+}
+
 /** Open a span; call `end()` when the work is done. */
 export function perfSpan(name: string, detail?: PerfDetail): PerfSpan {
   if (!perfEnabled()) return NOOP_SPAN;
@@ -82,13 +94,17 @@ export function perfSpan(name: string, detail?: PerfDetail): PerfSpan {
       if (closed) return 0;
       closed = true;
       const ms = now() - start;
-      const merged = extra ? { ...detail, ...extra } : detail;
-      try {
-        performance.measure(`postext:${name}`, { start, end: start + ms, detail: merged });
-      } catch {
-        /* older browsers */
-      }
-      log(name, ms, merged);
+      const record = (more: PerfDetail | undefined): void => {
+        const merged = more ? { ...detail, ...more } : detail;
+        try {
+          performance.measure(`postext:${name}`, { start, end: start + ms, detail: merged });
+        } catch {
+          /* older browsers */
+        }
+        log(name, ms, merged);
+      };
+      if (typeof extra === 'function') whenIdle(() => record(extra()));
+      else record(extra);
       return ms;
     },
   };
@@ -153,7 +169,7 @@ declare global {
   }
 }
 
-if (typeof window !== 'undefined' && !window.postextPerf) {
+if (hasWindow() && !window.postextPerf) {
   window.postextPerf = { set: setPerfEnabled, enabled: perfEnabled };
   installPerfObservers();
 }

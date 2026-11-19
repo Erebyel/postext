@@ -1,14 +1,29 @@
 'use client';
 
 import { useEffect, useState, type FocusEventHandler, type ReactNode } from 'react';
-import { BookCopy, BookOpen, ChevronDown, ChevronUp, File, MoveHorizontal, MoveVertical, Pin, PinOff, RefreshCw, Search, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  ZoomIn,
+  ZoomOut,
+  MoveHorizontal,
+  MoveVertical,
+  File,
+  BookOpen,
+  RefreshCw,
+  ChevronUp,
+  ChevronDown,
+  Pin,
+  PinOff,
+  Search,
+  BookCopy,
+} from 'lucide-react';
 import { openCoverDesigner } from '../../production/coverDesignerStore.js';
-import { useSandbox } from '../../context/SandboxContext.js';
+import { useSandboxDispatch, useSandboxLabels, useSandboxSelector, useSandboxStateGetter } from '../../context/SandboxContext.js';
 import { groupPagesIntoRows } from './CanvasPreview/layoutUtils.js';
 import { Tooltip, useUiRtl } from '../../ui/index.js';
 import { useCompactLayout } from '../../hooks/useCompactLayout.js';
 import { useLargeTargets } from '../../ui/largeTargets.js';
 import { PrintPreviewButton } from '../../print/PrintPreviewButton.js';
+import { SpecialInksButtons } from './SpecialInksButtons.js';
 import { openFind, searchableSelection, useFindState } from '../../editor/find/findStore.js';
 
 type ViewMode = 'single' | 'spread';
@@ -250,14 +265,20 @@ export function PinToolbarButton({
 /** Opens find and replace over the Markdown (the bar sits above the
  *  editor, in the Markdown panel), the editor's selection as the query. */
 export function FindToolbarButton() {
-  const { state, dispatch } = useSandbox();
+  const dispatch = useSandboxDispatch();
+  const labels = useSandboxLabels();
+  const markdownPanel = useSandboxSelector((s) => s.activePanel === 'markdown');
+  // The text and the selection are read when the button is pressed: a
+  // button that held them was drawn again on every keystroke (#1629).
+  const getState = useSandboxStateGetter();
   const findOpen = useFindState().open;
   return (
     <ToolbarButton
       icon={<Search size={16} aria-hidden="true" />}
-      label={state.labels.findOpen}
-      active={findOpen && state.activePanel === 'markdown'}
+      label={labels.findOpen}
+      active={findOpen && markdownPanel}
       onClick={() => {
+        const state = getState();
         dispatch({ type: 'SET_PANEL', payload: 'markdown' });
         openFind({ query: searchableSelection(state.markdown.slice(state.selection.from, state.selection.to)) });
       }}
@@ -372,8 +393,7 @@ export function CanvasToolbar({
   onFocus,
   onBlur,
 }: CanvasToolbarProps) {
-  const { state } = useSandbox();
-  const { labels } = state;
+  const labels = useSandboxLabels();
   const rootProps = useToolbarRootProps(hidden, true);
   const { prev: prevTarget, next: nextTarget } = rowTargets(currentPage, viewMode, pageCount, firstPageRecto);
   const prevDisabled = pageCount === 0 || currentPage <= 0;
@@ -450,6 +470,7 @@ export function CanvasToolbar({
       <ToolbarSeparator />
       <PrintPreviewButton />
       <ToolbarSeparator />
+      <SpecialInksButtons />
       <ToolbarButton
         icon={<ChevronUp size={16} aria-hidden="true" />}
         label={labels.previousPage}

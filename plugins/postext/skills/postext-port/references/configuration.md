@@ -66,8 +66,10 @@ Conversion at `page.dpi` (default 300):
   InDesign CMYK swatch, a brand colour). A CMYK print render (`print`, §21) sets them as they
   are; `hex` is their screen rendering. Put them on the palette entry: every linked use follows.
 - `spot` (with `model: 'spot'`): a spot ink (a Pantone, a corporate ink, a varnish),
-  `{ name, cmyk, tint?, overprint? }`: `name` is the plate, `cmyk` the ink at 100 % (the PDF's
-  alternate), `tint` percent (default 100), `overprint` for a varnish or an ink laid over process.
+  `{ name, cmyk, tint?, overprint?, finish? }`: `name` is the plate, `cmyk` the ink at 100 % (the PDF's
+  alternate), `tint` percent (default 100), `overprint` for a varnish or an ink laid over process,
+  `finish` (≥ 1.84) for a special ink: `{ kind: 'metallic' | 'foil' | 'fluorescent' | 'white' |
+  'varnish', sheen?: 'gloss' | 'satin' | 'matte' | 'softTouch' }` (§19i).
   A CMYK or PDF/X PDF prints it on its own plate (a `Separation` colour space); screens draw `hex`
   (the ink at its tint). Colours naming the same ink share a plate. A source's spot swatches map
   here, on the palette entry. In the print PDF an SVG colour prints on an ink only when it names
@@ -159,14 +161,15 @@ Conversion at `page.dpi` (default 300):
 | `canvasViewer` | `{ pageGap?, rowGap? }` | `24` / `24` | §21 Sandbox Canvas page spacing (≥ 1.43); `pageGap: 0` for art across the spine |
 | `composedViewerLeaf` | `{ width, height, margins? }` | — | host only (≥ 1.47): the Sandbox's HTML viewer lays composed pages on this print leaf, as `comics.viewerLeaf` does comic pages; **do not write in preset.json config** |
 | `pdfGeneration` | PdfGenerationConfig | §21 | outlines, tagging, colour space |
-| `print` | PrintConfig | §21 | PDF/X standard, ICC output profile, black (K-only, overprint, rich black), preflight (≥ 1.22) |
+| `print` | PrintConfig | §21 | PDF/X standard, ICC output profile, black (K-only, overprint, rich black), preflight (≥ 1.22); ink finishes and the die line (≥ 1.84) |
+| `dieCuts` | DieCutsConfig | — | §19i die-cuts (≥ 1.84): die `shapes`, `pages` that take them, rounded `corners`, a shaped `outline` |
 | `contrast` | ContrastConfig | §21 | contrast check of text on its ground (≥ 1.28): `level` AA/AAA, `mode` auto/screen/print/both, `reversedText` sizes, `allow` accepted pairs (>= 1.52); layout ignores it |
 | `folio` | FolioConfig | §21 | Folio 3D viewer only: tilt, yaw, paper stock, binding (type, covers, spine image), surface, lighting |
 | `debug` | DebugConfig | §21 | editor overlays + warning toggles; no effect on output |
 | `checks` | `{ contentInConfig?: { enabled?, allow?, maxWords?, maxChars? } }` | §19h | the `contentInConfig` check of design texts (postext 1.34; read by `preset_kit.py lint` on any version); out of the layout key; an older engine ignores the key |
 | `pageTemplates` | PageTemplate[] | §19g | composed-page templates (read and checked from 1.34.0, laid out from 1.34.1, groups and spreads from 1.35.0, `fit` from 1.36.0, continuation from 1.37.0, continue-before-shrink, `page:` jumps, ruled frames, vertical spreads from 1.38.0; frame `writingMode`/`direction`, label checks from 1.39.0; label styles that switch off a borrowed italic, frames in their own mode on right-to-left pages from 1.40.0; connectors, path elements, box shapes, repeating grids, modules and the overlap checks from 1.48.0; round 2, composed-pages.md) |
 | `labelStyles` | LabelStyle[] | §19g | styles of `::label` words on pictures (read from 1.34.0, drawn from 1.37.0, vertical and checked from 1.39.0; `fontStyle` / `textTransform` left unset follow a borrowed paragraph style from 1.40.0; leaders, keys (`kind: 'legend'`), plates with outlines from 1.48.0) |
-| `chapterStyles` | ChapterStyleConfig[] | §19g2 | named designs a chapter takes over the book's settings: `{ id, name, config }`, `config` a partial `PostextConfig` (page, typography, colours, running heads). A chapter names one in its front matter (`chapterStyle: <id>`); `::section{style="<id>"}` sets what follows in that style, from a new page |
+| `chapterStyles` | ChapterStyleConfig[] | §19g2 | named designs a chapter takes over the book's settings: `{ id, name, config }`, `config` a partial `PostextConfig` (page, typography, colours, running heads). A chapter names one in its front matter (`chapterStyle: <id>`); `:::part{style="<id>"}` sets every chapter of the part in it. Book-wide keys and the page trim are ignored in a style (`chapterStyleBookSetting`) |
 
 Not configurable (no config exists — don't look for it): margin notes (emulate with
 `span:'side'` callouts; footnotes and endnotes are `footnotes`, §19a), a blockquote's own family, size,
@@ -341,8 +344,6 @@ bodyText
 ├─ firstLineIndent   Dimension       1.5 em          set {0,'mm'} for block paragraphs
 ├─ hangingIndent     boolean         false           indent all lines but the first
 ├─ plusUnderline     boolean         false           (≥ 1.72) `++…++` underlines, as `:underline[…]` does; when on, EVERY pair does (`i++ … ++j` too), `\+\+` is a literal pair, code never underlines. Off: `++` is text
-├─ bindCitations     boolean         false           (≥ 1.73) the space before a numbered citation in brackets/parentheses (`autores [12]`, `(12–15)`) and the spaces in it become no-break spaces; never after a number (`2016 (3)`). Paragraphs, list items, quotes set horizontally; RTL/CJK blocks untouched
-├─ bindOperators     boolean         false           (≥ 1.73) a lone `= < > ≤ ≥ ± × ≈ ≠ ÷ −` between spaces stays with both terms (`p < 0.05`): no line ends on it nor starts with it. Same scope as bindCitations
 ├─ indentAfterHeading boolean        true            false = first paragraph after a heading unindented (classic book style)
 ├─ blockquote        { color=#666666, italic=true (false in an Arabic-script document, ≥ 1.15), indent=0, firstLineIndent=<body's> }   how `> …` quotes are set (colour palette-linkable; indent = every line, first line counted from it)
 ├─ verse             { layout='auto', indentStep=0.5em, turnover='hang', hang=2em, turnoverMark='[', stanzaSpace=1, keepStanzas=0, tighten=true }   (≥ 1.23) defaults of `:::verse` poems set line by line; the fence's attributes of the same name win. layout 'bayt' = 1.22's centred single hemistichs for poems with no `||` (stored configs < 9 get it); stanzaSpace in lines of the poem's leading; tighten (≥ 1.24) = a line a little wider than the measure shrinks its word spaces down to minWordSpacing and stays on one line, only a line still too wide turns over (false = 1.23: every overlong line turns over; stored configs < 10 with a line-by-line poem get false)
@@ -434,8 +435,29 @@ H&J / Knuth–Plass
 │                        starting on the same word or the same last/first stackMinCharacters characters (spaces included, accents and case
 │                        ignored; none in Chinese, Japanese, Thai, Lao, Khmer, Myanmar, Tibetan): 'warn' = same layout + a `stack` warning per
 │                        stack; 'avoid' = stackPenalty demerits per stack (scale: consecutiveHyphenDemerit 3000; a repeated monosyllable twice),
-│                        the stacks kept are reported. Captions, notes, table cells too; needs optimalLineBreaking. A port leaves it 'allow'
+│                        the stacks kept are reported. Captions, notes, table cells too, and (≥ 1.80) verse turnovers, contents and index
+│                        entries, ragged text without optimalRagged; a paragraph Knuth–Plass cannot fit (a word wider than the column) or
+│                        any text with optimalLineBreaking off is set line by line, ending a line one word space earlier when it would end
+│                        as the line above does and the shorter line stays within maxWordSpacing (ragged: ≥ half the measure). Stacks in
+│                        captions, notes and cells are reported (≥ 1.80) with resourceId, part and cell. A port leaves it 'allow'
 │                        (the original's breaks are what it reproduces); 'warn' lists the stacks in proofs without moving a line
+├─ citationBreaks     'allow'; citationBreakPenalty 10000   ≥ 1.79 a line that starts with a numbered citation after a word, or a piece
+│                        of one (`autores [12]`, `[14, 16]`, `(12–15)`, the `[3, p. 12]` a numbered style sets for `[@key, p. 12]`; never after
+│                        a number: `2016 (3)`): 'warn' = same layout + a `citationBreak` warning per break; 'avoid' = citationBreakPenalty
+│                        demerits on a break at the space before the citation or inside it (the space stays a stretching word space; the
+│                        default weighs one line stretched to the word-spacing limit), the breaks kept are reported. Paragraphs, lists,
+│                        quotes, boxes, notes, captions, table cells set horizontally, and (≥ 1.80) verse turnovers, contents and index
+│                        entries; RTL and CJK left alone; under 'avoid' ragged text is set by Knuth–Plass too; composed frames ignore it.
+│                        A paragraph Knuth–Plass cannot fit, or any text with optimalLineBreaking off, is set line by line and ends a line
+│                        at an earlier word space rather than at a ruled one when the shorter line stays within maxWordSpacing (ragged:
+│                        ≥ half the measure). Breaks in captions, notes and cells are reported (≥ 1.80) with resourceId, part and cell.
+│                        A port leaves it 'allow' (or
+│                        'warn' for proofs) unless the original keeps citations with their word, then 'avoid'; to bind one pair whatever
+│                        the rule, write a no-break space in the Markdown
+├─ operatorBreaks     'allow'; operatorBreakPenalty 10000   ≥ 1.79 a line that ends or starts on a lone `= < > ≤ ≥ ± × ≈ ≠ ÷ − + · →`
+│                        set between spaces (`p < 0.05`): same levels, an `operatorBreak` warning (edge 'end'|'start'), 'avoid' prices the
+│                        spaces on both sides of the sign, same blocks. 1.78's `bindCitations` / `bindOperators: true`
+│                        read as 'avoid' (write the new keys)
 ├─ kashida            'auto'|'none'   'auto' in an Arabic-script document, else 'none'   justified Arabic lines open spaces ≤ 1.25× then insert whole tatweels (U+0640) at raqim-kashida points; never Latin/digits/headings/ragged/last lines; plain and PDF-copied text leave them out
 ├─ kashidaPatterns    'auto'|'naskh'|'simple'|'nastaliq'   'auto' (from the body font: Ruqʿa/Dīwānī e.g. Aref Ruqaa → none, Nastaʿlīq → nastaliq, else naskh)
 ├─ kashidaPerWord     1       elongations per word
@@ -463,7 +485,7 @@ H&J / Knuth–Plass
 Gotchas
 - Hyphenation only applies when `textAlign: 'justify'`, unless `hyphenation.ragged: true` (ragged text too, within `zone`). Words < 5 chars never break (2 before / 3 after).
 - For a Spanish book set top-level `locale: 'es'` (hyphenation follows unless `hyphenation.locale` is set).
-- **Keeping words whole (postext ≥ 1.28).** `hyphenation.exceptions: ['Alice', 'You-Tube']`: a word without a hyphen is never divided, one with hyphens only there (TeX's `\hyphenation`). An entry matches a run of letters (`(Alice,`, `Alice’s`, each part of a compound); an inflected form is another entry; lower case matches any case, an initial capital only capitalised occurrences (`'Rose'` leaves `rose` alone). `hyphenation.capitalized: false` keeps every capitalised word whole, sentence openers included (InDesign's "Hyphenate Capitalized Words" off; useless in German, where every noun has a capital). `citations.hyphenateNames: false` keeps the family names of the cited authors whole (`(Lup-` | `ton, 2010)` never happens). All three reach captions, cells, notes and design text too. Port the source's hyphenation exception list and its "capitalized words" switch to these; for one occurrence, a soft hyphen before the word (references/document-format.md §3.3). Up to 1.27 the only ways were a `hyphenation: false` paragraph style, a soft hyphen typed inside the word, or rewording. A book in several languages can keep lists per language in `hyphenation.exceptionsByLanguage: { es: ['ca-mi-no'], en: ['Alice'] }`: each list reads as `exceptions`, applies only where that language's dictionary divides, and wins over the same word in `exceptions`. A source exception file (one word per line, breaks marked with hyphens, `=`, `~` or soft hyphens, or a TeX `\hyphenation{…}` block) goes in through the Sandbox's Import under the list, which merges it.
+- **Keeping words whole (postext ≥ 1.28).** `hyphenation.exceptions: ['Alice', 'You-Tube']`: a word without a hyphen is never divided, one with hyphens only there (TeX's `\hyphenation`). An entry matches a run of letters (`(Alice,`, `Alice’s`, each part of a compound); an inflected form is another entry; lower case matches any case, an initial capital only capitalised occurrences (`'Rose'` leaves `rose` alone). `hyphenation.capitalized: false` keeps every capitalised word whole, sentence openers included (InDesign's "Hyphenate Capitalized Words" off; useless in German, where every noun has a capital). `citations.hyphenateNames: false` keeps the family names of the cited authors whole (`(Lup-` | `ton, 2010)` never happens). All three reach captions, cells, notes and design text too. Port the source's hyphenation exception list and its "capitalized words" switch to these; for one occurrence, a soft hyphen before the word (references/document-format.md §3.3). Up to 1.27 the only ways were a `hyphenation: false` paragraph style, a soft hyphen typed inside the word, or rewording. Lists per language (postext ≥ 1.81) go in `hyphenation.exceptionsByLanguage: { es: ['ca-mi-no'], en: ['Alice'] }`: each list reads as `exceptions`, applies where that dictionary divides (the document's, a chapter style's `hyphenation.locale`, or, since 1.82, a passage marked with that language: `:::paragraphs{lang=fr}`, `:::verse{lang=fr}`, `:ltr[…]{lang=fr}`, which divide with their own dictionary; a passage in a language with no patterns is not divided, one in the text's language keeps its dictionary; up to 1.81 a passage kept the surrounding dictionary) and wins over the same word in `exceptions`; a language without patterns of its own (Greek, Arabic, Japanese…) keeps no list. In a book with editions per language, an edition's own `exceptions` (config layers) already applies to that edition only; `exceptionsByLanguage` is for a book whose chapters change dictionary. A source exception file (one word per line, breaks marked with hyphens, `=`, `~` or soft hyphens; the `\hyphenation{…}` blocks of a TeX file; or a JSON array, or an object of lists by language with `"*"` for every language) goes in through the Sandbox's Import, which merges it into the list chosen, or on the command line with `--hyphenation-exceptions [LANG=]FILE` (repeatable, after `--config`, before `--set`).
 - All widow/orphan/runt rules are soft penalties, never hard.
 - No-break spaces (U+00A0, U+202F, U+2007) and the word joiner (U+2060) glue their neighbours on every breaker; type the character, not `&nbsp;`. U+00A0 is in practically every face; a face without U+202F/U+2007 gets half a word space / a digit width.
 
@@ -1100,6 +1122,9 @@ number; each callout style's fills / border / rules / text; each colour of each 
 caption style. Still by value (the override wins): settings in different places that set the same
 colour of a block (`bodyText.color` vs a callout `body.color`, a paragraph style `color`,
 `bodyText.blockquote.color`) linked to such entries: give those entries distinct base values.
+The page colour (`page.backgroundColor`) linked by `paletteId` follows its own entry only
+(postext ≥ 1.82.1): a section overriding another entry of the same base value (`onBand` white like
+`paper`) leaves the paper alone. Unlinked, it is still matched by value.
 Page role of a part page = `'part'` (filter running heads with `pages`).
 
 ---------------------------------------------------------------------------------
@@ -1742,6 +1767,8 @@ splitInline = true   (≥ 1.25) overflow applies to `here` tables too: one that 
   next column at its width; < 5 body rows never cut); 'clip'/'hide' for one taller than a column; not inside boxes
   or on vertical pages. false = 1.24 (moves whole); a preset below configVersion 11 embedding a resource reads false
 continuedSuffix = '(cont.)', continuesMarkerEnabled = true, continuesMarker = 'Continued' | 'Continúa' (by locale)
+hyphenation = false  (≥ 1.81) true breaks each cell whole on the optimal breaker; cells are ragged, so words are
+  divided only with bodyText.hyphenation.ragged. Set true when the source hyphenates its table cells as its text.
 ```
 tableStyles[]: `{ id (REQUIRED), name?, …any tableStyle field }` — unset fields inherit
 `tableStyle`, then body. Picked per table by `resource.table.styleId`.
@@ -1762,10 +1789,11 @@ heads: `rules: 'booktabs'` with `headerBackgroundEnabled: false` and black (ink)
 fontFamily, fontSize, color  → body text (label and description share family+size: engine limit)
 figureStyle                  label and description (§20a); unset = the body's figures when in the body family
 align = 'left' (TextAlign), gap = 0.75em (em = caption size; body↔caption)
-bodyBreaking = false: true breaks the caption as the body (optimal breaker, word-spacing limits,
-   hyphenated when the body is, the body's hyphenation and stack rules; the label never divided).
-   Port a source whose captions are justified and hyphenated as its text with true.
-lineHeight (unset = the body's leading in proportion to the caption size; em = caption size)
+hyphenation = false (≥ 1.81): true hyphenates as a paragraph style's `hyphenation: true` (justified; ragged only
+   with bodyText.hyphenation.ragged; also when bodyText.hyphenation.enabled is off), broken whole on the optimal
+   breaker within the body's word spacing, under its hyphen, stack and citation/operator rules; label never divided.
+   Set true when the source hyphenates its captions as its text (narrow justified captions with hyphens).
+lineHeight (≥ 1.81; unset = the body's leading in proportion to the caption size; em = caption size)
 labelBold = true, labelItalic = false, labelColor = color
 labelNumberGap = ' ' (no-break space) between label and number; labelSeparator = '. ' after the number (≥ 1.9)
    Chinese captions: labelNumberGap '' and labelSeparator '　' (U+3000) → 图1-1　标题
@@ -1774,9 +1802,9 @@ descriptionItalic = false
 position = 'below' | 'above'
 backgroundEnabled = false, background = main, padding = 0.35em   (bar behind caption)
 note = { fontSize = 0.85×caption size, color = caption color, italic = false, gap = 0.35em, align = 'left',
-         bodyBreaking = false }
+         hyphenation = false, lineHeight (unset = body leading in proportion; em = note size) }   (≥ 1.81 for the last two)
 ```
-Per-type: `resourceTypes[].captionStyle` partial (e.g. tables `{position:'above'}`).
+Per-type: `resourceTypes[].captionStyle` partial (e.g. tables `{position:'above'}`; `hyphenation`, `lineHeight` and `note` too).
 Caption text supports inline markdown; a bold lead sentence is written as `**…**` in the caption.
 
 ---------------------------------------------------------------------------------
@@ -2581,9 +2609,27 @@ A book can hold named designs, and a chapter is laid out with one of them over t
 
 - `id` is what a chapter names in its front matter (`chapterStyle: appendix`); `name` is shown in the Sandbox.
 - `config` is a partial `PostextConfig` merged over the book's (as an edition's override is): only what differs.
-- Inside a chapter, `::section{style="appendix"}` sets what follows in that style, from a new page.
-- The page's trim, `dpi`, cut lines and binding stay the book's whatever the style says.
-- A chapter or section naming an unknown id is laid out with the book's settings.
+- A part gives its chapters a style: `:::part{number="IV" title="Appendices" style="appendix"}` at the top of
+  the part's first chapter sets that chapter and every chapter after it, until the next part, in the style.
+  A chapter's own `chapterStyle:` wins over its part's; a part with no `style` returns to the book's settings.
+  A styled fence after the chapter's text has started raises `partStyleMidChapter` and takes effect from the
+  next chapter. A chapter laid out alone reads its part's style from `continuation.part.style`.
+- What the whole book shares stays the book's whatever the style says: `page.sizePreset`/`width`/`height`/
+  `dpi`/`cutLines`/`binding` (`BOOK_PAGE_KEYS`) and `locale`, `direction`, `numerals`, `customFonts`,
+  `symbolFont`, `resourceTypes`, `print`, `pdfGeneration`, `htmlViewer`, `canvasViewer`, `folio`, `debug`,
+  `checks`, `contrast`, `chapterStyles`, `composedViewerLeaf` (`BOOK_WIDE_KEYS`). A style that sets one raises
+  the config warning `chapterStyleBookSetting` (path `chapterStyles[i].config.<key>`).
+- A `chapterStyle:` or part `style` naming an unknown id raises `chapterStyleUnknown`; the chapter is laid out
+  with the book's settings.
+- There is no style for part of a chapter: split the chapter, or use a heading style (§19g) for one section.
+  1.78's `::section{style="…"}` line is no longer read (its text stays in the chapter, `partStyleMidChapter`
+  with `source: 'section'`).
+- The Word export reads the styles too: in the formatted `.docx` each chapter is a Word section with its
+  style's margins, columns and page numbering, and a paragraph or character style the chapter style sets
+  otherwise gets a version named after it (`Normal (Appendix)`, id `NormalCs1`); the round trip gives back
+  the `chapterStyle:` lines and part fences as they were. A host laying the whole book out as one document
+  passes `content.chapters` (`{ start, end }` source ranges): the chapters of one style are laid out
+  together, the next style's from a new page (the Sandbox HTML viewer's whole-book mode does this).
 
 ## 19h. `checks` — the `contentInConfig` check (postext 1.34)
 
@@ -2612,6 +2658,65 @@ default is used). Never raise the limits to quiet a port: move the text into the
 `preset_kit.py lint` applies the same rule on any installed version.
 A box design prints the box's words through `{boxText}` / `{boxText.<n>}` and `{titleText}`; literal
 text typed into its elements is content like any other design text.
+
+## 19i. Special inks and `dieCuts` — die-cuts (postext ≥ 1.84)
+
+**Special inks.** A spot colour with `spot.finish`, or an ink table entry `print.inks[].finish` (the
+ink table's wins; it also covers an ink only an SVG or an imported file names):
+
+```
+finish  { kind, sheen? }
+├─ kind   metallic | foil | fluorescent | white | varnish
+└─ sheen  gloss | satin | matte | softTouch    default gloss for varnish and foil, satin for metallic;
+                                               ignored for fluorescent and white; softTouch only on a varnish
+```
+- Every special ink prints on its own Separation, never in process unless its ink entry says `output:
+  'process'`. White and varnish overprint unless `overprint: false`; the preflight lists white first and
+  varnish last (`inkPressOrder`). Screens paint the `hex`, except a varnish, which paints nothing (give it a
+  distinct hex all the same). In a `plates` job an unnamed white or varnish is dropped (`finishInkDropped`).
+- Nothing painted later cuts a white or varnish plate (≥ 1.85), pictures included: the white stays whole
+  under a photograph, folios painted after a varnish leave it whole. Only a white with `overprint: false`
+  knocks out the colour under it (white type on a coloured panel).
+- Two varnishes that meet (a soft-touch coat over the page from a footer element, a spot gloss over the
+  pictures) lie in the order of `print.inks` (postext > 1.85.1): a later entry over an earlier one, the
+  unlisted varnishes over the listed ones, in the palette's order. The finish mask, the Canvas sheen/map
+  views and Folio follow it. List them in the source's press order (soft touch first, then the gloss).
+- `whiteInkOnWhite`: set `page.backgroundColor` to the stock a white ink prints on.
+- From a source: `inventory.py` reads Separations (PDF) and spot swatches (IDML) and guesses a finish from
+  each name (`ink_finishes.py`, the engine's `guessInkFinish`): `suggested_config.print.inks`. Confirm with
+  the printer's specification (sources.md, "Special inks and die-cuts").
+
+**Die-cuts.** `dieCuts` describes the book's dies; the Markdown only names one.
+
+```
+dieCuts
+├─ shapes[]    DieShape  { id, name?, shape, x, y, width, height, radius?, d?, viewBox?, leaves?, wrap? }
+│   ├─ shape     rect | roundRect | circle | ellipse | path    circle = largest in the box, centred
+│   ├─ x, y      Dimension from the trim's top-left; width/height = the box the shape fills
+│   ├─ radius    3mm        corners of a roundRect
+│   ├─ d         SVG path data of a path (M L H V C S Q T A Z), in viewBox units, stretched to the box
+│   ├─ viewBox   [1, 1]
+│   ├─ leaves    1          leaves the hole goes through (this one, then the next ones)
+│   └─ wrap      { gap: 3mm }  text keeps gap clear on flowing pages; false = runs under and is cut away
+├─ pages[]     DieCutPlacement  { pages: '1' | '3-12' | '3,7,11-13', die }   pages by position in the
+│                                book (1 = first page), not printed folios
+├─ corners     { radius, edges?: fore | all }   fore (default) = fore-edge corners, spine square
+└─ outline     { d, viewBox? }   every leaf cut to a shape, stretched to a recto's trim; wins over corners
+```
+- Three placements: `dieCuts.pages`; a `:::diecut{die=<id>}` fence (its content starts a page, and the text
+  after its `:::` too; every page it lands on is cut; the innermost fence wins); a decoration element
+  `{ kind: 'cut', id, placement, die?, d?, viewBox?, preserveAspectRatio?, leaves?, wrap?, when?, unless? }`
+  in a page template (the `die` names the shape stretched to the element's box, else `d`, else the box; the
+  element's own `leaves`/`wrap` win; it is never painted). Composed frames do not wrap around a hole yet.
+- A hole cuts both sides of its leaf, mirrored on the back; `leaves: N` carries it through the next leaves.
+  `render.mjs --jpeg` paints the pages a hole shows, as deep as the holes line up, and paper cut away
+  (rounded corners, a shaped leaf) white: compare with the source's pages as held, not as printed flat.
+- `print.dieLine` strokes the die line on its own Separation (overprinting, an artifact, in the optional
+  content group "Die line" outside PDF/X-1a): `output` page | none, `ink` the plate name (default `Die`;
+  use the die-maker's: `CutContour`, `Dieline`, `Troquel`…), `cmyk` its alternate (100 % magenta), `width`
+  (0.25 pt). The page prints whole; the hole is not cut out of the PDF. CLI: `postext pdf --die-line none`.
+- Preflight (whenever enabled): `dieCutText` (text in a gap or under a hole), `dieCutTrim` (< 3 mm from the
+  trim; critical past it), `dieCutGutter` (critical, within 3 mm of the spine), `dieCutUnknown`.
 
 ## 20. Fonts — `customFonts` and what goes in preset.json
 
@@ -2787,8 +2892,11 @@ as a change. Left out, the file is stamped with the time of the call.
                  "safeZone": { "value": 5, "unit": "mm" }, "bleedSnap": { "value": 3, "unit": "mm" }, "checkFonts": true },
   "inks": [                        // the ink table: spot inks as the printer gets them
     { "name": "Azul corporativo", "pdfName": "PANTONE 286 C", "aliases": ["Pantone 286C"] },
-    { "name": "Varnish", "output": "process" }    // process: printed in CMYK from its alternate
+    { "name": "Varnish", "output": "process" },   // process: printed in CMYK from its alternate
+    { "name": "Gold", "finish": { "kind": "metallic", "sheen": "satin" } }   // ≥ 1.84, §19i
   ],                               // also "cmyk" (the alternate) and "overprint", over the colours' own
+  "dieLine": { "output": "page", "ink": "Die", "cmyk": { "c": 0, "m": 100, "y": 0, "k": 0 },
+               "width": { "value": 0.25, "unit": "pt" } },   // ≥ 1.84: the die line's plate (§19i); output none = no line
   "plates": {                      // two-ink printing: the only plates the job prints on (absent: all)
     "inks": ["Black", "PANTONE 286 C"],      // Cyan/Magenta/Yellow/Black, or a spot plate by name/alias
     "images": ["Black", "PANTONE 286 C"],    // pictures as a monotone (one) or duotone (two)
@@ -2833,7 +2941,9 @@ as a change. Left out, the file is stamped with the time of the call.
   print: info when its projection lands within ΔE 6, a warning past it or with no profile), `offPlateColor` (warning:
   a screen colour that lands past ΔE 6), `plateUndefined` (a spot plate no colour or `inks` entry defines: it prints
   as black), `cmykImageForeign` (a CMYK JPEG of another press
-  condition in a PDF/X-1a job, with `imageColor.cmykProfile: 'convert'`). `render.mjs` passes each SVG's ink names to the preflight (`svgInks`, read with
+  condition in a PDF/X-1a job, with `imageColor.cmykProfile: 'convert'`); ≥ 1.84 (§19i): `spotInkFinish` and
+  `inkPressOrder` (info), `whiteInkOnWhite` (warning), `dieCutText`, `dieCutTrim`, `dieCutGutter`, `dieCutUnknown`,
+  and the render warning `finishInkDropped`. `render.mjs` passes each SVG's ink names to the preflight (`svgInks`, read with
   `svgSpotInks`), so its PREFLIGHT lines include `spotInkUndefined`; so does `postext check`. Fix the critical ones.
 - With `plates`, a colour off the job's plates prints as the closest mix of one
   plate or two (a `DeviceN` space for two); greys stay on Black; rich black is dropped unless every ink of the recipe
@@ -2896,6 +3006,11 @@ book out again or changes the PDF, HTML or EPUB. Set `"canvasViewer": { "pageGap
 designs run across the spread, so the Canvas shows the spread as one (Sandbox: Design › Export › Canvas).
 
 ### Delivering EPUB, HTML and PDF files
+
+`postext design my-book -o house.postext` writes the book's design as a design file (no chapters; `--parts page,text,…`
+for some of the Design panel's groups, `composition` for the composition rules alone, ≥ 1.80), and every command takes
+`--design house.postext` to set a book in one and `--composition es|en-US|en-GB|fr|de|auto` (≥ 1.80) to set a
+language's composition convention (project-format.md §7, Design files).
 
 The `postext` command line writes every output from the project folder or the `.postext`; `build` takes
 the same options and lays the book out once for all of them

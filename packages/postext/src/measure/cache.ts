@@ -2,7 +2,7 @@ import type { InlineSpan } from '../parse/index.js';
 import type { MeasuredBlock, MeasurementCache, MeasureBlockOptions } from './types.js';
 import { measureBlock } from './plain.js';
 import { measureRichBlock, measureRichSnippet } from './rich.js';
-import { getHyphenationLocale, getHyphenationRulesKey, hyphenationLimitsId } from '../hyphenation/hyphenate.js';
+import { hyphenationDictionaryKey, getHyphenationRulesKey, hyphenationLimitsId } from '../hyphenation/hyphenate.js';
 import { hasCJK } from './cjk/cjk.js';
 import { getCjkLineBreak } from './cjk/cjkClasses.js';
 import { getMeasureRegion, getMeasureUprightDigits, getMeasureWritingMode } from './vertical.js';
@@ -11,6 +11,7 @@ import { getMeasureArabicNumbers, getMeasureDirection } from './rtl/bidiLines.js
 import { evictionsSince, measurementGeneration, measureLanguageKey } from './canvas.js';
 import { scriptContextKey } from './script.js';
 import { getSlashBreaks } from './breakRules.js';
+import { perfNow, perfTap } from '../util/perfTap.js';
 
 /** Options that change a block's lines, joined into its cache key. The
  *  active hyphenation dictionary is one: soft hyphens (and the syllables an
@@ -25,7 +26,7 @@ import { getSlashBreaks } from './breakRules.js';
  *  letters or that switch the rule off; and the breaks after a slash
  *  (#1164), in the documents that switch them off. */
 function optionsKey(options: MeasureBlockOptions | undefined): string {
-  return `${(options?.direction ?? getMeasureDirection()) === 'rtl' ? 'rtl\x00' : ''}${getMeasureArabicNumbers() ? 'an\x00' : ''}${scriptContextKey()}${measureLanguageKey()}${options?.textAlign ?? ''}\x00${options?.hyphenate ?? ''}\x00${options?.firstLineIndentPx ?? ''}\x00${options?.hangingIndent ?? ''}\x00${options?.optimal ?? ''}\x00${options?.maxStretchRatio ?? ''}\x00${options?.minShrinkRatio ?? ''}\x00${options?.runtPenalty ?? ''}\x00${options?.runtMinCharacters ?? ''}\x00${options?.looseness ?? ''}\x00${options?.letterSpacingPx ?? ''}\x00${options?.hyphenationZonePx ?? ''}\x00${getHyphenationLocale()}${hyphenationLimitsId() ? `\x00dl${hyphenationLimitsId()}` : ''}${options?.justifyTrackingPx ? `\x00${options.justifyTrackingPx}` : ''}${options?.runtGraded ? '\x00rg' : ''}${options?.justifyForcedBreaks ? '\x00jb' : ''}${options?.stacks ? `\x00st${options.stacks.minChars}:${options.stacks.demerits}` : ''}${options?.ladders ? `\x00hl${options.ladders.maxRun}:${options.ladders.demerits}` : ''}${options?.lastWordDemerits ? `\x00lw${options.lastWordDemerits}` : ''}${options?.hyphenSpacing ? `\x00hs${options.hyphenSpacing.lines}:${options.hyphenSpacing.demerits}` : ''}${options?.extraHyphenPenalty ? `\x00fh${options.extraHyphenPenalty}` : ''}${options?.labelColumnPx !== undefined ? `\x00lc${options.labelColumnPx}` : ''}${options?.labelLength ? `\x00ll${options.labelLength}` : ''}${options?.numberSeams?.length ? `\x00ns${options.numberSeams.join(',')}` : ''}${options?.avoidHyphenAtLines?.length ? `\x00ah${options.avoidHyphenAtLines.join(',')}` : ''}${options?.kashida ? `\x00k${options.kashida.patterns}:${options.kashida.perWord}:${options.kashida.maxLengthPx}` : ''}${options?.lineIndentsPx?.length ? `\x00li${options.lineIndentsPx.join(',')}` : ''}${options?.tabs ? `\x00tb${JSON.stringify(options.tabs)}` : ''}${hyphenationRulesKey()}${getSlashBreaks() ? '' : '\x00s/'}`;
+  return `${(options?.direction ?? getMeasureDirection()) === 'rtl' ? 'rtl\x00' : ''}${getMeasureArabicNumbers() ? 'an\x00' : ''}${scriptContextKey()}${measureLanguageKey()}${options?.textAlign ?? ''}\x00${options?.hyphenate ?? ''}\x00${options?.firstLineIndentPx ?? ''}\x00${options?.hangingIndent ?? ''}\x00${options?.optimal ?? ''}\x00${options?.maxStretchRatio ?? ''}\x00${options?.minShrinkRatio ?? ''}\x00${options?.runtPenalty ?? ''}\x00${options?.runtMinCharacters ?? ''}\x00${options?.looseness ?? ''}\x00${options?.letterSpacingPx ?? ''}\x00${options?.hyphenationZonePx ?? ''}\x00${hyphenationDictionaryKey()}${hyphenationLimitsId() ? `\x00dl${hyphenationLimitsId()}` : ''}${options?.justifyTrackingPx ? `\x00${options.justifyTrackingPx}` : ''}${options?.runtGraded ? '\x00rg' : ''}${options?.justifyForcedBreaks ? '\x00jb' : ''}${options?.stacks ? `\x00st${options.stacks.minChars}:${options.stacks.demerits}` : ''}${options?.spaceBreaks ? `\x00sb${options.spaceBreaks.citations}:${options.spaceBreaks.operators}` : ''}${options?.ladders ? `\x00hl${options.ladders.maxRun}:${options.ladders.demerits}` : ''}${options?.lastWordDemerits ? `\x00lw${options.lastWordDemerits}` : ''}${options?.hyphenSpacing ? `\x00hs${options.hyphenSpacing.lines}:${options.hyphenSpacing.demerits}` : ''}${options?.extraHyphenPenalty ? `\x00fh${options.extraHyphenPenalty}` : ''}${options?.labelColumnPx !== undefined ? `\x00lc${options.labelColumnPx}` : ''}${options?.labelLength ? `\x00ll${options.labelLength}` : ''}${options?.numberSeams?.length ? `\x00ns${options.numberSeams.join(',')}` : ''}${options?.avoidHyphenAtLines?.length ? `\x00ah${options.avoidHyphenAtLines.join(',')}` : ''}${options?.kashida ? `\x00k${options.kashida.patterns}:${options.kashida.perWord}:${options.kashida.maxLengthPx}` : ''}${options?.lineIndentsPx?.length ? `\x00li${options.lineIndentsPx.join(',')}` : ''}${options?.tabs ? `\x00tb${JSON.stringify(options.tabs)}` : ''}${hyphenationRulesKey()}${getSlashBreaks() ? '' : '\x00s/'}`;
 }
 
 /** The document's hyphenation rules (#699: words kept whole, capitalised
@@ -141,17 +142,33 @@ function cjkLinkKey(spans: InlineSpan[], spanKey: string): string {
 
 /** A cached result must read exactly like a fresh measure: the block's own
  *  fields (`totalHeight`, `lastLineRunt`, whatever it gains) are carried
- *  whole, and only the lines — which the pipeline shifts and stamps — are
- *  copied. */
+ *  whole, and the lines — which the pipeline shifts and stamps — are
+ *  copied, each with its box and a list of its own of its segments.
+ *
+ *  The segments themselves are the cache's (#1609): copying every word of
+ *  every line was two thirds of a hit. Whoever changes a placed segment
+ *  puts a copy in the line's list instead (a colour in
+ *  `marks/characterStyles.ts`, `marks/highlightMarks.ts` and
+ *  `pipeline/sections/partPalette/recolor.ts`); the tests run with the
+ *  cached segments frozen ({@link freezeMeasured}), so a write to one
+ *  throws there. */
 function cloneMeasuredBlock(block: MeasuredBlock): MeasuredBlock {
   return {
     ...block,
     lines: block.lines.map((l) => ({
       ...l,
       bbox: { ...l.bbox },
-      segments: l.segments ? l.segments.map((s) => ({ ...s })) : undefined,
+      segments: l.segments ? l.segments.slice() : undefined,
     })),
   };
+}
+
+/** Freeze the segments of a block about to be kept, when the host asks
+ *  for it (`globalThis.__postextFreezeMeasured`, set by the test setup,
+ *  `src/__tests__/freezeMeasured.ts`): the copies handed out share them. */
+function freezeMeasured(block: MeasuredBlock): void {
+  if ((globalThis as { __postextFreezeMeasured?: boolean }).__postextFreezeMeasured !== true) return;
+  for (const line of block.lines) for (const seg of line.segments ?? []) Object.freeze(seg);
 }
 
 /** Whether a cache key sets text in one of `families` (lower case): the
@@ -178,6 +195,26 @@ function current(cache: MeasurementCache): MeasurementCache {
   return cache;
 }
 
+/** The cached block under `key`, or `measure()` kept under it: a copy
+ *  either way. `started` is when the caller began building the key, read
+ *  only when a benchmark listens (`util/perfTap.ts`). */
+function throughCache(cache: MeasurementCache, key: string, started: number, measure: () => MeasuredBlock): MeasuredBlock {
+  const tap = perfTap();
+  const cached = current(cache)._blocks.get(key);
+  const found = tap ? perfNow() : 0;
+  tap?.('measure.key', found - started);
+  if (cached) {
+    const copy = cloneMeasuredBlock(cached);
+    tap?.('measure.hit', perfNow() - found);
+    return copy;
+  }
+  const result = measure();
+  freezeMeasured(result);
+  cache._blocks.set(key, result);
+  tap?.('measure.miss', perfNow() - found);
+  return cloneMeasuredBlock(result);
+}
+
 export function cachedMeasureBlock(
   text: string,
   font: string,
@@ -186,12 +223,9 @@ export function cachedMeasureBlock(
   options: MeasureBlockOptions | undefined,
   cache: MeasurementCache,
 ): MeasuredBlock {
+  const started = perfTap() ? perfNow() : 0;
   const key = buildPlainCacheKey(text, font, maxWidthPx, lineHeightPx, options);
-  const cached = current(cache)._blocks.get(key);
-  if (cached) return cloneMeasuredBlock(cached);
-  const result = measureBlock(text, font, maxWidthPx, lineHeightPx, options);
-  cache._blocks.set(key, result);
-  return cloneMeasuredBlock(result);
+  return throughCache(cache, key, started, () => measureBlock(text, font, maxWidthPx, lineHeightPx, options));
 }
 
 /** {@link cachedMeasureRichBlock} for a table cell's paragraph or a piece
@@ -209,12 +243,9 @@ export function cachedMeasureRichSnippet(
   options: MeasureBlockOptions | undefined,
   cache: MeasurementCache,
 ): MeasuredBlock {
+  const started = perfTap() ? perfNow() : 0;
   const key = `S${buildRichCacheKey(spans, [normalFont, boldFont, italicFont, boldItalicFont], maxWidthPx, lineHeightPx, options)}`;
-  const cached = current(cache)._blocks.get(key);
-  if (cached) return cloneMeasuredBlock(cached);
-  const result = measureRichSnippet(spans, normalFont, boldFont, italicFont, boldItalicFont, maxWidthPx, lineHeightPx, options);
-  cache._blocks.set(key, result);
-  return cloneMeasuredBlock(result);
+  return throughCache(cache, key, started, () => measureRichSnippet(spans, normalFont, boldFont, italicFont, boldItalicFont, maxWidthPx, lineHeightPx, options));
 }
 
 export function cachedMeasureRichBlock(
@@ -228,10 +259,7 @@ export function cachedMeasureRichBlock(
   options: MeasureBlockOptions | undefined,
   cache: MeasurementCache,
 ): MeasuredBlock {
+  const started = perfTap() ? perfNow() : 0;
   const key = buildRichCacheKey(spans, [normalFont, boldFont, italicFont, boldItalicFont], maxWidthPx, lineHeightPx, options);
-  const cached = current(cache)._blocks.get(key);
-  if (cached) return cloneMeasuredBlock(cached);
-  const result = measureRichBlock(spans, normalFont, boldFont, italicFont, boldItalicFont, maxWidthPx, lineHeightPx, options);
-  cache._blocks.set(key, result);
-  return cloneMeasuredBlock(result);
+  return throughCache(cache, key, started, () => measureRichBlock(spans, normalFont, boldFont, italicFont, boldItalicFont, maxWidthPx, lineHeightPx, options));
 }

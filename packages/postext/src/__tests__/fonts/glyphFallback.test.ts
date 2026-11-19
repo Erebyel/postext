@@ -3,7 +3,8 @@ import { buildDocument } from '../../pipeline/build.js';
 import { formatWarning } from '../../pipeline/contentWarnings.js';
 import { rangesHave, sfntCodePointRanges, type CodePointRanges } from '../../fonts/cmap.js';
 import { minimalFont } from '../../fonts/minimalFont.js';
-import { forgetFontCoverage, glyphFallbacks, registerFontCoverage, GLYPH_FALLBACK_LISTED } from '../../fonts/glyphFallback.js';
+import { forgetFontCoverage, glyphFallbacks, readDocumentTexts, registerFontCoverage, skippedChar, GLYPH_FALLBACK_LISTED, SKIPPED } from '../../fonts/glyphFallback.js';
+import { glyphFallbackPlaces } from '../../fonts/glyphPlaces.js';
 import { fontStringFamilies } from '../../measure/fontString.js';
 import type { ContentWarning, VDTDocument } from '../../vdt.js';
 
@@ -146,5 +147,51 @@ describe('#1105: glyphFallback warnings', () => {
     registerFontCoverage('Subset Sans', 400, 'normal', LATIN);
     const doc = buildDocument({ markdown: 'An arrow → here.' }, { bodyText: { fontFamily: '"Subset Sans", serif' }, debug: { warnings: { missingFont: false } } });
     expect(glyphWarnings(doc.contentWarnings)).toEqual([]);
+  });
+
+  it('skips the same characters with and without the pattern (#1606)', () => {
+    for (let code = 0; code < 0x3000; code++) {
+      const ch = String.fromCodePoint(code);
+      expect(skippedChar(ch), `U+${code.toString(16)}`).toBe(SKIPPED.test(ch));
+    }
+  });
+
+  it('finds the same faces and places from a reading of the document as by reading it again (#1635)', () => {
+    // The bold face has every character; the regular one lacks the arrow
+    // and the Greek. A face whose characters are all there is not looked
+    // into a second time, the other is, text by text.
+    registerFontCoverage('Subset Sans', 400, 'normal', LATIN);
+    registerFontCoverage('Subset Sans', 700, 'normal', [[0x20, 0x7e], [0x370, 0x3ff], [0x2190, 0x21ff]]);
+    const doc = buildDocument(
+      { markdown: 'An arrow → here.\n\n**A bold arrow → and π here.**\n\nPlain π, **bold π**, plain again →.\n\nNo arrow here.' },
+      { bodyText: { fontFamily: '"Subset Sans", serif' }, debug: { warnings: { missingFont: false } } },
+    );
+    const reading = readDocumentTexts(doc);
+    expect(glyphFallbacks(doc, { reading })).toEqual(glyphFallbacks(doc));
+    const places = glyphFallbackPlaces(doc, { reading });
+    expect(places).toEqual(glyphFallbackPlaces(doc));
+    expect(places.map((p) => [p.weight, p.characters.join('')])).toEqual([[400, '→'], [400, 'π→']]);
+    // A reading that knows nothing of a shorthand leaves it to the search.
+    expect(glyphFallbackPlaces(doc, { reading: { chars: new Map(), texts: new Map() } })).toEqual(places);
+  });
+
+  it('answers from the files registered now, after others were asked (#1635)', () => {
+    registerFontCoverage('Subset Sans', 400, 'normal', LATIN);
+    expect(glyphWarnings(build('An arrow → here.').contentWarnings)).toHaveLength(1);
+    registerFontCoverage('Subset Sans', 400, 'normal', [[0x2190, 0x21ff]]);
+    expect(glyphWarnings(build('An arrow → here.').contentWarnings)).toEqual([]);
+    forgetFontCoverage(['Subset Sans']);
+    registerFontCoverage('Subset Sans', 400, 'normal', LATIN);
+    expect(glyphWarnings(build('An arrow → here.').contentWarnings)).toHaveLength(1);
+  });
+
+  it('reports a character every paragraph that sets it, however often the text repeats (#1606)', () => {
+    registerFontCoverage('Subset Sans', 400, 'normal', LATIN);
+    const doc = buildDocument({ markdown: 'An arrow → here.\n\nAn arrow → here.\n\nNo arrow here.\n\nAn arrow → here, and → there.' }, { bodyText: { fontFamily: '"Subset Sans", serif' } });
+    const places = (doc.contentWarnings ?? []).filter((w) => w.kind === 'glyphFallbackAt');
+    expect(places.map((w) => (w.kind === 'glyphFallbackAt' ? w.characters : []))).toEqual([['→'], ['→'], ['→']]);
+    expect(new Set(places.map((w) => (w.kind === 'glyphFallbackAt' ? w.blockId : ''))).size).toBe(3);
+    const faces = glyphWarnings(doc.contentWarnings);
+    expect(faces).toHaveLength(1);
   });
 });

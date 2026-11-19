@@ -149,6 +149,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>Die Absätze werden als Grundtext gesetzt.</td>
     </tr>
     <tr>
+      <td><code>chapterStyleUnknown</code>, <code>partStyleMidChapter</code></td>
+      <td><a href="/de/docs/configuration-styles#kapitelstile">Kapitelstile</a></td>
+      <td>—</td>
+    </tr>
+    <tr>
       <td><code>unknownCalloutType</code></td>
       <td><code>:::callout{'{'}type{'}'}</code> verweist auf keinen der <code>calloutStyles</code> – wird nur ausgelöst, wenn welche konfiguriert sind.</td>
       <td>Der Kasten erhält den ersten Kastenstil.</td>
@@ -389,8 +394,8 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>Die Liste wird geteilt, wo die Spalte endet.</td>
     </tr>
     <tr>
-      <td><code>stack</code></td>
-      <td>Zwei Zeilen hintereinander eines Absatzes in derselben Spalte, die auf dasselbe Wort oder dieselben <code>bodyText.stackMinCharacters</code> Zeichen enden (<code>edge: 'end'</code>) oder damit beginnen (<code>'start'</code>): <code>text</code> ist, was sie wiederholen, wie die erste Zeile es druckt, und <code>lines</code> sind die beiden Zeilen. Unter <code>bodyText.stacks: 'warn'</code> wird jede gemeldet; unter <code>'avoid'</code> die, die der Algorithmus behielt. Eine pro Wiederholung; verweist auf die beiden Zeilen, mit ihrer Seite. Seit postext 1.73.</td>
+      <td><code>stack</code>, <code>citationBreak</code>, <code>operatorBreak</code></td>
+      <td>Zwei Zeilen hintereinander eines Absatzes in derselben Spalte, die auf dasselbe Wort oder dieselben <code>bodyText.stackMinCharacters</code> Zeichen enden (<code>edge: 'end'</code>) oder damit beginnen (<code>'start'</code>) (<code>stack</code>, seit postext 1.73); eine Zeile, die mit einem nummerierten Zitat nach einem Wort oder einem Stück davon beginnt (<code>citationBreak</code>, 1.79); eine Zeile, die auf ein einzelnes Zeichen zwischen Leerzeichen wie <code>=</code> oder <code>±</code> endet oder damit beginnt (<code>operatorBreak</code>, 1.79). <code>text</code> ist das Wiederholte, das Zitat oder das Zeichen, <code>lines</code> die beiden Zeilen. Bei <code>'warn'</code> (<code>bodyText.stacks</code>, <code>citationBreaks</code>, <code>operatorBreaks</code>) wird jeder Fall gemeldet, bei <code>'avoid'</code> die, die der Zeilenumbruch behielt. Einer pro Umbruch; zeigt auf die beiden Zeilen mit ihrer Seite.</td>
       <td>Die Zeilen werden gesetzt, wie sie sind.</td>
     </tr>
     <tr>
@@ -410,7 +415,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
     </tr>
     <tr>
       <td><code>tocGroupSplit</code></td>
-      <td>Ein zusammenzuhaltender Block des Inhaltsverzeichnisses (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), angeführt von <code>title</code>, gesetzt in <code>columns</code> Spalten: Er ist höher als eine ganze Spalte, oder die Spalte, in der er beginnt, ist kurz (unter einem seitenbreiten Kasten, neben einem Gleitobjekt). Eine pro Block; verweist auf die Direktive <code>:::toc</code>, mit der Seite, auf der der Block beginnt. Um sie zu beheben, führen Sie weniger Ebenen auf (<code>levels="1"</code>), lassen Sie die Blöcke von einer tieferen Ebene anführen (<code>toc.groups.head: 2</code>) oder setzen Sie die Einträge kleiner oder enger. Seit postext 1.34.</td>
+      <td>Ein zusammenzuhaltender Block des Inhaltsverzeichnisses (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), angeführt von <code>title</code>, gesetzt in <code>columns</code> Spalten: Er ist höher als eine ganze Spalte, oder die Spalte, in der er beginnt, ist kurz (unter einem seitenbreiten Kasten, neben einem Gleitobjekt). Eine pro Block; verweist auf die Direktive <code>:::toc</code>, mit der Seite, auf der der Block beginnt. Seit postext 1.34.</td>
       <td>Der Block wird geteilt; mit <code>toc.groups.continuation</code> beginnt jede Spalte, in der er weiterläuft, mit seiner Kopfzeile und dem Fortsetzungsvermerk.</td>
     </tr>
     <tr>
@@ -441,7 +446,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
   </tbody>
 </table>
 
-Die Tabelle führt die Arten auf, die jedes Dokument auslösen kann. Die Arten einer einzelnen Funktion sind bei ihr beschrieben: die der Comics (`comicPanelCount`, `comicBalloonOverflow` …) auf der Seite [Comics](/de/docs/comics), die der Videos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) unter [Bilder, Tabellen und Videos](/de/docs/document-format-resources), die der Literaturangaben und des Registers (`unknownCitationKey`, `referencesUnreadable`, `indexMark` …) unter [Anmerkungen und Verweise](/de/docs/document-format-notes-references), die von chinesischem, japanischem und arabischem Text (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading` …) auf den Seiten dieser Schriften und die des Zeilenumbruchs (`raggedLine`, `unbreakableWordOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) unter [Silbentrennung und Blocksatz](/de/docs/justification).
+Die Tabelle führt die Arten auf, die jedes Dokument auslösen kann. Die Arten einer einzelnen Funktion sind bei ihr beschrieben: die der Comics (`comicPanelCount`, `comicBalloonOverflow` …) auf der Seite [Comics](/de/docs/comics), die der Videos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) unter [Bilder, Tabellen und Videos](/de/docs/document-format-resources), die der Literaturangaben und des Registers (`unknownCitationKey`, `referencesUnreadable`, `indexMark` …) unter [Anmerkungen und Verweise](/de/docs/document-format-notes-references), die von chinesischem, japanischem und arabischem Text (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading` …) auf den Seiten dieser Schriften und die des Zeilenumbruchs (`raggedLine`, `unbreakableWordOverflow`, `numberOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) unter [Silbentrennung und Blocksatz](/de/docs/justification).
 
 Die Warnungen zu einer Ressource – ihr Tabellenstil, ihr Raster, ein Verweis in ihrer Legende, Anmerkung oder ihren Zellen – verweisen auf die erste Einbettung oder den ersten Verweis der Ressource im Text, und jede wird pro Ressource einmal aufgeführt. Geprüft werden nur die Ressourcen, die das Dokument verwendet: Ein Kapitel eines Buches meldet die Tabellen, die es zitiert, nicht jede Tabelle, die das Buch enthält.
 
@@ -795,7 +800,7 @@ const { bytes: book } = await createBundle(importBundleInput(result));
 
 - **`idmlToPostext(bytes, options)`** ist synchron. `layout` ist `'pages'` (zusammengesetzte Seiten, die der Vorlage Seite für Seite folgen), `'flow'` (ein Buch im Fließtext) oder `'auto'` (Standard: der Import entscheidet und nennt seinen Grund in `reason`). `linkBytes(link)` liefert die Bytes eines verknüpften Bilds (`link.name`, `link.uri`); eingebettete Bilder werden aus dem Paket gelesen, und Verknüpfungen ohne Bytes stehen in `missingLinks`. Das Ergebnis enthält `chapters` (`{ title, markdown }`), `config` (nur was das Dokument festlegt), `resources` mit ihren `files`, die `fonts`, die das Buch braucht (nur die Namen: eine `.idml` enthält keine Schriftdateien), und `report`: ein `verdict` (`faithful`, `approximate` oder `lossy`) und `findings`, jeweils mit `severity` (`info`, `warning`, `loss`), `message`, `count` und `examples`. **`importBundleInput(result)`** ist die Eingabe für `createBundle` aus `postext/bundle`.
 - Zeilen, die die Vorlage mit erzwungenen Zeilenumbrüchen beendet, bleiben die Zeilen des Buchs: Der Import schaltet `bodyText.justifyHardBreaks` ein. Ein aus Postext exportiertes Buch kommt mit denselben Zeilen zurück. Ein in InDesign erstelltes Dokument wird mit Verlusten gelesen, die der Bericht auflistet. Die Kommandozeile importiert mit [`postext import-idml`](/de/docs/command-line#import-idml); die Sandbox über das Menü **Neu** im [Bedienfeld Bücher](/de/docs/sandbox-books-saving#ein-indesign-dokument-importieren), und der [Agent-Skill](/de/docs/skill) bleibt der empfohlene Weg, das Layout eines InDesign-Buchs nachzubilden: [InDesign: Import, Export und Portierung](/de/docs/indesign) vergleicht die beiden Wege. `spreads` ist seit postext 1.78 auch eine Option der Kommandozeile (`--spreads`).
-- **`readIdml(bytes)`** und **`inspectIdml(doc)`** sind der typisierte Leser für sich: das Paket als `IdmlDocument` und eine Zusammenfassung davon (Seiten, Textabschnitte, Schriften, verwendete Formate, Bilder).
+- **`readIdml(bytes)`** und **`inspectIdml(doc)`** sind der typisierte Leser für sich: das Paket als `IdmlDocument` und eine Zusammenfassung davon (Seiten, Textabschnitte, Schriften, verwendete Formate, Bilder). **`openIdmlArchive(zip)`** liest ein gezipptes Paket.
 
 ## Layout in einem Web Worker ausführen
 

@@ -3,11 +3,11 @@
 export const metadata = {
   title: 'Línea de comandos: postext en una terminal, un script o un agente',
   sidebarTitle: 'Línea de comandos',
-  description: 'Un único ejecutable autónomo para macOS, Linux y Windows. Convierte un libro .postext, una carpeta de libro o archivos Markdown sueltos en PDF, HTML, EPUB, imágenes de las páginas y Word; además, crea paquetes, revisa libros y devuelve resultados en JSON para scripts y agentes',
+  description: 'Un único ejecutable autónomo para macOS, Linux y Windows. Convierte un libro .postext, una carpeta de libro o archivos Markdown sueltos en PDF, HTML, EPUB, imágenes de las páginas y Word; además, crea paquetes, revisa libros y devuelve resultados en JSON para scripts y agentes, con paquetes de Python y Rust que lo usan desde el código',
   lang: 'es',
-  lastUpdated: '2026-11-06',
+  lastUpdated: '2026-11-16',
   readingTime: '14 min',
-  order: 51,
+  order: 52,
   plainSummary: "Esta página es para quien quiere hacer libros con Postext desde una terminal en lugar de desde la web. Descargas un único archivo para tu ordenador y lo ejecutas, sin instalar nada más. Le das tu libro, o unos cuantos archivos de texto, y te hace un PDF, una página web, un libro electrónico, imágenes de las páginas o un documento de Word. También puede revisar un libro en busca de problemas y juntar todos sus archivos en uno. Otros programas y los asistentes de inteligencia artificial también pueden usarlo, porque sabe responder en un formato que leen con facilidad.",
 };
 
@@ -99,6 +99,8 @@ comando `postext`.
 Sin argumentos, `postext` muestra su ayuda; `postext help <command>` enumera
 las opciones de un comando.
 
+Para llamarlo desde un programa, `pip install postext` (Python) y `cargo add postext` (Rust) envuelven este mismo ejecutable y lo descargan la primera vez que se usan: consulta [Python](#python) y [Rust](#rust) más abajo.
+
 ## Un primer libro
 
 Tres archivos Markdown en una carpeta forman un libro, con un capítulo cada uno, por orden de
@@ -165,7 +167,8 @@ pida otro (`--locale en`).
     <tr><td><code>docx</code></td><td>Los capítulos como documento de Word: semántico (solo el contenido, en estilos de Word sencillos), maquetado (el mismo texto editable con el diseño del libro) o facsímil de páginas (cada línea en un cuadro de texto fijo).</td></tr>
     <tr><td><code>idml</code></td><td>Las páginas como paquete de InDesign (IDML), para terminarlas en InDesign.</td></tr>
     <tr><td><code>import-docx</code></td><td>Las correcciones hechas en un archivo de Word exportado, de vuelta en el libro; cualquier otro documento de Word, como libro nuevo (una carpeta o un <code>.postext</code>).</td></tr>
-    <tr><td><code>import-idml</code></td><td>Un documento de InDesign guardado como IDML, como libro nuevo (una carpeta o un <code>.postext</code>).</td></tr>
+    <tr><td><code>import-idml</code></td><td>Un documento de InDesign guardado como IDML, o un armado de InDesign comprimido, como libro nuevo (una carpeta o un <code>.postext</code>).</td></tr>
+    <tr><td><code>design</code></td><td>El diseño de un libro (algunas de sus partes, o todas) como archivo de diseño, un <code>.postext</code> sin capítulos.</td></tr>
     <tr><td><code>pack</code></td><td>Una carpeta de libro o Markdown suelto como un único archivo <code>.postext</code>.</td></tr>
     <tr><td><code>unpack</code></td><td>Un archivo <code>.postext</code> como carpeta.</td></tr>
     <tr><td><code>info</code></td><td>Los capítulos, idiomas, recursos y fuentes del libro y, con <code>--pages</code>, su número de páginas.</td></tr>
@@ -200,6 +203,9 @@ estas opciones los cambian para una sola ejecución:
   de pantalla.
 - `--no-outlines`: deja fuera los marcadores.
 - `--page-negative`: páginas en negativo, para algunos flujos de imprenta.
+- `--die-line page|none`: la línea de troquel de un libro con troqueles, en su propia plancha
+  (`page`, por defecto) u omitida (`none`); véase
+  [La línea de troquel en el PDF](/es/docs/special-inks-die-cuts#la-línea-de-troquel-en-el-pdf).
 
 ### html
 
@@ -388,7 +394,7 @@ con campo de formulario pasan a ser campos de formulario de InDesign. `--lines
 keep` (el valor por defecto) termina cada línea donde la terminó Postext, así
 que InDesign muestra las mismas líneas que el PDF; `--lines reflow` deja los
 párrafos al componedor de InDesign, y los cortes de línea pueden variar.
-`--spreads facing` o `--spreads single` empareja las páginas, o no, digan lo que digan los márgenes.
+El texto corrido de las páginas compuestas en columnas va en un solo artículo, enlazado por un marco por columna, que el importador lee como libro de flujo; `--text frames` escribe en su lugar un marco y un artículo por bloque (desde postext 1.85.0). `--spreads facing` o `--spreads single` empareja las páginas, o no, digan lo que digan los márgenes.
 `--images link` deja las imágenes junto al archivo, en `Links/`, en lugar de
 dentro. `--fonts` escribe los archivos de fuente de las variantes usadas junto
 al paquete, en `Document fonts/`, donde InDesign los encuentra para ese
@@ -398,7 +404,7 @@ llevar como está en el libro (los puntos de énfasis del texto vertical, el mar
 redondeado de una tabla) se notifica como aviso `idml.*`. El generador es el paquete
 `postext-idml`: véase [Uso programático › Paquetes de
 InDesign](/es/docs/configuration-programmatic-usage#paquetes-de-indesign-postext-idml).
-En `build`, `--idml ARCHIVO` escribe el mismo paquete, con `--idml-images`, `--idml-lines`, `--idml-spreads` y `--idml-fonts`.
+En `build`, `--idml ARCHIVO` escribe el mismo paquete, con `--idml-images`, `--idml-lines`, `--idml-spreads`, `--idml-text` y `--idml-fonts`.
 Desde postext 1.71; `--lines` y `--fonts`, desde 1.76, y `--spreads`, desde 1.78.
 
 ### import-idml
@@ -407,11 +413,32 @@ Desde postext 1.71; `--lines` y `--fonts`, desde 1.76, y `--spreads`, desde 1.78
 postext import-idml libro.idml -o libro/
 postext import-idml libro.idml -o libro.postext --layout flow --links pictures/
 postext import-idml libro.idml --report --json
+postext import-idml libro.zip -o libro.postext
+postext import-idml libro.zip --document Libro/Libro.idml -o libro/
 ```
 
-`import-idml` lee un paquete de InDesign Markup y escribe un libro nuevo, en una carpeta o en un `.postext`: los capítulos en Markdown, la configuración que dan los estilos y las páginas del documento, y sus imágenes y tablas como recursos. Un `.indd` no se lee: guárdalo antes desde InDesign como InDesign Markup. `--layout pages` sigue el documento página a página con páginas compuestas, cada marco donde estaba; `--layout flow` escribe un libro de texto corrido, en orden de lectura y con los estilos del documento, para que Postext lo maquete de nuevo; `auto` (el valor por defecto) elige uno de los dos y dice por qué. Las imágenes enlazadas se leen de `--links` o, si no se indica, de la carpeta del archivo y de su `Links/`, y las que no aparecen se enumeran. También se enumeran las fuentes que nombra el documento: un paquete no lleva archivos de fuente, así que hay que darlos con `--font-dir` al generar el libro.
+`import-idml` lee un paquete de InDesign Markup y escribe un libro nuevo, en una carpeta o en un `.postext`: los capítulos en Markdown, la configuración que dan los estilos y las páginas del documento, y sus imágenes y tablas como recursos. Un `.indd` no se lee: guárdalo antes desde InDesign como InDesign Markup. `--layout pages` sigue el documento página a página con páginas compuestas, cada marco donde estaba; `--layout flow` escribe un libro de texto corrido, en orden de lectura y con los estilos del documento, para que Postext lo maquete de nuevo; `auto` (el valor por defecto) elige uno de los dos y dice por qué. El archivo también puede ser un armado de InDesign comprimido, la carpeta que hace **Archivo › Empaquetar** con **Incluir IDML** marcado, enviada como un solo `.zip`: la orden importa su IDML con las imágenes de su carpeta `Links/` y pone en el libro los archivos de fuente de su carpeta `Document fonts/`. Si el zip guarda varios documentos IDML, `--document` nombra el que se importa por su ruta dentro del zip (`--document Libro/Libro.idml`); sin esa opción, la orden los enumera. Un armado que solo guarda el `.indd` se rechaza, con el modo de obtener el IDML. Las imágenes enlazadas se leen primero de `--links`, luego del armado y luego de la carpeta del archivo y de su `Links/`, y las que no aparecen se enumeran. También se enumeran las fuentes que nombra el documento: un `.idml` suelto no lleva archivos de fuente, así que hay que darlos con `--font-dir` al generar el libro. Con un armado, una fuente que esté en `--font-dir` entra en el libro en lugar del archivo del armado. Una colección de fuentes (`.ttc`, `.otc`), en el armado o en `--font-dir`, se separa en caras sueltas, y solo entran las caras que usa el libro (desde postext 1.83).
 
 Un libro exportado desde Postext vuelve con las mismas líneas. Un documento hecho en InDesign se lee con pérdidas: el comando imprime el veredicto (`faithful`, `approximate` o `lossy`), los recuentos y lo que se perdió o se aproximó; `--report` añade las notas y cómo se leyó cada estilo de párrafo, y `--json` lo lleva todo como datos. `--hidden`, `--pasteboard` y `--non-printing` leen también las capas y los objetos ocultos, la mesa de trabajo y los objetos no imprimibles; `--conditions all` lee todo el texto condicional, `--changes reject` lee los cambios registrados como si se hubieran rechazado y `--no-masters` deja fuera los elementos de las páginas maestras. `--name` y `--locale` dan el título y el idioma. El importador es `idmlToPostext`, del paquete `postext-idml`: véase [Uso programático › Paquetes de InDesign](/es/docs/configuration-programmatic-usage#paquetes-de-indesign-postext-idml). La importación copia el documento tal como está; para portar un libro que vas a conservar, con sus reglas de maquetación deducidas, usa en su lugar la skill para agentes (véase [InDesign: importar, exportar y portar](/es/docs/indesign)).
+
+### design
+
+```bash
+postext design book.postext -o novel.postext
+postext design book/ --parts page,text,headings -o type.postext
+postext pdf other/ --design novel.postext -o other.pdf
+```
+
+Un archivo de diseño guarda el diseño de un libro y nada de su texto: los ajustes de las partes pedidas (los grupos del panel Diseño, véase [Archivos de diseño](/es/docs/configuration-bundles#archivos-de-diseño)) con los archivos de fuente y el perfil de color que nombran. Una fuente marcada como no redistribuible se queda fuera. `--parts` toma solo algunas partes, separadas por comas; `--design-name`, `--id` y `--description` dan nombre al diseño. El mismo libro da siempre los mismos bytes.
+
+`--design ARCHIVO`, una opción de todas las órdenes que leen un libro, pone el libro en un archivo de diseño o en el diseño de otro libro, antes de `--config` y `--set`: los ajustes de sus partes sustituyen a los del libro, los estilos con nombre se combinan por id y las fuentes del diseño se suman a las del libro. `--design-parts` toma solo algunas de sus partes. El panel Diseño del Sandbox importa y exporta los mismos archivos.
+
+`--composition ETIQUETA`, también una opción de todas las órdenes que leen un libro, pone las reglas de composición de la tradición de un idioma después de `--design` (desde postext 1.80): `es`, `en-US` (o `en`), `en-GB`, `fr` o `de`, o `auto` para el idioma del libro. Las reglas de la convención sustituyen a las del libro y las demás vuelven a sus valores por defecto; la tipografía se queda como está. Véase [Convenciones de composición](/es/docs/configuration-text#convenciones-de-composición).
+
+```bash
+postext pdf book/ --composition auto -o book.pdf
+postext design book/ --composition es --parts composition -o house-rules.postext
+```
 
 ### pack y unpack
 
@@ -483,10 +510,14 @@ archivos correctos.
     <tr><td><code>--chapters LIST</code></td><td>Compone solo algunos capítulos: <code>2</code>, <code>1,3-5</code>, <code>4-</code>. Es más rápido en un libro largo; sus páginas se numeran desde su propia primera página.</td></tr>
     <tr><td><code>--set PATH=VALUE</code></td><td>Cambia un ajuste para esta ejecución, indicado como ruta con puntos: <code>--set page.dpi=150</code>, <code>--set bodyText.fontFamily=Lora</code>, <code>--set headings.levels.0.italic=true</code>. El valor se lee como JSON cuando es posible (números, true y false, objetos) y, si no, como texto. Se puede repetir.</td></tr>
     <tr><td><code>--config FILE</code></td><td>Una configuración (o un <code>preset.json</code>) para Markdown suelto, o que se combina con la del propio libro, por encima de ella.</td></tr>
+    <tr><td><code>--design FILE</code>, <code>--design-parts LIST</code></td><td>Pone el libro en el diseño de un archivo de diseño (de <code>postext design</code> o del Sandbox) o del <code>.postext</code> de otro libro, antes de <code>--config</code> y <code>--set</code>. <code>--design-parts LISTA</code> toma solo algunas de sus partes.</td></tr>
+    <tr><td><code>--composition TAG</code></td><td>Pone las reglas de composición de la tradición de un idioma (<code>es</code>, <code>en-US</code>, <code>en-GB</code>, <code>fr</code>, <code>de</code>; <code>auto</code>: el idioma del libro) después de <code>--design</code>. Desde postext 1.80.</td></tr>
+    <tr><td><code>--hyphenation-exceptions [LANG=]FILE</code></td><td>Combina un archivo de palabras que no se dividen con las listas del libro para esta ejecución, después de <code>--config</code> y antes de <code>--set</code>. Lee los mismos archivos que Importar del Sandbox (<a href="/es/docs/configuration-language#palabras-que-no-se-dividen">palabras que no se dividen</a>): una lista sencilla, los bloques <code>{'\\hyphenation{…}'}</code> de un archivo TeX o JSON. Una lista sencilla va a la lista de <code>LANG</code>, o a la de todos los idiomas si no se indica; un objeto JSON llena una lista por idioma, y su clave <code>"*"</code> es la de todos los idiomas. Repetible. Desde postext 1.81.</td></tr>
     <tr><td><code>--resources DIR</code>, <code>--fonts DIR</code>, <code>--name TEXT</code></td><td>Imágenes, fuentes y título para Markdown suelto.</td></tr>
     <tr><td><code>--font-dir DIR</code></td><td>Una carpeta en la que buscar las fuentes que el libro no incluye. Se puede repetir.</td></tr>
     <tr><td><code>--offline</code></td><td>No descarga fuentes nunca.</td></tr>
     <tr><td><code>--cache-dir DIR</code></td><td>Dónde se guardan las fuentes descargadas.</td></tr>
+    <tr><td><code>--threads N|auto</code></td><td>Compone los capítulos en <code>N</code> hilos (<code>auto</code>: los que piden la extensión del libro y los núcleos de la máquina). Las páginas son las mismas que con un solo hilo, que es lo predeterminado. Desde postext 1.89.</td></tr>
   </tbody>
 </table>
 
@@ -601,28 +632,73 @@ pdf = postext.pdf_bytes(open("book.postext", "rb").read())
 ```
 
 - **Una función por comando**: `pdf`, `html`, `epub`, `image`, `images`,
-  `docx`, `import_docx`, `pack`, `unpack`, `info`, `check` y `build`. Las
-  opciones conservan su nombre, con guiones bajos (`color_space`, `font_dirs`,
-  `dry_run`). `set` recibe un diccionario, `config` un archivo o un
-  diccionario, `chapters` un número, una lista, un `range` o `"1,3-5"`.
+  `docx`, `idml`, `import_docx`, `import_idml`, `design`, `pack`, `unpack`,
+  `info`, `check` y `build`. Las opciones conservan su nombre, con guiones
+  bajos (`color_space`, `font_dirs`, `dry_run`). `set` recibe un diccionario,
+  `config` un archivo o un diccionario, `chapters` un número, una lista, un
+  `range` o `"1,3-5"`. Toda función que lee un libro admite `design=`, un
+  archivo de diseño como ruta o como bytes, `design_parts=`, una lista o
+  `"page,text"`, y `composition=`, una etiqueta de idioma o `"auto"`.
 - **Informes como objetos.** Cada función ejecuta su comando con `--json` y
   devuelve el informe: `outputs`, `pages`, `timings` y `warnings`, cada aviso
   un `Diagnostic` con `kind`, `severity`, `message`, `at` y `page`. `info`
   añade `chapters`, `resources` y `fonts`; `check` añade `passed`,
-  `error_count` y `warning_count`.
+  `error_count` y `warning_count`; `design` añade `name` y `parts`;
+  `import_idml` añade `layout`, `reason`, `chapters`, `quality`, `fonts`,
+  `missing_links` y `package`.
 - **Errores como excepciones.** Un fallo lanza `PostextError`; una opción
   equivocada, `UsageError`. Cuando `check` encuentra errores lanza
   `ProblemsFound`, cuyo `report` los enumera; con `raise_on_problems=False`
   devuelve el informe.
 - **Bytes.** Un libro puede darse como los bytes de un paquete `.postext`. Con
   `out="-"` el archivo vuelve en `report.content`; `pdf_bytes`, `html_bytes`,
-  `epub_bytes`, `image_bytes`, `docx_bytes` y `pack_bytes` lo devuelven
-  directamente.
+  `epub_bytes`, `image_bytes`, `docx_bytes`, `idml_bytes`, `pack_bytes` y
+  `design_bytes` lo devuelven directamente.
 - `postext.Postext(binary, cwd=…, timeout=…)` usa un ejecutable concreto, y
   `python -m postext …` es la propia línea de comandos.
 
 Cada llamada arranca el ejecutable de nuevo. El
 [README](https://github.com/drnachio/postext/tree/main/packages/postext-python) del paquete recoge todas las opciones.
+
+## Rust
+
+`cargo add postext` hace lo mismo en Rust. La versión del crate es la de
+postext, descarga el mismo ejecutable en la misma caché la primera vez que lo
+necesita (nunca al compilar, así que las compilaciones sin conexión funcionan)
+y también lee `POSTEXT_BIN`, de modo que el paquete de Python y el crate de
+Rust comparten una sola descarga en un mismo equipo.
+
+```rust
+let report = postext::pdf("book.postext").out("book.pdf").set("page.dpi", 300).locale("es").run()?;
+println!("{:?}", report.output().and_then(|o| o.pages));
+for warning in &report.warnings {
+    println!("{} {:?} {}", warning.kind, warning.at, warning.message);
+}
+
+let pdf = postext::pdf(std::fs::read("book.postext")?).bytes()?;
+```
+
+- **Un constructor por comando**: `pdf`, `html`, `epub`, `image`, `images`,
+  `docx`, `idml`, `import_docx`, `import_idml`, `design`, `pack`, `unpack`,
+  `info`, `check` y `build`. Las opciones son métodos con el mismo nombre, con
+  guiones bajos (`color_space`, `font_dir`, `dry_run`). `set` recibe cualquier
+  valor JSON, `config_json` un `serde_json::Value`, `chapters` un número, un
+  rango, una lista o `"1,3-5"`. `run()` devuelve el informe y `bytes()`, el
+  archivo.
+- **Informes con tipos**: `Report` con `outputs`, `pages`, `timings` y
+  `warnings`, e `InfoReport`, `CheckReport`, `DesignReport` e
+  `ImportIdmlReport` con los campos de sus comandos; `raw` conserva el JSON
+  completo.
+- **Un solo tipo de error**: `postext::Error` es `Failed`, `Usage`,
+  `ProblemsFound` (con el informe; `allow_problems()` lo devuelve en su lugar),
+  `BinaryNotFound`, `InvalidArgument`, `Timeout` o `Io`.
+- `postext::Postext::with_binary(ruta)` usa un ejecutable concreto, con su
+  propia carpeta, entorno y tiempo límite. Sin la función `download`, activa
+  por defecto, el crate nunca descarga nada.
+
+El [README](https://github.com/drnachio/postext/tree/main/packages/postext-rust)
+del crate y su [documentación de la API](https://docs.rs/postext) recogen todas
+las opciones.
 
 ## Cómo está hecho
 

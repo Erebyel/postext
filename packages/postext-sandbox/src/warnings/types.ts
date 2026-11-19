@@ -1,8 +1,9 @@
 import type { FrameFitStep, FrameOverflowProposal, FrameCoverProposal, FrameOutsideProposal, PageTemplateWarningKind } from 'postext';
-import type { ContrastCheck, PreflightCheck } from './types/checks.js';
+import type { ContrastCheck, PreflightCheck, SnippetPlace } from './types/checks.js';
 
 export type { WarningKind } from './types/kind.js';
-export type { ContrastCheck, PreflightCheck } from './types/checks.js';
+export type { ContrastCheck, PreflightCheck, SnippetPlace } from './types/checks.js';
+export type { Warning } from './types/warning.js';
 
 /** Which design slot a warning points at. `level` tags heading slots;
  *  the part opener is a single slot; `'box'` is a box style's design
@@ -49,6 +50,9 @@ export type WarningPayload =
    *  `ratio` times their width (#732). */
   | { kind: 'raggedLine'; text: string; ratio: number }
   | { kind: 'unbreakableWordOverflow'; text: string }
+  /** The engine's `numberOverflow` (#1549): `text`, a number wider than
+   *  its line, runs past it whole; `place`, its caption, note or cell. */
+  | { kind: 'numberOverflow'; page: number; text: string; place?: SnippetPlace }
   /** The engine's `wordDividedByCharacter` / `wordDividedBySyllable`
    *  (#1150): a word wider than its whole line, cut between two letters
    *  or at a syllable to fit. `text` is the line's text. */
@@ -114,6 +118,10 @@ export type WarningPayload =
   /** A `:::paragraphs{style="…"}` container names a style id that is not in
    *  `config.paragraphStyles`; the paragraphs render as body text. */
   | { kind: 'unknownParagraphStyle'; style: string }
+  /** #1521: a `chapterStyle:` or `:::part{style}` (`source`) naming no chapter style;
+   *  a `:::part{style}` after text of its chapter, or 1.78's `::section` (#1532). */
+  | { kind: 'chapterStyleUnknown'; style: string; source: 'frontmatter' | 'part' }
+  | { kind: 'partStyleMidChapter'; style: string; source?: 'section' }
   /** A `:::callout{type="…"}` container names a type that is not in
    *  `config.calloutStyles`. */
   | { kind: 'unknownCalloutType'; type: string }
@@ -131,6 +139,9 @@ export type WarningPayload =
   /** `:::columns{flow=…}` names neither `snake` nor `parallel` (#634): the
    *  group takes the default. */
   | { kind: 'columnsFlowUnknown'; value: string }
+  /** `:::diecut{die=…}` names a die shape `dieCuts.shapes` does not have
+   *  (#1565): the pages are not cut. */
+  | { kind: 'dieCutUnknown'; die: string }
   /** Composed pages (#854): a `::::page` naming no template, a slot the
    *  template lacks, a template frame left empty, a composed page written
    *  with three colons. */
@@ -453,7 +464,12 @@ export type WarningPayload =
   /** Two lines in a row of a paragraph that end (`edge: 'end'`) or start
    *  on the same word or characters, `text` (`bodyText.stacks: 'warn' |
    *  'avoid'`, #1463), on book page `page`; `lines` are the two lines. */
-  | { kind: 'stack'; page: number; edge: 'end' | 'start'; text: string; lines: [string, string] }
+  | { kind: 'stack'; page: number; edge: 'end' | 'start'; text: string; lines: [string, string]; place?: SnippetPlace }
+  /** A line that starts with the citation `text`, or ends (`edge`) or
+   *  starts on the operator `text` (`bodyText.citationBreaks` /
+   *  `operatorBreaks`, #1519), on book page `page`. */
+  | { kind: 'citationBreak'; page: number; text: string; lines: [string, string]; place?: SnippetPlace }
+  | { kind: 'operatorBreak'; page: number; edge: 'end' | 'start'; text: string; lines: [string, string]; place?: SnippetPlace }
   /** More lines in a row ending on a hyphen than `max`
    *  (`hyphenation.ladders: 'warn' | 'avoid'`, #1466), by book page. */
   | { kind: 'hyphenLadder'; page: number; lines: number; max: number }
@@ -511,6 +527,8 @@ export type WarningPayload =
    *  (`suggestion` the closest id), or that comes back to it (`value` the
    *  loop): the style stands alone. */
   | { kind: 'calloutStyleExtendsUnknown' | 'calloutStyleExtendsCycle'; path: string; value: string; used: string; suggestion?: string }
+  /** A chapter style sets what the whole book shares (#1521): `path`. */
+  | { kind: 'chapterStyleBookSetting'; path: string; value: string; used: string }
   /** A page template problem (#853), from the engine's
    *  `validatePageTemplates`: `path` is a JSON pointer
    *  (`/pageTemplates/3/frames/2/style`), `value` the id, name, loop or
@@ -570,24 +588,3 @@ export type WarningPayload =
    *  reversed text too fine for the press. `page` is the book page number
    *  of its first occurrence. */
   | { kind: 'contrast'; check: ContrastCheck; page?: number };
-
-export interface Warning {
-  id: string;
-  payload: WarningPayload;
-  /** Absolute source offset to focus in the editor on click. Undefined for
-   *  warnings that don't map to a specific markdown location (e.g. missing
-   *  fonts sourced from the config). */
-  sourceStart?: number;
-  sourceEnd?: number;
-  /** Approximate line number in the editor (1-based), when available. In a
-   *  multi-chapter book this is the line in the composed document. */
-  line?: number;
-  /** Chapter the warning points at, with a chapter-local line, when the
-   *  document was composed from several chapters. */
-  chapterId?: string;
-  chapterIndex?: number;
-  chapterLine?: number;
-  /** Chapter-local offsets (`sourceStart`/`sourceEnd` stay document-wide). */
-  chapterStart?: number;
-  chapterEnd?: number;
-}

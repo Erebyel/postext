@@ -240,7 +240,7 @@ La proprietà `bodyText` controlla la tipografia di tutto il testo dei paragrafi
       <td><code>stacks</code></td>
       <td><code>'allow' | 'warn' | 'avoid'</code></td>
       <td><code>'allow'</code></td>
-      <td>Ripetizioni: due righe di seguito di un paragrafo, nella stessa colonna, che finiscono con la stessa parola, o con gli stessi <code>stackMinCharacters</code> ultimi caratteri, spazi compresi (<code>-mente</code> / <code>-mente</code>, <code>della</code> / <code>nella</code>), o che cominciano con la stessa parola o gli stessi primi caratteri (<code>di un</code> / <code>di una</code>). <code>'allow'</code> compone le righe come le trova l'algoritmo e non segnala nulla. <code>'warn'</code> le compone allo stesso modo e segnala ogni ripetizione con un avviso di contenuto <code>stack</code>, che il Sandbox elenca in Revisione e segna sulla pagina. <code>'avoid'</code> somma <code>stackPenalty</code> ai demeriti di ogni ripetizione, così l'algoritmo compone il paragrafo in altro modo dove la spaziatura tra le parole lo permette, e segnala le ripetizioni che tiene. Accenti e maiuscole non contano («sól» è «sol»). Le parole si confrontano solo nelle scritture che le separano con spazi: un testo cinese, giapponese, thai, lao, khmer, birmano o tibetano non ha ripetizioni. Una formula, un chip o un campione di colore al bordo di una riga non si confronta mai. Con <code>'avoid'</code>, didascalie, note e celle di tabella, giustificate o a bandiera, si dividono intere con Knuth–Plass per seguire la regola; la cornice di una pagina composta compone il suo testo senza. Richiede <code>optimalLineBreaking</code>. Nel port di un libro lasciala su <code>'allow'</code> o usa <code>'warn'</code> per le bozze: il port riproduce le divisioni dell'originale.</td>
+      <td>Ripetizioni: due righe di seguito di un paragrafo, nella stessa colonna, che finiscono con la stessa parola, o con gli stessi <code>stackMinCharacters</code> ultimi caratteri, spazi compresi (<code>-mente</code> / <code>-mente</code>, <code>della</code> / <code>nella</code>), o che cominciano con la stessa parola o gli stessi primi caratteri (<code>di un</code> / <code>di una</code>). <code>'allow'</code> compone le righe come le trova l'algoritmo e non segnala nulla. <code>'warn'</code> le compone allo stesso modo e segnala ogni ripetizione con un avviso di contenuto <code>stack</code>, che il Sandbox elenca in Revisione e segna sulla pagina. <code>'avoid'</code> somma <code>stackPenalty</code> ai demeriti di ogni ripetizione, così l'algoritmo compone il paragrafo in altro modo dove la spaziatura tra le parole lo permette, e segnala le ripetizioni che tiene. Accenti e maiuscole non contano («sól» è «sol»). Le parole si confrontano solo nelle scritture che le separano con spazi: un testo cinese, giapponese, thai, lao, khmer, birmano o tibetano non ha ripetizioni. Una formula, un chip o un campione di colore al bordo di una riga non si confronta mai. Con <code>'avoid'</code>, didascalie, note e celle di tabella, giustificate o a bandiera, si dividono intere con Knuth–Plass per seguire la regola; la cornice di una pagina composta compone il suo testo senza. La regola vale anche per i versi che vanno a capo e per le voci dell'indice generale e dell'indice analitico che occupano più di una riga, composte allo stesso modo, e per il testo a bandiera senza <code>optimalRagged</code>. Un paragrafo che Knuth–Plass non riesce a comporre nella sua giustezza (una parola più larga della colonna), e ogni testo con <code>optimalLineBreaking</code> disattivato, si compone riga per riga: quell'algoritmo chiude la riga a uno spazio precedente quando la divisione la farebbe finire sulla parola o sui caratteri su cui finisce la riga sopra, purché la riga più corta tenga la spaziatura entro <code>maxWordSpacing</code> (a bandiera, almeno metà della giustezza). <code>'warn'</code> e <code>'avoid'</code> segnalano anche le ripetizioni di didascalie, note e celle di tabella, con la risorsa e la parte in cui si trovano. Nel port di un libro lasciala su <code>'allow'</code> o usa <code>'warn'</code> per le bozze: il port riproduce le divisioni dell'originale.</td>
     </tr>
     <tr>
       <td><code>stackMinCharacters</code></td>
@@ -253,6 +253,30 @@ La proprietà `bodyText` controlla la tipografia di tutto il testo dei paragrafi
       <td><code>number</code></td>
       <td><code>3000</code></td>
       <td>Quanto costa una ripetizione all'algoritmo con <code>stacks: 'avoid'</code>, in demeriti sommati a quelli del paragrafo, sulla scala di <code>consecutiveHyphenDemerit</code> (due righe di seguito con il trattino costano 3000). Un monosillabo ripetuto («a», «e», «di», con le vocali delle scritture latina, greca e cirillica) costa il doppio. Un valore più alto evita più ripetizioni a prezzo di righe più larghe; 0 le tiene tutte.</td>
+    </tr>
+    <tr>
+      <td><code>citationBreaks</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Una riga che comincia con una citazione numerata tra parentesi quadre o tonde posta dopo una parola, o con un pezzo di una: <code>autori [12]</code>, <code>[14, 16]</code>, <code>(12–15)</code>, e il richiamo che uno stile numerico mette per <code>[@chiave]</code> (<code>[3, p. 12]</code>). Mai dopo un numero: <code>2016 (3)</code> è un anno e un fascicolo. <code>'allow'</code> compone le righe come le trova l'algoritmo e non segnala nulla. <code>'warn'</code> le compone allo stesso modo e segnala ogni a capo del genere con un avviso di contenuto <code>citationBreak</code>, che il Sandbox elenca in Revisione. <code>'avoid'</code> somma <code>citationBreakPenalty</code> ai demeriti di un a capo nello spazio prima della citazione o al suo interno, così l'algoritmo compone il paragrafo in altro modo dove la spaziatura tra le parole lo permette, e segnala gli a capo che tiene. Lo spazio resta uno spazio tra parole e si allarga con gli altri; il testo non cambia. Paragrafi, elenchi, citazioni, riquadri, note, didascalie e celle di tabella composti in orizzontale; ogni citazione si legge nella scrittura che la circonda, e il testo da destra a sinistra e il CJK restano come sono. Con <code>'avoid'</code> il testo a bandiera, le didascalie, le note e le celle sono composti dall’algoritmo di Knuth–Plass perché seguano anch’essi la regola; la cornice di una pagina composta compone il suo testo senza. La regola vale anche per i versi che vanno a capo e per le voci dell'indice generale e dell'indice analitico che occupano più di una riga, composte allo stesso modo. Un paragrafo che Knuth–Plass non riesce a comporre nella sua giustezza (una parola più larga della colonna), e ogni testo con <code>optimalLineBreaking</code> disattivato, si compone riga per riga: quell'algoritmo chiude la riga a uno spazio precedente quando la divisione lascerebbe un rimando bibliografico o un operatore isolato sul bordo di una riga, purché la riga più corta tenga la spaziatura entro <code>maxWordSpacing</code> (a bandiera, almeno metà della giustezza). <code>'warn'</code> e <code>'avoid'</code> segnalano anche queste divisioni in didascalie, note e celle di tabella, con la risorsa e la parte in cui si trovano. Per tenere insieme due parole precise qualunque sia la regola, scrivete uno spazio indivisibile.</td>
+    </tr>
+    <tr>
+      <td><code>citationBreakPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>Quanto costa all'algoritmo, con <code>citationBreaks: 'avoid'</code>, un a capo prima di una citazione o al suo interno, in demeriti sommati a quelli del paragrafo. Per impostazione predefinita quanto una riga allargata fino al limite della spaziatura, così l'algoritmo non supera mai quel limite per tenere una citazione con la sua parola. Un valore più alto tiene più citazioni a prezzo di righe più larghe; 0 lascia passare ogni a capo.</td>
+    </tr>
+    <tr>
+      <td><code>operatorBreaks</code></td>
+      <td><code>'allow' | 'warn' | 'avoid'</code></td>
+      <td><code>'allow'</code></td>
+      <td>Una riga che finisce o comincia con un segno di relazione o di operazione messo tra spazi (<code>=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>≤</code>, <code>≥</code>, <code>±</code>, <code>×</code>, <code>≈</code>, <code>≠</code>, <code>÷</code>, <code>−</code>, <code>+</code>, <code>·</code>, <code>→</code>): <code>LR+ = 18,29</code>, <code>p &lt; 0,05</code>. I livelli sono quelli di <code>citationBreaks</code>, l’avviso è <code>operatorBreak</code> (con il bordo, fine o inizio) e <code>'avoid'</code> dà un prezzo agli spazi ai due lati del segno, negli stessi blocchi. Una configurazione di postext 1.78 con <code>bindCitations: true</code> o <code>bindOperators: true</code> si legge come <code>'avoid'</code> nella regola corrispondente.</td>
+    </tr>
+    <tr>
+      <td><code>operatorBreakPenalty</code></td>
+      <td><code>number</code></td>
+      <td><code>10000</code></td>
+      <td>Quanto costa all'algoritmo, con <code>operatorBreaks: 'avoid'</code>, un a capo accanto a un segno isolato, in demeriti sommati a quelli del paragrafo, sulla scala di <code>citationBreakPenalty</code>.</td>
     </tr>
     <tr>
       <td><code>hardLineBreaks</code></td>
@@ -271,18 +295,6 @@ La proprietà `bodyText` controlla la tipografia di tutto il testo dei paragrafi
       <td><code>boolean</code></td>
       <td><code>false</code></td>
       <td>Leggi <code>++testo++</code> come testo sottolineato, oltre a <code>:underline[testo]</code>, che si legge sempre. Ogni coppia di due segni più per lato sottolinea, anche <code>use ++i rather than i++</code>; <code>{'\\+\\+'}</code> scrive una coppia letterale, una lettera o una cifra attaccata ai segni li lascia come testo (<code>C++</code>, <code>g++</code>), e il codice in linea e i blocchi di codice non si sottolineano mai. Vale ovunque si leggano i segni in linea: il testo corrente, i titoli, gli elenchi, le didascalie, le celle di tabella, le note e i chip. <code>false</code>: i segni più si stampano. Vedi <a href="/it/docs/document-format-inline#sottolineato">Formato del documento › Sottolineato</a>.</td>
-    </tr>
-    <tr>
-      <td><code>bindCitations</code></td>
-      <td><code>boolean</code></td>
-      <td><code>false</code></td>
-      <td>Tiene un richiamo numerato tra parentesi quadre o tonde unito alla parola (o alla punteggiatura che la chiude) che lo precede, e intero: lo spazio prima e quelli all’interno diventano spazi indivisibili (<code>autori [12]</code>, <code>[14, 16]</code>, <code>(12–15)</code>). Mai dopo un numero: <code>2016 (3)</code> è un anno e un fascicolo, non un richiamo. Solo nei paragrafi, negli elementi di elenco e nelle citazioni composti in orizzontale; un blocco con testo da destra a sinistra o CJK resta com’è.</td>
-    </tr>
-    <tr>
-      <td><code>bindOperators</code></td>
-      <td><code>boolean</code></td>
-      <td><code>false</code></td>
-      <td>Tiene una relazione o un operatore tra spazi (<code>=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>≤</code>, <code>≥</code>, <code>±</code>, <code>×</code>, <code>≈</code>, <code>≠</code>, <code>÷</code>, <code>−</code>) unito alle parole da entrambi i lati: <code>LR+ = 18,29</code>, <code>p &lt; 0,05</code>. Nessuna riga termina né comincia con il segno. Stesso ambito di <code>bindCitations</code>.</td>
     </tr>
     <tr>
       <td><code>scriptContext</code></td>
@@ -322,6 +334,25 @@ La proprietà `bodyText` controlla la tipografia di tutto il testo dei paragrafi
     </tr>
   </tbody>
 </table>
+
+### Convenzioni di composizione
+
+Le regole di composizione di `bodyText` (le regole di sillabazione, `stacks`, `citationBreaks`, `operatorBreaks`, `hyphenateAcrossColumns` e i loro limiti e penalità) sono disattivate per impostazione predefinita, quindi nessun libro cambia. Un libro composto secondo una tradizione tipografica può prenderle insieme: il motore include le regole di cinque tradizioni come convenzioni di composizione (da postext 1.80), progetti che contengono solo la parte `composition` (vedi [File di progetto grafico](/it/docs/configuration-bundles#file-di-progetto-grafico)). Ciascuna imposta una regola solo dove la tradizione la stabilisce; le altre restano ai valori predefiniti, e le penalità sono quelle del motore.
+
+<table>
+  <thead>
+    <tr><th>Convenzione</th><th>Regole</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Spagnolo (tradizionale), <code>composition-es</code></td><td><code>hyphenation.ladders: 'avoid'</code> con <code>maxConsecutive: 1</code>, <code>hyphenation.lastWord: 'avoid'</code>, <code>stacks: 'avoid'</code>, <code>hyphenateAcrossColumns: false</code></td></tr>
+    <tr><td>Inglese (USA), <code>composition-en-us</code></td><td><code>hyphenation.ladders: 'avoid'</code> con <code>maxConsecutive: 3</code>, <code>hyphenation.lastWord: 'avoid'</code></td></tr>
+    <tr><td>Inglese (Regno Unito), <code>composition-en-gb</code></td><td><code>hyphenation.ladders: 'avoid'</code> con <code>maxConsecutive: 2</code>, <code>hyphenation.lastWord: 'avoid'</code></td></tr>
+    <tr><td>Francese, <code>composition-fr</code></td><td><code>hyphenation.ladders: 'avoid'</code> con <code>maxConsecutive: 3</code>, <code>hyphenation.lastWord: 'avoid'</code></td></tr>
+    <tr><td>Tedesco, <code>composition-de</code></td><td><code>hyphenation.ladders: 'avoid'</code> con <code>maxConsecutive: 3</code></td></tr>
+  </tbody>
+</table>
+
+Una convenzione da sola non cambia nulla. Nella Sandbox le cinque sono nella galleria dei progetti, e il gruppo Composizione propone quella della lingua del libro (vedi [Pannello Grafica](/it/docs/sandbox-design-checks)); la riga di comando ne imposta una con `--composition` (vedi [Riga di comando](/it/docs/command-line#design)); nel codice, `applyDesign(config, compositionConventionDesign(compositionConventionFor('es')!))`. Applicarne una imposta le sue regole e riporta le altre regole di composizione ai valori predefiniti, e lascia come sono la tipografia, la lingua della sillabazione e le eccezioni di parole. Il catalano, l’italiano e il portoghese non ne hanno ancora.
 
 ### Citazioni in blocco
 

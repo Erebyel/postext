@@ -149,6 +149,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>The paragraphs are set as body text.</td>
     </tr>
     <tr>
+      <td><code>chapterStyleUnknown</code>, <code>partStyleMidChapter</code></td>
+      <td><a href="/en/docs/configuration-styles#chapter-styles">Chapter styles</a></td>
+      <td>—</td>
+    </tr>
+    <tr>
       <td><code>unknownCalloutType</code></td>
       <td><code>:::callout{'{'}type{'}'}</code> names none of the <code>calloutStyles</code> — only raised once some are configured.</td>
       <td>The box takes the first callout style.</td>
@@ -389,8 +394,8 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>The list is cut where the column ends.</td>
     </tr>
     <tr>
-      <td><code>stack</code></td>
-      <td>Two lines in a row of a paragraph, in one column, that end (<code>edge: 'end'</code>) or start (<code>'start'</code>) on the same word or the same <code>bodyText.stackMinCharacters</code> characters: <code>text</code> is what they repeat, as the first line prints it, and <code>lines</code> the two lines. Under <code>bodyText.stacks: 'warn'</code> every stack is reported; under <code>'avoid'</code>, the ones the line breaker kept. One per stack; points at the two lines, with their page. Since postext 1.73.</td>
+      <td><code>stack</code>, <code>citationBreak</code>, <code>operatorBreak</code></td>
+      <td>Two lines in a row of a paragraph, in one column, that end (<code>edge: 'end'</code>) or start (<code>'start'</code>) on the same word or the same <code>bodyText.stackMinCharacters</code> characters (<code>stack</code>, 1.73); a line that starts with a numbered citation after a word, or a piece of one (<code>citationBreak</code>, 1.79); a line that ends or starts on a lone sign, <code>=</code> or <code>±</code> (<code>operatorBreak</code>, 1.79). <code>text</code> is the repeat, citation or sign; <code>lines</code>, the two lines. <code>'warn'</code> (<code>bodyText.stacks</code>, <code>citationBreaks</code>, <code>operatorBreaks</code>) reports all; <code>'avoid'</code>, those kept. One per break, at the two lines and their page.</td>
       <td>The lines are set as they are.</td>
     </tr>
     <tr>
@@ -405,7 +410,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
     </tr>
     <tr>
       <td><code>tocGroupSplit</code></td>
-      <td>A block of the contents kept together (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), headed by <code>title</code>, set in <code>columns</code> columns: it is taller than a full column, or the column it starts in is short (under a page-span box, beside a float). One per block; points at the <code>:::toc</code> directive, with the page the block starts on. To clear it, list fewer levels (<code>levels="1"</code>), head the blocks with a lower level (<code>toc.groups.head: 2</code>), or make the entries smaller or tighter. Since postext 1.34.</td>
+      <td>A block of the contents kept together (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), headed by <code>title</code>, set in <code>columns</code> columns: it is taller than a full column, or the column it starts in is short (under a page-span box, beside a float). One per block; points at the <code>:::toc</code> directive, with the page the block starts on. Since postext 1.34.</td>
       <td>The block is cut; with <code>toc.groups.continuation</code> each column it goes on in opens with its head row and the continuation mark.</td>
     </tr>
     <tr>
@@ -436,7 +441,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
   </tbody>
 </table>
 
-The table lists the kinds any document can raise. The kinds of one feature are described with it: comics (`comicPanelCount`, `comicBalloonOverflow`…) on the [Comics](/en/docs/comics) page, videos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) under [Resources](/en/docs/document-format-resources), citations and the index (`unknownCitationKey`, `referencesUnreadable`, `indexMark`…) under [Notes and references](/en/docs/document-format-notes-references), Chinese, Japanese and Arabic text (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading`…) on the pages of those scripts, and the line breaker's (`raggedLine`, `unbreakableWordOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) under [Justification](/en/docs/justification).
+The table lists the kinds any document can raise. The kinds of one feature are described with it: comics (`comicPanelCount`, `comicBalloonOverflow`…) on the [Comics](/en/docs/comics) page, videos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) under [Resources](/en/docs/document-format-resources), citations and the index (`unknownCitationKey`, `referencesUnreadable`, `indexMark`…) under [Notes and references](/en/docs/document-format-notes-references), Chinese, Japanese and Arabic text (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading`…) on the pages of those scripts, and the line breaker's (`raggedLine`, `unbreakableWordOverflow`, `numberOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) under [Justification](/en/docs/justification).
 
 The warnings about a resource — its table style, its grid, a reference inside its caption, note or cells — point at the resource's first embed or reference in the text, and each is listed once per resource. Only the resources the document uses are checked: a chapter of a book reports the tables it cites, not every table the book holds.
 
@@ -790,7 +795,7 @@ const { bytes: book } = await createBundle(importBundleInput(result));
 
 - **`idmlToPostext(bytes, options)`** is synchronous. `layout` is `'pages'` (composed pages that follow the source page for page), `'flow'` (a flowing book) or `'auto'` (the default; the result gives its `reason`). `linkBytes(link)` supplies a linked picture; links left without bytes are listed in `missingLinks`. The result holds `chapters`, `config`, `resources` with their `files`, the names of the `fonts` the book needs and `report`: a `verdict` (`faithful`, `approximate` or `lossy`) and `findings` with their `severity`, `message` and `count`. **`importBundleInput(result)`** is the input of `createBundle` from `postext/bundle`.
 - Lines the source ends with forced line breaks stay the lines of the book (the importer turns on `bodyText.justifyHardBreaks`), so a book exported from Postext comes back with the same lines. A document made in InDesign is read with losses, which the report lists. To port an InDesign book, use the [agent skill](/en/docs/skill) (see [InDesign](/en/docs/indesign)). The command line takes `spreads` as `--spreads` since postext 1.78.
-- **`readIdml(bytes)`** and **`inspectIdml(doc)`** are the typed reader on its own.
+- **`readIdml(bytes)`** and **`inspectIdml(doc)`** are the typed reader on its own. **`openIdmlArchive(zip)`** reads a zipped package.
 
 ## Running layout in a Web Worker
 

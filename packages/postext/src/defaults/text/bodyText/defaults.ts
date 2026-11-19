@@ -5,7 +5,6 @@ import { cjkRegionOfConfig } from '../cjk.js';
 import { DEFAULT_MAIN_COLOR, dimensionsEqual } from '../../shared.js';
 import { DEFAULT_VERSE_CONFIG } from '../verse.js';
 import { normalizeHyphenationExceptions, normalizeExceptionsByLanguage } from '../../../hyphenation/hyphenationExceptions.js';
-import { hyphenationLocaleFor } from '../../../hyphenation/locale.js';
 
 export const DEFAULT_HYPHENATION_CONFIG: ResolvedBodyTextConfig['hyphenation'] = {
   enabled: true,
@@ -122,6 +121,10 @@ export const DEFAULT_BODY_TEXT_CONFIG: ResolvedBodyTextConfig = {
   stacks: 'allow',
   stackMinCharacters: 3,
   stackPenalty: 3000,
+  citationBreaks: 'allow',
+  citationBreakPenalty: 10000,
+  operatorBreaks: 'allow',
+  operatorBreakPenalty: 10000,
   avoidRuntsInLists: true,
   tightenRunts: true,
   maxRuntTracking: 10,
@@ -160,5 +163,5 @@ export function hyphenationEqual(a: HyphenationConfig | undefined, b: Hyphenatio
 
 /** The per-language lists as the engine reads them, for comparing. */
 function byLanguageOf(record: unknown): Record<string, string[]> | undefined {
-  return normalizeExceptionsByLanguage(record, (tag) => hyphenationLocaleFor(tag, false));
+  return normalizeExceptionsByLanguage(record);
 }

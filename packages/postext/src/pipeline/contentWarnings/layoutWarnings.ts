@@ -9,6 +9,8 @@ import { composedFrameBlockIds } from '../../composed/paint.js';
 import { bitmapResolutionFor, bitmapLayoutSize } from '../../bitmapResolution.js';
 import { findStacks } from '../../checks/stacks.js';
 import { findHyphenFaults, endsOnHyphen } from '../../checks/hyphenRules.js';
+import { findSpaceBreaks } from '../../checks/spaceBreaks.js';
+import { findSnippetEdgeFaults, findSnippetNumberOverflows, overflowingNumber } from '../../checks/snippetEdges.js';
 
 /**
  * The page each content warning's construct was placed on: the first placed
@@ -126,6 +128,75 @@ export function stackWarnings(doc: VDTDocument): ContentWarning[] {
   });
 }
 
+/** A `citationBreak` or `operatorBreak` warning for each line of the
+ *  running text that starts with a numbered citation, or ends or starts on
+ *  a lone operator (#1519, `findSpaceBreaks`), across the columns and pages
+ *  a paragraph runs over, on the page of the line after the break, under
+ *  `bodyText.citationBreaks` / `operatorBreaks` at `'warn'` or `'avoid'`
+ *  (the breaks the breaker kept); none under `'allow'`. */
+export function spaceBreakWarnings(doc: VDTDocument): ContentWarning[] {
+  return findSpaceBreaks(doc).map((f) => {
+    const a = f.block.lines[f.line]!;
+    const b = f.nextBlock.lines[f.nextLine]!;
+    const where = {
+      ...(a.sourceStart !== undefined ? { sourceStart: a.sourceStart } : {}),
+      ...(b.sourceEnd !== undefined ? { sourceEnd: b.sourceEnd } : {}),
+      ...(f.nextBlock.pageIndex >= 0 ? { pageIndex: f.nextBlock.pageIndex } : {}),
+    };
+    const lines: [string, string] = [a.text, b.text];
+    return f.rule === 'citation'
+      ? { kind: 'citationBreak', text: f.text, lines, ...where }
+      : { kind: 'operatorBreak', edge: f.edge, text: f.text, lines, ...where };
+  });
+}
+
+/** A `stack`, `citationBreak` or `operatorBreak` warning for each fault of
+ *  the line-edge rules in a caption, a note or a table cell (#1542,
+ *  `findSnippetEdgeFaults`), with the resource and the part it lies in, on
+ *  the page the resource was first placed on; `sourceRangeOf` gives the
+ *  range of the content block citing or embedding it. Under the rules at
+ *  `'warn'` or `'avoid'` (the faults the breaker kept). */
+export function snippetEdgeWarnings(
+  doc: VDTDocument,
+  sourceRangeOf?: (contentIndex: number) => { start: number; end: number } | undefined,
+): ContentWarning[] {
+  return findSnippetEdgeFaults(doc).map((f) => {
+    const range = f.block.contentIndex !== undefined ? sourceRangeOf?.(f.block.contentIndex) : undefined;
+    const where = {
+      resourceId: f.resourceId,
+      part: f.part,
+      ...(f.cell ? { cell: f.cell } : {}),
+      ...(range ? { sourceStart: range.start, sourceEnd: range.end } : {}),
+      pageIndex: f.pageIndex,
+    };
+    return f.kind === 'citationBreak'
+      ? { kind: 'citationBreak', text: f.text, lines: f.lines, ...where }
+      : { kind: f.kind, edge: f.edge, text: f.text, lines: f.lines, ...where };
+  });
+}
+
+/** A `numberOverflow` warning for each number wider than its line in a
+ *  caption, a note or a table cell (#1549, `findSnippetNumberOverflows`),
+ *  with the resource and the part it lies in, on the page the resource was
+ *  first placed on; `sourceRangeOf` as for {@link snippetEdgeWarnings}. */
+export function snippetNumberWarnings(
+  doc: VDTDocument,
+  sourceRangeOf?: (contentIndex: number) => { start: number; end: number } | undefined,
+): ContentWarning[] {
+  return findSnippetNumberOverflows(doc).map((f) => {
+    const range = f.block.contentIndex !== undefined ? sourceRangeOf?.(f.block.contentIndex) : undefined;
+    return {
+      kind: 'numberOverflow',
+      text: f.text,
+      resourceId: f.resourceId,
+      part: f.part,
+      ...(f.cell ? { cell: f.cell } : {}),
+      ...(range ? { sourceStart: range.start, sourceEnd: range.end } : {}),
+      pageIndex: f.pageIndex,
+    };
+  });
+}
+
 /** A `hyphenLadder`, `lastWordDivided` or `hyphenSpacing` warning for each
  *  fault of the hyphen rules in the running text (#1466,
  *  `findHyphenFaults`), on the page it starts on, under
@@ -162,7 +233,8 @@ function dividedKind(cut: 'syllable' | 'character' | undefined): 'wordDividedByC
  *  the breaker cut to fit (`VDTLine.wordDivided`, #1150), in the flow, a
  *  composed page's frames and design texts alike. And an
  *  `unbreakableWordOverflow` warning for each line holding a word of a
- *  joining script wider than the line (`VDTLine.wordOverflow`), on the page
+ *  joining script wider than the line (`VDTLine.wordOverflow`), or a
+ *  `numberOverflow` one for a number (`VDTLine.numberOverflow`), on the page
  *  it was placed on; and once per text for a design text line that does
  *  (`VDTDesignTextLine.wordOverflow`: a running head repeats it on every
  *  page), on the first page that shows it. */
@@ -195,11 +267,12 @@ export function wordOverflowWarnings(doc: VDTDocument): ContentWarning[] {
   });
   for (const block of doc.blocks) {
     for (const line of block.lines) {
-      const kind = line.wordOverflow ? 'unbreakableWordOverflow' : dividedKind(line.wordDivided);
+      const kind = line.numberOverflow ? 'numberOverflow' : line.wordOverflow ? 'unbreakableWordOverflow' : dividedKind(line.wordDivided);
       if (!kind) continue;
       out.push({
         kind,
-        text: line.text,
+        // A number names itself, not its line (#1549).
+        text: kind === 'numberOverflow' ? overflowingNumber(line.text) : line.text,
         ...(line.sourceStart !== undefined ? { sourceStart: line.sourceStart } : {}),
         ...(line.sourceEnd !== undefined ? { sourceEnd: line.sourceEnd } : {}),
         ...(block.pageIndex >= 0 ? { pageIndex: block.pageIndex } : {}),

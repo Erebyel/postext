@@ -11,6 +11,8 @@ import { contrastDetail } from '../../contrast/contrastText.js';
 import { frameOverflowDetail } from '../../warnings/frameOverflowText.js';
 import { frameCoveredDetail, frameOutsideDetail, repeatOverflowDetail } from '../../warnings/frameOverlapText.js';
 import { localNumber } from '../../viewport/composed/reflowText.js';
+import { pdfFontDetail } from './fontDetails.js';
+import { placePrefix } from './placeText.js';
 
 /** Where a design warning points: the slot (`header`, `part`, `H2`); for
  *  a heading style its `{style="…"}` and, for the running heads of its
@@ -27,18 +29,6 @@ function slotWhere(payload: { slot: string; level?: number; styleId?: string; co
 
 /** How many missing characters a warning lists before "…". */
 const LISTED_GLYPHS = 12;
-
-/** `"Noto Serif TC" 700 italic`: the face a PDF font warning is about. */
-function faceLabel(payload: { family: string; weight: number; style: 'normal' | 'italic' }): string {
-  return `"${payload.family}" ${payload.weight}${payload.style === 'italic' ? ' italic' : ''}`;
-}
-
-/** A PDF font warning's detail: the face, what happened, and a note when
- *  the book has changed since that PDF. */
-function pdfFontDetail(payload: { family: string; weight: number; style: 'normal' | 'italic'; stale?: true }, labels: SandboxLabels, detail: string): string {
-  const text = `${faceLabel(payload)} — ${detail}`;
-  return payload.stale ? `${text} ${labels.warningsPdfFontStale}` : text;
-}
 
 /** `pagebreak`, `numbering`, `callout`, … — every fence name the parser
  *  accepts, for the unknown-directive detail string. */
@@ -164,6 +154,11 @@ export function detailFor(payload: WarningPayload, labels: SandboxLabels, locale
       return labels.warningsTabInVerticalTextDetail;
     case 'unknownParagraphStyle':
       return `:::paragraphs{style="${payload.style}"} — ${labels.warningsUnknownParagraphStyleDetail}`;
+    case 'chapterStyleUnknown':
+      return `${payload.source === 'part' ? `:::part{style="${payload.style}"}` : `chapterStyle: ${payload.style}`} — ${labels.warningsChapterStyleUnknownDetail}`;
+    case 'partStyleMidChapter':
+      if (payload.source === 'section') return `${payload.style ? `::section{style="${payload.style}"}` : '::section'} — ${labels.warningsSectionLineDetail}`;
+      return `:::part{style="${payload.style}"} — ${labels.warningsPartStyleMidChapterDetail}`;
     case 'unknownCalloutType':
       return `:::callout{type="${payload.type}"} — ${labels.warningsUnknownCalloutTypeDetail}`;
     case 'exerciseUnknownType':
@@ -182,6 +177,7 @@ export function detailFor(payload: WarningPayload, labels: SandboxLabels, locale
       return labels.warningsSolutionOutsideDetail;
     case 'columnsFlowUnknown':
       return `:::columns{flow="${payload.value}"} — ${labels.warningsColumnsFlowUnknownDetail}`;
+    case 'dieCutUnknown': return `:::diecut{die="${payload.die}"} — ${labels.warningsDieCutUnknownDetail}`;
     case 'templateUnknown':
       return `::::page{template="${payload.template}"} — ${labels.warningsTemplateUnknownDetail}`;
     case 'slotUnknown':
@@ -442,8 +438,15 @@ export function detailFor(payload: WarningPayload, labels: SandboxLabels, locale
       return `#${payload.resourceId} — ${labels.warningsParagraphCitedInNoteDetail}`;
     case 'floatCropped':
       return `#${payload.resourceId} — ${(payload.reason === 'row' ? labels.warningsFloatRowCroppedDetail : labels.warningsFloatCroppedDetail).replace('__share__', String(Math.round(payload.share * 100)))}`;
+    case 'numberOverflow':
+      // In a caption, a note or a cell (#1549), named as a stack is.
+      return placePrefix(payload.place, labels) + labels.warningsNumberOverflowDetail.replace('__page__', String(payload.page)).replace('__text__', payload.text);
     case 'stack':
-      return (payload.edge === 'end' ? labels.warningsStackEndDetail : labels.warningsStackStartDetail)
+    case 'citationBreak':
+    case 'operatorBreak':
+      return placePrefix(payload.place, labels) + (payload.kind === 'citationBreak' ? labels.warningsCitationBreakDetail
+        : payload.kind === 'stack' ? (payload.edge === 'end' ? labels.warningsStackEndDetail : labels.warningsStackStartDetail)
+        : payload.edge === 'end' ? labels.warningsOperatorBreakEndDetail : labels.warningsOperatorBreakStartDetail)
         .replace('__page__', String(payload.page))
         .replace('__text__', payload.text);
     case 'hyphenLadder':
@@ -457,10 +460,8 @@ export function detailFor(payload: WarningPayload, labels: SandboxLabels, locale
     case 'openerFloat':
       return `${payload.resourceId !== undefined ? `#${payload.resourceId} — ` : ''}${labels.warningsOpenerFloatDetail.replace('__page__', String(payload.page))}`;
     case 'tocGroupSplit':
-      return labels.warningsTocGroupSplitDetail
-        .replace('__page__', String(payload.page))
-        .replace('__title__', payload.title)
-        .replace('__columns__', String(payload.columns));
+      return labels.warningsTocGroupSplitDetail.replace('__page__', String(payload.page))
+        .replace('__title__', payload.title).replace('__columns__', String(payload.columns));
     case 'codeOverflow': {
       const detail = payload.mode === 'wrap' ? labels.warningsCodeOverflowWrap
         : payload.mode === 'clip' ? labels.warningsCodeOverflowClip
@@ -486,6 +487,8 @@ export function detailFor(payload: WarningPayload, labels: SandboxLabels, locale
       const detail = payload.kind === 'calloutStyleExtendsUnknown' ? labels.warningsCalloutStyleExtendsUnknownDetail : labels.warningsCalloutStyleExtendsCycleDetail;
       return `${payload.path}: "${payload.value}" — ${detail}${payload.suggestion ? ` ${labels.warningsUnknownConfigKeySuggestion.replace('__suggestion__', payload.suggestion)}` : ''}`;
     }
+    case 'chapterStyleBookSetting':
+      return `${payload.path} — ${labels.warningsChapterStyleBookSettingDetail}`;
     case 'templateDuplicate':
     case 'templateExtendsCycle':
     case 'templateExtendsUnknown':

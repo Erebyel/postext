@@ -5,9 +5,9 @@ export const metadata = {
   sidebarTitle: 'InDesign',
   description: '把InDesign书籍带进Postext的两种方式：照搬文档内容的IDML导入器，和推断版式规则的智能体技能；各自适合什么情况，以及IDML导出器怎样把书交回InDesign',
   lang: 'zh',
-  lastUpdated: '2026-11-11',
+  lastUpdated: '2026-11-14',
   readingTime: '8分钟',
-  order: 49,
+  order: 50,
   plainSummary: "用InDesign做的书可以用两种方式带进Postext。导入器照搬InDesign文件里的内容，每一页、每个框和每种样式都原样保留，速度很快，但得到的是旧页面的副本，不好修改，也不好翻译。智能体技能则研究这本书：文件、印刷PDF、字体和图片，找出设计者遵循的规则，再按这些规则重建这本书，文字可以自由排下去。这样得到的书更好，所以我们推荐这种方式。本页说明这两种方式、各自适合的情况，以及Postext怎样把做好的书交回InDesign。",
 };
 
@@ -22,6 +22,8 @@ Postext读写InDesign Markup包（`.idml`），也就是InDesign用<strong>文�
 - <strong>导出器</strong>，把Postext书写成`.idml`，交给设计者在InDesign中完成。
 
 导入器和技能都能把书带进来，但得到的不是同一本书。本页说明两者的区别，方便你选择。
+
+<YouTubeVideo film="indesign" />
 
 ## 进入Postext的两种方式
 
@@ -60,14 +62,21 @@ InDesign文档是一组由人手工做出的页面。设计者遵循一些规则
 postext import-idml book.idml -o book/
 postext import-idml book.idml -o book.postext --layout flow --links Links/
 postext import-idml book.idml --report --json
+postext import-idml package.zip -o book.postext
 ```
 
-同样的导入也可以在Sandbox中进行，位置是<strong>书库 › 新建 › 从 InDesign 文档（IDML）新建书</strong>（见[沙盒 › 导入InDesign文档](/zh/docs/sandbox-books-saving#导入indesign文档)），在代码中则用`postext-idml`包的`idmlToPostext`（见[以编程方式使用 › InDesign包](/zh/docs/configuration-programmatic-usage#indesign包postext-idml)）。命令的全部选项见[命令行 › import-idml](/zh/docs/command-line#import-idml)。
+同样的导入也可以在Sandbox中进行，位置是<strong>书库 › 新建 › 从 InDesign 文档（IDML）新建书</strong>（见[导入InDesign文档](/zh/docs/indesign#导入indesign文档)；沙盒还能用<strong>从 InDesign 打包文件（.zip）新建书</strong>打开压缩成zip的InDesign打包文件，并从中取用字体和链接的图片），在代码中则用`postext-idml`包的`idmlToPostext`（见[以编程方式使用 › InDesign包](/zh/docs/configuration-programmatic-usage#indesign包postext-idml)）。命令的全部选项见[命令行 › import-idml](/zh/docs/command-line#import-idml)。
+
+### 导入InDesign文档
+
+<strong>书库</strong>面板<strong>新建</strong>菜单中的<strong>从 InDesign 文档（IDML）新建书</strong>在浏览器中读取一个`.idml`文件，并打开一个对话框。对话框列出文档的内容：页数和页面大小、文章、用到的字体、链接的和嵌入的图片，以及表。<strong>排版方式</strong>有两种：<strong>模板页</strong>让每一页的框架都留在文档中原来的位置，<strong>流式排版的书</strong>让文字顺着书的设计生成的页面排下去；<strong>自动</strong>把选择交给导入器，导入器会说明理由。`.idml`不带它所链接的图片：请选择这些文件，或选择它们所在的文件夹，每张图片按文件名匹配。导入报告随每一项选择更新：结论、各项计数，丢失、近似和备注三类情况（每类附数量和一个例子），这本书需要的字体，以及仍缺少的链接。<strong>创建这本书</strong>把结果加入你的书并打开它，原有的书保持不变。`.indd`文件会被拒绝，提示会说明要先在InDesign中把它存为IDML。命令行用[`postext import-idml`](/zh/docs/command-line#import-idml)做同样的导入。导入得到的是文档页面的副本；对于你会长期保留的书，[智能体技能](/zh/docs/skill)会推断出它的版式规则（见[技能](/zh/docs/indesign#技能)）。
+
+<strong>从 InDesign 打包文件（.zip）新建书</strong>读取InDesign的<strong>文件 › 打包</strong>生成的文件夹，打包时须勾选<strong>包括 IDML</strong>，再压缩成zip。打包文件中有不止一个IDML文档时，会弹出对话框询问哪一个成为这本书。之后的导入对话框与上面所述相同，另外列出打包文件带来的内容。链接的图片取自打包文件，按文件名匹配；同名的文件再按文件夹区分。`Document fonts`中的字体文件放入书中：每种字体样式按PostScript名称与文档指定的字体样式匹配，因此文字用原来的字体样式排出。报告列出打包文件带有的字体和没有对应文件的字体样式，并指出书无法带上的字体文件（Type 1、Mac字体手提箱、WOFF 1文件）。字体集（`.ttc`、`.otc`，macOS就是这样提供PT Sans等字体的）会拆成单个字体样式：正文用到的样式，连同同一字族的其他样式，以按样式命名的单独TrueType或OpenType文件放进书中，字体集里的其他样式不带入（自postext 1.83起）。只含一个`.indd`的打包文件会被拒绝，提示会说明如何得到它的IDML。
 
 ### 逐页还是连续排
 
 - <strong>`--layout pages`</strong>逐页照文档排。每一页成为一个[模板页](/zh/docs/composed-pages)，每个框保持原来的位置、大小和顺序，串接的框仍然串接。适合每一页都是手工做出来的文档。
-- <strong>`--layout flow`</strong>按阅读顺序写出各篇文章，沿用文档的段落样式，由Postext把它们排进书的设计生成的页面。适合小说、随笔这类连续的文字，页面只是用来容纳文字。
+- <strong>`--layout flow`</strong>按阅读顺序写出各篇文章，沿用文档的段落样式，由Postext把它们排进书的设计生成的页面。适合小说、随笔这类连续的文字，页面只是用来容纳文字。各个框只有放在一起才读得通的页面会整页排出（自postext 1.83.1起）。没有自己正文的页面，如封面或篇章页，在连续版式中成为一个[组合页面](/zh/docs/composed-pages)，各框留在InDesign中的位置，形状和图片作为装饰。正文从一个带色带、图片或填色框的标题下面开始的页面是章首页：标题成为开启该页的标题，其标题样式的设计画出色带、眉题和切口上的书签。报告把它们列为`composedPagesInFlow`和`openerDesigns`。
 - <strong>`auto`</strong>是默认值，它根据文档选一种，并说明理由。
 
 ### 带过来的内容
@@ -76,14 +85,17 @@ postext import-idml book.idml --report --json
 - 文字连同强调、强制换行、制表符、脚注、超链接、注音、着重号和纵中横。
 - 表格连同合并单元格、表头行、内边距和单元格中的图片；锚定和置入的图片；线条、矩形和色板。
 - 页面及其尺寸和页边距、主页上的项目，以及章节。
+- 文本绕排。文本绕开设置了绕排的框。在绕排方式为<strong>上下型绕排</strong>的对象后面，文本框被切成对象上方和下方相互串接的框，并保留绕排的上、下位移，文本因此像在InDesign中一样在对象上方停下、在下方继续；<strong>下一栏绕排</strong>则让文本停在对象上方（自postext 1.82.2起）。
+- 专色色板，作为调色板中的专色，各自印在单独的印版上。带工艺的专色成为[`print.inks`](/zh/docs/special-inks-die-cuts)中的一项：Postext导出时记下的工艺原样读回，其他的按油墨名称推断（`PANTONE 871 C`为金属油墨，`光油`为上光油），并列在`inkFinishGuessed`下，请与印厂核实（自postext 1.87.0起）。
+- 模切线。名称像模切线的图层（模切、Die line、Troquel…）上的路径，或描边为`CutContour`、`Die`、`Dieline`色板的路径，无论在页面上还是在主页上，都成为书的[`dieCuts`](/zh/docs/special-inks-die-cuts)：每个孔是一个形状，放在它切到的第一个奇数页上，若还穿过后面的纸页则带`leaves`；裁切的边缘成为圆角（`corners`）或轮廓（`outline`）。色板的名称成为`print.dieLine.ink`。模切路径不作为图稿复制（自postext 1.87.0起）。
 
 ### 报告的内容
 
-`.idml`不带字体，也不带链接的图片。导入器列出这本书需要的字体家族，你再用`--font-dir`把它们交给构建。链接的图片从`--links`或文件旁边读取，找不到的会列出来。
+`.idml`不带字体，也不带链接的图片。导入器列出这本书需要的字体家族，你再用`--font-dir`把它们交给构建。链接的图片从`--links`或文件旁边读取，找不到的会列出来。压缩成zip的打包文件两样都带：在命令行中（`postext import-idml package.zip`）、在沙盒中，以及在代码中用`openIdmlArchive`时，导入器从其`Links`文件夹取用图片，并把其`Document fonts`文件夹中的字体文件放入书中。
 
 InDesign能做的有些事在Postext中没有对应，比如路径文字、旋转的单元格、单元格中的对角线、GREP样式和嵌套样式，或者透明效果。每一项都成为报告中的一条结果，附带数量和一个例子：省略的是<em>loss</em>，以接近原稿的方式排出的是<em>warning</em>（表格的表尾行、渐变、沿轮廓绕排）。报告最后给出结论：
 
-- <strong>`faithful`</strong>：没有丢失，也没有近似处理（Postext导出的书）。
+- <strong>`faithful`</strong>：没有丢失，也没有近似处理。Postext导出的书会忠实返回。自postext 1.85.0起，导出把分栏排版页面的正文串接成一篇文章，每栏一个框，导入器把它读回原来的连续版式的书：段落完整，标题、方框以及带图注的插图都在原来的位置。栏参考线就是页面的栏，侧栏也包括在内。自postext 1.86.0起，书眉和页码作为书的页眉和页脚返回，章首页自己的也包括在内；浮动到侧栏的方框（旁注）作为该栏的浮动对象返回。Postext在每页绘制的图形不会导入，并作为丢失列入报告（`pageArtInFlow`），因此带有图形的书以连续版式返回时结论为`lossy`，可由它的设计重新绘制。用`--text frames`导出（每个块一个框，与1.85.0之前相同）时，它以组合页面的形式返回：每页的框都在导出时放置的位置，书的段落样式、字符样式、方框和图片也都保留（自postext 1.84.0起）。
 - <strong>`approximate`</strong>：有些内容以接近原稿的方式排出，没有省略任何内容。
 - <strong>`lossy`</strong>：有内容被省略。
 
@@ -137,9 +149,11 @@ postext build book/ --pdf book.pdf --idml book.idml
 
 - <strong>页面与跨页。</strong>页面按成品尺寸放置：设了对称页边距的书排成对页的跨页，否则每个跨页一页；`--spreads facing`或`--spreads single`不管页边距怎样设，都按指定的方式排。
 - <strong>行。</strong>默认的`--lines keep`让每一行都在Postext断行的位置结束，因此InDesign显示的行与PDF相同。`--lines reflow`把段落交给InDesign的排版器，用于要在InDesign中重新排版的书。
-- <strong>文字。</strong>模板页的每个框成为一个带有独立文章的文本框，用`next`串接的框共用一篇文章。段落样式带有书中的样式名、缩进、制表位和间距。脚注、链接、注音、着重号、从右到左的文章和竖排文章都会带过去。
+- <strong>文字。</strong>分栏排版页面的正文是一篇文章，像在InDesign中排的书一样，串接在每栏一个的文本框中，流中的方框锚定在其中（自postext 1.85.0起）；`--text frames`则在Postext绘制的位置为每个块写一个框和一篇文章。模板页的每个框成为一个带有独立文章的文本框，用`next`串接的框共用一篇文章。段落样式带有书中的样式名、缩进、制表位和间距。脚注、链接、注音、着重号、从右到左的文章和竖排文章都会带过去。
+- <strong>书眉。</strong>正文串接导出时，书眉和页码放在主页上，与在InDesign中排版的书一样（自postext 1.86.0起）。页码是InDesign的当前页码，`{chapterTitle}`是显示该页最后一个章标题的书眉文本变量，其他文字照原样写出。显示相同书眉的页面应用同一个主页，章首页有自己的主页，名为Opener。InDesign无法表达的书眉（例如`{attr.place}`）留在所在页面上。浮动到侧栏的方框（旁注）以自定位置锚定在正文中，随旁边的段落一起移动。
 - <strong>页面项目。</strong>线条、方框、路径和图片成为InDesign页面项目；表格成为InDesign表格，行内公式、乐谱和色样成为锚定对象。作者定义的CMYK颜色成为印刷色色板，表单域标签成为InDesign表单域。
-- <strong>图片与字体。</strong>`--images link`把图片写到包旁边的`Links/`中，而不嵌入。`--fonts`把字体文件写到`Document fonts/`中，InDesign会在那里找到它们；书无权再分发的字体家族不写出。
+- <strong>特种油墨与模切线。</strong>每种专色成为一个专色色板，带有自己的油墨；工艺记在色板的脚本标签中（`postext:finish`），因为InDesign没有存放工艺的字段。油墨管理器得到该工艺分色所用的油墨类型：上光油为透明，白墨、金属油墨和烫金为不透明。白墨和上光油设为叠印，与PDF相同。模切画在名为<strong>Die line</strong>的锁定图层上，路径用模切色板描边并设为叠印；`print.dieLine.output`为`none`时该图层不打印。再次导入后，这个包给回同样的油墨和模切（自postext 1.87.0起）。
+- <strong>图片与字体。</strong>`--images link`把图片写到包旁边的`Links/`中，而不嵌入。每个文件都带有其格式的扩展名（`.svg`、`.png`、`.jpg`、`.pdf`等），解压后即可用相应的程序打开。`--fonts`把字体文件写到`Document fonts/`中，InDesign会在那里找到它们；书无权再分发的字体家族不写出。
 - <strong>警告。</strong>InDesign无法照Postext排出的样子显示的内容，以`idml.*`警告报告，比如表格的圆角外框或竖排文字里的着重号。
 
 导出不是反过来的移植。`.idml`保存的是Postext排出的页面，排出这些页面的规则留在Postext书里。在InDesign中做的修改，要通过导入器回到Postext，回来的是页面的副本。像字号这样的规则，最好在Postext书中修改，再重新导出。

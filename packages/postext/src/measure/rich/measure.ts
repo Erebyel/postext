@@ -20,12 +20,14 @@ import { getMeasureWritingMode, withMeasureWritingMode, measuringVertically, get
 import { isBlankText } from '../spaces.js';
 import { raggedStretchPx } from '../breakRules.js';
 import { joiningScriptIn } from '../rtl/joining.js';
+import { isNumberWord } from './numbers.js';
 import { spanLanguages, applySegmentLanguages } from '../rtl/bidiLines.js';
 import { justifyLinesWithKashida } from '../rtl/kashida.js';
 import { sidewaysNumberSpans, setLabelTabs, tokenSegment } from './spanTokens.js';
 import { tabsAsSpaces, paragraphBidi, markKashidaCapacity, withDirections, tabRun, setTabbedLine } from './tabsAndBidi.js';
 import { tokenizeSpans } from './tokenize.js';
 import { type RichToken, tokenFont, pickSpanFont, rtlWordWidth, expandSmallCaps, type RichBreakPoint } from './tokens.js';
+import { greedyRules, ruleBackoff, noteLineEnd } from './greedyRules.js';
 import { ownRest, markRestShifts, withLeadingHyphen, MAX_RAGGED_HYPHEN_RUN, trailingSpaceWidth, splitToken, isDivisible, emergencySplit, gluedTailLength, lastPlainBreakInGroup, lastSyllableInGroup } from './wordBreaks.js';
 
 /**
@@ -199,7 +201,7 @@ function measureRichText(
     const spaceWidth = ragged ? normalSpaceWidthFor(normalFont) + letterSpacingPx : normalSpaceWidth;
     // The rest of a word broken at a line end, as the text painted (#770).
     if (ownTokens) markRestShifts(tokens, fontOfToken, repeatHyphen);
-    const items = richTokensToItems(tokens, spaceWidth, maxStretchRatio, minShrinkRatio, repeatHyphen, options.stacks !== undefined);
+    const items = richTokensToItems(tokens, spaceWidth, maxStretchRatio, minShrinkRatio, repeatHyphen, options.stacks !== undefined, measuringVertically() ? undefined : options.spaceBreaks);
     const lineWidthFn = lineWidthFunction(maxWidthPx, options);
     const lineIndentFn = indentOf;
     const runtPenalty = options.runtPenalty ?? 0;
@@ -269,6 +271,8 @@ function measureRichText(
   const tabSpaceWidth = hasTabs ? normalSpaceWidthFor(normalFont) + letterSpacingPx : 0;
   // A word space a line may start or end at (a tab is none).
   const isBreakSpace = (t: RichToken): boolean => t.kind === 'space' && !t.tab;
+  // The line-edge rules avoided (#1542, `greedyRules.ts`); a tab's line is set as it falls.
+  const rules = hasTabs ? undefined : greedyRules(tokens, options);
 
   while (tokenIdx < tokens.length) {
     const lineIndent = indentOf(lineIndex);
@@ -280,8 +284,9 @@ function measureRichText(
     let lineSyllable = false;
     // The line ends after a hyphen the word carries (EF-140).
     let lineHardHyphen = false;
-    // A word of a joining script wider than the line runs past it.
-    let lineWordOverflow = false;
+    // A word of a joining script, or a number (#1549), wider than the line
+    // runs past it.
+    let lineWordOverflow: false | 'word' | 'number' = false;
     let lineWordDivided: 'syllable' | 'character' | undefined;
     // The line holds a tab placed at a stop (#622).
     let lineTabbed = false;
@@ -290,6 +295,7 @@ function measureRichText(
     while (tokenIdx < tokens.length && isBreakSpace(tokens[tokenIdx]!)) {
       tokenIdx++;
     }
+    const lineStart = tokenIdx;
     // The compound's hyphen, repeated: the tail it broke from opens the
     // line with it, measured.
     const lineRepeated = repeatPending && tokens[tokenIdx]?.kind === 'text';
@@ -515,9 +521,9 @@ function measureRichText(
 
       // No viable split. If line is empty, force-fit this token; else break to next line.
       if (lineTokens.length === 0) {
-        // A word of a joining script wider than the line is never cut: it
-        // runs past the measure, and the line says so.
-        if (token.width > lineMaxWidth && token.kind === 'text' && joiningScriptIn(token.text)) lineWordOverflow = true;
+        // A word of a joining script or a number wider than the line is
+        // never cut: it runs past the measure, and the line says so.
+        if (token.width > lineMaxWidth && token.kind === 'text') lineWordOverflow = joiningScriptIn(token.text) ? 'word' : isNumberWord(token.text) ? 'number' : false;
         lineTokens.push(token);
         lineWidth += token.width;
         tokenIdx++;
@@ -526,6 +532,11 @@ function measureRichText(
     }
 
     if (lineTokens.length === 0) break;
+    const keep = rules && !lineHyphenated && tokenIdx < tokens.length ? ruleBackoff(rules, tokens, lineStart, lineTokens, tokenIdx, (w, n, sw) => (textAlign === 'justify' ? n > 0 && (sw + lineMaxWidth - w) / (n * normalSpaceWidth) <= (options?.maxStretchRatio ?? 1.5) : w >= lineMaxWidth / 2)) : undefined;
+    if (keep !== undefined) {
+      tokenIdx = lineStart + keep;
+      while (lineTokens.length > keep) lineWidth -= lineTokens.pop()!.width;
+    }
     syllableRun = lineSyllable ? syllableRun + 1 : 0;
     repeatPending = lineRepeatNext;
 
@@ -535,6 +546,7 @@ function measureRichText(
       lineWidth -= lineTokens[lineTokens.length - 1]!.width;
       lineTokens.pop();
     }
+    if (rules) noteLineEnd(rules, lineTokens);
 
     // Check if this is the last line
     // Skip remaining leading spaces to check if there's more content
@@ -564,7 +576,7 @@ function measureRichText(
       segments,
       isLastLine,
       ...spaceRatios,
-      ...(lineWordOverflow ? { wordOverflow: true as const } : {}),
+      ...(lineWordOverflow ? { wordOverflow: true as const, ...(lineWordOverflow === 'number' ? { numberOverflow: true as const } : {}) } : {}),
       ...(lineWordDivided ? { wordDivided: lineWordDivided } : {}),
       ...(lineTabbed ? { tabbed: true as const, ...(textAlign === 'justify' ? { ragged: true } : {}) } : {}),
     });

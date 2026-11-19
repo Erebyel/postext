@@ -3,11 +3,11 @@
 export const metadata = {
   title: "Línia d'ordres: postext en un terminal, un script o un agent",
   sidebarTitle: "Línia d'ordres",
-  description: "Un sol executable autònom, per a macOS, Linux i Windows, que converteix un llibre .postext, una carpeta de llibre o fitxers Markdown solts en PDF, HTML, EPUB, imatges de pàgina i Word. També crea paquets i revisa llibres, i pot respondre en JSON per a scripts i agents",
+  description: "Un sol executable autònom, per a macOS, Linux i Windows, que converteix un llibre .postext, una carpeta de llibre o fitxers Markdown solts en PDF, HTML, EPUB, imatges de pàgina i Word. També crea paquets i revisa llibres, i pot respondre en JSON per a scripts i agents, i paquets de Python i Rust el fan servir des del codi",
   lang: 'ca',
-  lastUpdated: '2026-11-06',
+  lastUpdated: '2026-11-16',
   readingTime: '14 min',
-  order: 51,
+  order: 52,
   plainSummary: "Aquesta pàgina és per a qui vol fer llibres amb Postext des d'un terminal en lloc del web. Baixes un sol fitxer per al teu ordinador i l'executes, sense instal·lar res més. Li dones el teu llibre, o uns quants fitxers de text, i en fa un PDF, una pàgina web, un llibre electrònic, imatges de les pàgines o un document de Word. També pot revisar un llibre per trobar-hi problemes i reunir tots els fitxers del llibre en un de sol. També el poden fer servir altres programes i els assistents d'intel·ligència artificial, perquè pot respondre en un format que llegeixen sense dificultat.",
 };
 
@@ -101,6 +101,8 @@ ordre `postext`.
 Sense arguments, `postext` mostra l'ajuda; `postext help <command>` llista les
 opcions d'una ordre.
 
+Per cridar-lo des d'un programa, `pip install postext` (Python) i `cargo add postext` (Rust) embolcallen aquest mateix executable i el baixen el primer cop que es fan servir: vegeu [Python](#python) i [Rust](#rust) més avall.
+
 ## Un primer llibre
 
 Tres fitxers Markdown en una carpeta ja són un llibre: un capítol per fitxer,
@@ -169,7 +171,8 @@ es llegeix en la llengua principal, tret que `--locale` en demani una altra (`--
     <tr><td><code>docx</code></td><td>Els capítols com un document de Word: semàntic (només el contingut, en estils de Word senzills), maquetat (el mateix text editable amb el disseny del llibre) o facsímil de pàgines (cada línia en un quadre de text fix).</td></tr>
     <tr><td><code>idml</code></td><td>Les pàgines com un paquet d'InDesign (IDML), per acabar-les a InDesign.</td></tr>
     <tr><td><code>import-docx</code></td><td>Les correccions fetes en un fitxer de Word exportat, de tornada al llibre; qualsevol altre document de Word, com a llibre nou (una carpeta o un <code>.postext</code>).</td></tr>
-    <tr><td><code>import-idml</code></td><td>Un document d'InDesign desat com a IDML, com a llibre nou (una carpeta o un <code>.postext</code>).</td></tr>
+    <tr><td><code>import-idml</code></td><td>Un document d'InDesign desat com a IDML, o un paquet d'InDesign comprimit, com a llibre nou (una carpeta o un <code>.postext</code>).</td></tr>
+    <tr><td><code>design</code></td><td>El disseny d'un llibre (algunes de les seves parts, o totes) com a fitxer de disseny, un <code>.postext</code> sense capítols.</td></tr>
     <tr><td><code>pack</code></td><td>Una carpeta de llibre o Markdown solt com un sol fitxer <code>.postext</code>.</td></tr>
     <tr><td><code>unpack</code></td><td>Un fitxer <code>.postext</code> com a carpeta.</td></tr>
     <tr><td><code>info</code></td><td>Els capítols, les llengües, els recursos i les fonts del llibre, i amb <code>--pages</code> el nombre de pàgines.</td></tr>
@@ -204,6 +207,9 @@ aquestes opcions els canvien només per a una execució:
   de pantalla.
 - `--no-outlines`: deixa fora els marcadors.
 - `--page-negative`: pàgines en negatiu, per a alguns fluxos d'impremta.
+- `--die-line page|none`: la línia de troquel d'un llibre amb troquels, en una planxa pròpia
+  (`page`, per defecte) o fora del fitxer (`none`); vegeu
+  [La línia de troquel al PDF](/ca/docs/special-inks-die-cuts#la-línia-de-troquel-al-pdf).
 
 ### html
 
@@ -393,7 +399,7 @@ de formulari passen a ser camps de formulari d'InDesign. `--lines keep` (el
 valor per defecte) acaba cada línia on la va acabar Postext, de manera que
 InDesign mostra les mateixes línies que el PDF; `--lines reflow` deixa els
 paràgrafs al compositor d'InDesign, i els salts de línia poden variar.
-`--spreads facing` o `--spreads single` aparella les pàgines, o no, diguin el que diguin els marges.
+El text corrent de les pàgines compostes en columnes va en un sol article, enllaçat per un marc per columna, que l'importador llegeix com a llibre de flux; `--text frames` escriu en canvi un marc i un article per bloc (des de postext 1.85.0). `--spreads facing` o `--spreads single` aparella les pàgines, o no, diguin el que diguin els marges.
 `--images link` deixa les imatges al costat del fitxer, a `Links/`, en lloc de
 dins. `--fonts` escriu els fitxers de font de les variants usades al costat
 del paquet, a `Document fonts/`, on InDesign els troba per a aquell document;
@@ -403,7 +409,7 @@ redistribuir es deixa fora amb un avís. El que el paquet no pot portar tal com
 a avís `idml.*`. El generador és el paquet `postext-idml`: vegeu [Ús
 programàtic › Paquets
 d'InDesign](/ca/docs/configuration-programmatic-usage#paquets-dindesign-postext-idml).
-A `build`, `--idml FITXER` escriu el mateix paquet, amb `--idml-images`, `--idml-lines`, `--idml-spreads` i `--idml-fonts`.
+A `build`, `--idml FITXER` escriu el mateix paquet, amb `--idml-images`, `--idml-lines`, `--idml-spreads`, `--idml-text` i `--idml-fonts`.
 Des de postext 1.71; `--lines` i `--fonts`, des de 1.76, i `--spreads`, des de 1.78.
 
 ### import-idml
@@ -412,11 +418,32 @@ Des de postext 1.71; `--lines` i `--fonts`, des de 1.76, i `--spreads`, des de 1
 postext import-idml book.idml -o book/
 postext import-idml book.idml -o book.postext --layout flow --links pictures/
 postext import-idml book.idml --report --json
+postext import-idml package.zip -o book.postext
+postext import-idml package.zip --document Book/Book.idml -o book/
 ```
 
-`import-idml` llegeix un paquet d'InDesign Markup i escriu un llibre nou, en una carpeta o en un `.postext`: els capítols en Markdown, la configuració que donen els estils i les pàgines del document, i les seves imatges i taules com a recursos. Un `.indd` no es llegeix: desa'l abans des d'InDesign com a InDesign Markup. `--layout pages` segueix el document pàgina a pàgina amb pàgines compostes, cada marc on era; `--layout flow` escriu un llibre de text seguit, en ordre de lectura i amb els estils del document, perquè Postext el torni a compondre; `auto` (el valor per defecte) en tria un i diu per què. Les imatges enllaçades es llegeixen de `--links` o, si no s'indica, de la carpeta del fitxer i del seu `Links/`, i les que no es troben s'enumeren. També s'enumeren les fonts que anomena el document: un paquet no porta fitxers de font, de manera que cal donar-los amb `--font-dir` en generar el llibre.
+`import-idml` llegeix un paquet d'InDesign Markup i escriu un llibre nou, en una carpeta o en un `.postext`: els capítols en Markdown, la configuració que donen els estils i les pàgines del document, i les seves imatges i taules com a recursos. Un `.indd` no es llegeix: desa'l abans des d'InDesign com a InDesign Markup. `--layout pages` segueix el document pàgina a pàgina amb pàgines compostes, cada marc on era; `--layout flow` escriu un llibre de text seguit, en ordre de lectura i amb els estils del document, perquè Postext el torni a compondre; `auto` (el valor per defecte) en tria un i diu per què. El fitxer també pot ser un paquet d'InDesign comprimit, la carpeta que fa **File › Package** amb **Include IDML** marcat, enviada com un sol `.zip`: l'ordre n'importa l'IDML amb les imatges de la seva carpeta `Links/` i posa al llibre els fitxers de font de la seva carpeta `Document fonts/`. Si el zip conté diversos documents IDML, `--document` anomena el que s'importa pel seu camí dins del zip (`--document Book/Book.idml`); sense aquesta opció, l'ordre els enumera. Un paquet que només conté l'`.indd` es rebutja, amb la manera d'obtenir l'IDML. Les imatges enllaçades es llegeixen primer de `--links`, després del paquet i després de la carpeta del fitxer i del seu `Links/`, i les que no es troben s'enumeren. També s'enumeren les fonts que anomena el document: un `.idml` sol no porta fitxers de font, de manera que cal donar-los amb `--font-dir` en generar el llibre. Amb un paquet, una font que es trobi a `--font-dir` entra al llibre en lloc del fitxer del paquet. Una col·lecció de fonts (`.ttc`, `.otc`), al paquet o a `--font-dir`, se separa en cares soltes, i només hi entren les cares que fa servir el llibre (des de postext 1.83).
 
 Un llibre exportat des de Postext torna amb les mateixes línies. Un document fet a InDesign es llegeix amb pèrdues: l'ordre imprimeix el veredicte (`faithful`, `approximate` o `lossy`), els recomptes i el que s'ha perdut o aproximat; `--report` hi afegeix les notes i com s'ha llegit cada estil de paràgraf, i `--json` ho porta tot com a dades. `--hidden`, `--pasteboard` i `--non-printing` llegeixen també les capes i els objectes ocults, la taula de muntatge i els objectes no imprimibles; `--conditions all` llegeix tot el text condicional, `--changes reject` llegeix els canvis registrats com si s'haguessin rebutjat i `--no-masters` deixa fora els elements de les pàgines mestres. `--name` i `--locale` donen el títol i la llengua. L'importador és `idmlToPostext`, del paquet `postext-idml`: vegeu [Ús programàtic › Paquets d'InDesign](/ca/docs/configuration-programmatic-usage#paquets-dindesign-postext-idml). La importació copia el document tal com és; per portar un llibre que hagis de conservar, amb les regles de maquetació deduïdes, fes servir en lloc seu la skill per a agents (vegeu [InDesign: importar, exportar i portar](/ca/docs/indesign)).
+
+### design
+
+```bash
+postext design book.postext -o novel.postext
+postext design book/ --parts page,text,headings -o type.postext
+postext pdf other/ --design novel.postext -o other.pdf
+```
+
+Un fitxer de disseny guarda el disseny d'un llibre i res del seu text: els ajustos de les parts demanades (els grups del tauler Disseny, vegeu [Fitxers de disseny](/ca/docs/configuration-bundles#fitxers-de-disseny)) amb els fitxers de font i el perfil de color que anomenen. Una font marcada com a no redistribuïble no hi viatja. `--parts` en pren només algunes parts, separades per comes; `--design-name`, `--id` i `--description` donen nom al disseny. El mateix llibre dona sempre els mateixos bytes.
+
+`--design FITXER`, una opció de totes les ordres que llegeixen un llibre, posa el llibre en un fitxer de disseny o en el disseny d'un altre llibre, abans de `--config` i `--set`: els ajustos de les seves parts substitueixen els del llibre, els estils amb nom es combinen per id i les fonts del disseny se sumen a les del llibre. `--design-parts` en pren només algunes parts. El tauler Disseny del Sandbox importa i exporta els mateixos fitxers.
+
+`--composition ETIQUETA`, també una opció de totes les ordres que llegeixen un llibre, posa les regles de composició de la tradició d'una llengua després de `--design` (des de postext 1.80): `es`, `en-US` (o `en`), `en-GB`, `fr` o `de`, o `auto` per a la llengua del llibre. Les regles de la convenció substitueixen les del llibre i les altres tornen als seus valors per defecte; la tipografia es queda com està. Vegeu [Convencions de composició](/ca/docs/configuration-text#convencions-de-composició).
+
+```bash
+postext pdf book/ --composition auto -o book.pdf
+postext design book/ --composition es --parts composition -o house-rules.postext
+```
 
 ### pack i unpack
 
@@ -494,10 +521,14 @@ les sortides. Si en desar el llibre queda trencat, imprimeix l'error i conserva 
     <tr><td><code>--chapters LIST</code></td><td>Compon només alguns capítols: <code>2</code>, <code>1,3-5</code>, <code>4-</code>. És més ràpid en un llibre llarg; les pàgines es numeren a partir de la primera pàgina d'aquests capítols.</td></tr>
     <tr><td><code>--set PATH=VALUE</code></td><td>Canvia un paràmetre per a aquesta execució, indicat com una ruta amb punts: <code>--set page.dpi=150</code>, <code>--set bodyText.fontFamily=Lora</code>, <code>--set headings.levels.0.italic=true</code>. El valor es llegeix com a JSON quan és possible (números, true i false, objectes) i, si no, com a text. Es pot repetir.</td></tr>
     <tr><td><code>--config FILE</code></td><td>Una configuració (o un <code>preset.json</code>) per a Markdown solt, o que es combina amb la del llibre i hi té prioritat.</td></tr>
+    <tr><td><code>--design FILE</code>, <code>--design-parts LIST</code></td><td>Posa el llibre en el disseny d'un fitxer de disseny (de <code>postext design</code> o del Sandbox) o del <code>.postext</code> d'un altre llibre, abans de <code>--config</code> i <code>--set</code>. <code>--design-parts LLISTA</code> en pren només algunes parts.</td></tr>
+    <tr><td><code>--composition TAG</code></td><td>Posa les regles de composició de la tradició d'una llengua (<code>es</code>, <code>en-US</code>, <code>en-GB</code>, <code>fr</code>, <code>de</code>; <code>auto</code>: la llengua del llibre) després de <code>--design</code>. Des de postext 1.80.</td></tr>
+    <tr><td><code>--hyphenation-exceptions [LANG=]FILE</code></td><td>Combina un fitxer de mots que no es divideixen amb les llistes del llibre per a aquesta execució, després de <code>--config</code> i abans de <code>--set</code>. Llegeix els mateixos fitxers que Importa del Sandbox (<a href="/ca/docs/configuration-language#mots-que-no-es-divideixen">mots que no es divideixen</a>): una llista senzilla, els blocs <code>{'\\hyphenation{…}'}</code> d'un fitxer TeX o JSON. Una llista senzilla va a la llista de <code>LANG</code>, o a la de totes les llengües si no se n'indica cap; un objecte JSON omple una llista per llengua, i la seva clau <code>"*"</code> és la de totes les llengües. Repetible. Des de postext 1.81.</td></tr>
     <tr><td><code>--resources DIR</code>, <code>--fonts DIR</code>, <code>--name TEXT</code></td><td>Imatges, fonts i títol per a Markdown solt.</td></tr>
     <tr><td><code>--font-dir DIR</code></td><td>Una carpeta on buscar les fonts que el llibre no porta. Es pot repetir.</td></tr>
     <tr><td><code>--offline</code></td><td>No baixa mai fonts.</td></tr>
     <tr><td><code>--cache-dir DIR</code></td><td>On es desen les fonts baixades.</td></tr>
+    <tr><td><code>--threads N|auto</code></td><td>Compon els capítols en <code>N</code> fils (<code>auto</code>: els que demanen l’extensió del llibre i els nuclis de la màquina). Les pàgines són les mateixes que amb un sol fil, que és el valor per defecte. Des de postext 1.89.</td></tr>
   </tbody>
 </table>
 
@@ -618,28 +649,72 @@ pdf = postext.pdf_bytes(open("book.postext", "rb").read())
 ```
 
 - **Una funció per ordre**: `pdf`, `html`, `epub`, `image`, `images`, `docx`,
-  `import_docx`, `pack`, `unpack`, `info`, `check` i `build`. Les opcions
-  conserven el nom, amb guions baixos (`color_space`, `font_dirs`, `dry_run`).
-  `set` rep un diccionari, `config` un fitxer o un diccionari, `chapters` un
-  número, una llista, un `range` o `"1,3-5"`.
-- **Informes com a objectes.** Cada funció executa la seva ordre amb `--json`
-  i retorna l'informe: `outputs`, `pages`, `timings` i `warnings`, cada avís un
+  `idml`, `import_docx`, `import_idml`, `design`, `pack`, `unpack`, `info`,
+  `check` i `build`. Les opcions conserven el nom, amb guions baixos
+  (`color_space`, `font_dirs`, `dry_run`). `set` rep un diccionari, `config` un
+  fitxer o un diccionari, `chapters` un número, una llista, un `range` o
+  `"1,3-5"`. Tota funció que llegeix un llibre admet `design=`, un fitxer de
+  disseny com a camí o com a bytes, `design_parts=`, una llista o
+  `"page,text"`, i `composition=`, una etiqueta de llengua o `"auto"`.
+- **Informes com a objectes.** Cada funció executa la seva ordre amb `--json` i
+  retorna l'informe: `outputs`, `pages`, `timings` i `warnings`, cada avís un
   `Diagnostic` amb `kind`, `severity`, `message`, `at` i `page`. `info` hi
   afegeix `chapters`, `resources` i `fonts`; `check`, `passed`, `error_count` i
-  `warning_count`.
+  `warning_count`; `design`, `name` i `parts`; `import_idml`, `layout`,
+  `reason`, `chapters`, `quality`, `fonts`, `missing_links` i `package`.
 - **Errors com a excepcions.** Una fallada llança `PostextError`; una opció
   equivocada, `UsageError`. Quan `check` troba errors llança `ProblemsFound`,
   el `report` del qual els enumera; amb `raise_on_problems=False` retorna
   l'informe.
 - **Bytes.** Un llibre es pot donar com els bytes d'un paquet `.postext`. Amb
   `out="-"` el fitxer torna a `report.content`; `pdf_bytes`, `html_bytes`,
-  `epub_bytes`, `image_bytes`, `docx_bytes` i `pack_bytes` el retornen
-  directament.
+  `epub_bytes`, `image_bytes`, `docx_bytes`, `idml_bytes`, `pack_bytes` i
+  `design_bytes` el retornen directament.
 - `postext.Postext(binary, cwd=…, timeout=…)` fa servir un executable concret,
   i `python -m postext …` és la mateixa línia d'ordres.
 
 Cada crida torna a engegar l'executable. El
 [README](https://github.com/drnachio/postext/tree/main/packages/postext-python) del paquet recull totes les opcions.
+
+## Rust
+
+`cargo add postext` fa el mateix en Rust. La versió del crate és la de
+postext, baixa el mateix executable a la mateixa memòria cau el primer cop que
+el necessita (mai en compilar, de manera que les compilacions sense connexió
+funcionen) i també llegeix `POSTEXT_BIN`, així que el paquet de Python i el
+crate de Rust comparteixen una sola baixada en un mateix ordinador.
+
+```rust
+let report = postext::pdf("book.postext").out("book.pdf").set("page.dpi", 300).locale("es").run()?;
+println!("{:?}", report.output().and_then(|o| o.pages));
+for warning in &report.warnings {
+    println!("{} {:?} {}", warning.kind, warning.at, warning.message);
+}
+
+let pdf = postext::pdf(std::fs::read("book.postext")?).bytes()?;
+```
+
+- **Un constructor per ordre**: `pdf`, `html`, `epub`, `image`, `images`,
+  `docx`, `idml`, `import_docx`, `import_idml`, `design`, `pack`, `unpack`,
+  `info`, `check` i `build`. Les opcions són mètodes amb el mateix nom, amb
+  guions baixos (`color_space`, `font_dir`, `dry_run`). `set` rep qualsevol
+  valor JSON, `config_json` un `serde_json::Value`, `chapters` un nombre, un
+  interval, una llista o `"1,3-5"`. `run()` retorna l'informe i `bytes()`,
+  el fitxer.
+- **Informes amb tipus**: `Report` amb `outputs`, `pages`, `timings` i
+  `warnings`, i `InfoReport`, `CheckReport`, `DesignReport` i
+  `ImportIdmlReport` amb els camps de les seves ordres; `raw` conserva el JSON
+  sencer.
+- **Un sol tipus d'error**: `postext::Error` és `Failed`, `Usage`,
+  `ProblemsFound` (amb l'informe; `allow_problems()` el retorna en lloc seu),
+  `BinaryNotFound`, `InvalidArgument`, `Timeout` o `Io`.
+- `postext::Postext::with_binary(camí)` fa servir un executable concret, amb
+  la seva pròpia carpeta, entorn i temps límit. Sense la funció `download`,
+  activa per defecte, el crate no baixa mai res.
+
+El [README](https://github.com/drnachio/postext/tree/main/packages/postext-rust)
+del crate i la seva [documentació de l'API](https://docs.rs/postext) recullen
+totes les opcions.
 
 ## Com està fet
 

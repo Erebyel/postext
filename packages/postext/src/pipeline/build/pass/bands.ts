@@ -13,11 +13,13 @@ import { headingDesignBoxes, defaultOpenerTitle, measureHeadingDesign, markedTit
 import type { SideObstacle } from '../../floats/floatSlots.js';
 import { measureContentBlock, type BlockMeasureContext } from '../../blocks/measureContentBlock.js';
 import { columnBottom, uncapBand, type BandCap, bandTop, bareBandTop, applyBandCap, type BandCapZone, bandLinePitch, bandCapLinesAroundZone, bandCapLines, capRetryLimit } from '../../columns/bandCaps.js';
+import { bandSlackLines } from '../../columns/bandSlack.js';
 import { rollbackTrailingBlocks } from '../../blocks/buildHelpers.js';
 import type { BlockStyle } from '../../styles.js';
 import type { PartPlan } from '../../sections/parts.js';
 import type { PlannedFloat } from '../../floats/floatPlacement.js';
 import type { PassState, PassLate } from './state.js';
+import { passTape } from '../passTape.js';
 
 /** What createBands takes from the pass. */
 export interface BandsDeps {
@@ -366,9 +368,13 @@ export function createBands(deps: BandsDeps) {
   const bandCapProposals = new Map<number, BandCap>();
   const spanPlacedInBand = new Set<number>();
   const bandCapsApplied = new Set<number>();
+  /** Delivered trailing caps: the whole lines every column of the band
+   *  left empty under the cut (#1600, see `BandPassReport.capSlack`). */
+  const capSlack = new Map<number, number>();
 
   /** Columns of the band each cap was last applied to. */
   const cappedBandColumns = new Map<number, readonly VDTColumn[]>();
+  passTape().track('bands', { bandVisits, balanceExtraInColumn, openerBandHeads, openerOwnColumn, sideObstacleColumn, headingClaims, headingLeftBand, spanHeadingOpenedHere, bandCapProposals, spanPlacedInBand, bandCapsApplied, capSlack, cappedBandColumns });
   const enterBand = (contentIndex: number, part: number): void => {
     const page = doc.pages[cursor.pageIndex]!;
     const band = currentBand(page, cursor);
@@ -386,8 +392,9 @@ export function createBands(deps: BandsDeps) {
     state.bandStart = { contentIndex, part, visit };
     state.activeCap = null;
     if (!bandCaps) return;
-    for (const [spanIndex, cap] of bandCaps) {
-      if (cap.startContentIndex !== contentIndex || cap.startPart !== part || (cap.startVisit ?? 0) !== visit) continue;
+    // The caps of the band that opens here, asked for by its start (#1639):
+    // a cap for another band is none of this band's reading.
+    for (const [spanIndex, cap] of passTape().hintGroup('bandCaps', bandCaps, `${contentIndex}:${part}:${visit}`)) {
       // A cap whose last band took nothing (its opening block is taller
       // than the cut — a heading's leading over a one-line cap) would cut
       // the next band just as short, and the flow would open empty pages
@@ -450,7 +457,11 @@ export function createBands(deps: BandsDeps) {
       // a page of its own at the chapter's end. Not delivered: the cap is
       // tried a line lower, then dropped (#505).
       const displaced = floatPages && pendingFloats.some((f) => floatPages.get(f.resourceId) === page.index);
-      if (!displaced) spanPlacedInBand.add(boundaryIndex);
+      if (!displaced) {
+        spanPlacedInBand.add(boundaryIndex);
+        const cap = bandCaps?.get(boundaryIndex);
+        if (cap?.kind === 'trailing' && !cap.zone) capSlack.set(boundaryIndex, bandSlackLines(cols, cap.pitchPx ?? baselineGrid));
+      }
       return;
     }
     // A cap in force for this boundary that did not open the band the
@@ -537,7 +548,7 @@ export function createBands(deps: BandsDeps) {
     balanceExtraInColumn, addBalanceExtra, opensDefaultOpener, measuredAcrossPage, reserveOpenerBand,
     openerOwnColumn, openerHeadOf, underOpenerHeadFloat, atColumnHead, openerHeadSpacing,
     sideObstacleColumn, headingClaims, noteHeadingClaim, markSideObstacles, spanHeadingOpenedHere,
-    openSpanHeadingHere, rollbackHeadings, bandCapProposals, spanPlacedInBand, bandCapsApplied,
+    openSpanHeadingHere, rollbackHeadings, bandCapProposals, spanPlacedInBand, bandCapsApplied, capSlack,
     cappedBandColumns, enterBand, proposeTrailingCap
   };
 }

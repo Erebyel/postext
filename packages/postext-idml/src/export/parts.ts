@@ -18,6 +18,12 @@ export interface DesignMapInput {
   title: string;
   layerId: string;
   masterId: string;
+  /** Master spreads beside the empty one (`masters.ts`). */
+  masters?: string[];
+  /** Text variables, written as they are. */
+  variables?: string;
+  /** Layers above the pages' own (the die line's), written as they are. */
+  layers?: string;
   spreads: string[];
   stories: string[];
   /** Sections, hyperlinks and their destinations, written as they are. */
@@ -27,7 +33,7 @@ export interface DesignMapInput {
   guideLayerId?: string;
   /** The layers the page items are sorted into, bottom to top, instead of
    *  the one `Postext` layer (`layerId` then names the default one). */
-  layers?: { id: string; name: string; color?: string; locked?: boolean; printable?: boolean }[];
+  itemLayers?: { id: string; name: string; color?: string; locked?: boolean; printable?: boolean }[];
 }
 
 /** A layer of the document map. */
@@ -44,11 +50,13 @@ export function designMapXml(d: DesignMapInput): string {
     '<idPkg:Fonts src="Resources/Fonts.xml"/>' +
     '<idPkg:Styles src="Resources/Styles.xml"/>' +
     '<idPkg:Preferences src="Resources/Preferences.xml"/>' +
-    (d.layers?.length
-      ? d.layers.map((l) => layerXml(l.id, l.name, l.color ?? 'LightBlue', !!l.locked, l.printable !== false)).join('')
+    (d.variables ?? '') +
+    (d.itemLayers?.length
+      ? d.itemLayers.map((l) => layerXml(l.id, l.name, l.color ?? 'LightBlue', !!l.locked, l.printable !== false)).join('')
       : layerXml(d.layerId, 'Postext', 'LightBlue', false, true)) +
+    (d.layers ?? '') +
     (d.guideLayerId ? `<Layer${attr('Self', d.guideLayerId)} Name="Guides" Visible="true" Locked="false" IgnoreWrap="false" ShowGuides="true" LockGuides="true" UI="true" Expendable="true" Printable="false"><Properties><LayerColor type="enumeration">Magenta</LayerColor></Properties></Layer>` : '') +
-    `<idPkg:MasterSpread src="MasterSpreads/MasterSpread_${d.masterId}.xml"/>` +
+    [d.masterId, ...(d.masters ?? [])].map((id) => `<idPkg:MasterSpread src="MasterSpreads/MasterSpread_${id}.xml"/>`).join('') +
     d.spreads.map((id) => `<idPkg:Spread src="Spreads/Spread_${id}.xml"/>`).join('') +
     (d.sections ?? '') +
     '<idPkg:BackingStory src="XML/BackingStory.xml"/>' +
@@ -110,14 +118,32 @@ export interface Swatch {
   name: string;
   space: 'CMYK' | 'RGB';
   value: number[];
-  /** A spot ink (its own plate) rather than a process colour. */
-  spot?: true;
+  /** A spot ink's swatch (an ink of its own), or a tint of one. */
+  model?: 'Spot';
+  /** A tint swatch: the swatch it is a tint of, and the tint (percent). */
+  base?: string;
+  tint?: number;
+  /** The swatch's script label, key and value. */
+  label?: [string, string][];
 }
 
-export function graphicXml(swatches: Swatch[]): string {
-  const own = swatches
-    .map((s) => `<Color${attr('Self', s.self)}${attr('Model', s.spot ? 'Spot' : 'Process')}${attr('Space', s.space)}${attr('ColorValue', s.value.map(num).join(' '))} ColorOverride="Normal" AlternateSpace="NoAlternateColor" AlternateColorValue=""${attr('Name', s.name)} ColorEditable="true" ColorRemovable="true" Visible="true" SwatchCreatorID="7937"/>`)
-    .join('');
+const labelXml = (pairs: [string, string][] | undefined): string =>
+  pairs?.length ? `<Properties><Label>${pairs.map(([k, v]) => `<KeyValuePair${attr('Key', k)}${attr('Value', v)}/>`).join('')}</Label></Properties>` : '';
+
+function swatchXml(s: Swatch): string {
+  const tag = s.base ? 'Tint' : 'Color';
+  const head =
+    `<${tag}${attr('Self', s.self)} Model="${s.model ?? 'Process'}"${attr('Space', s.space)}${attr('ColorValue', s.value.map(num).join(' '))} ColorOverride="Normal" AlternateSpace="NoAlternateColor" AlternateColorValue=""` +
+    `${attr('Name', s.base ? '$ID/' : s.name)} ColorEditable="true" ColorRemovable="true" Visible="true" SwatchCreatorID="7937"${s.base ? `${attr('TintValue', s.tint ?? 100)}${attr('BaseColor', s.base)}` : ''}`;
+  const label = labelXml(s.label);
+  return label ? `${head}>${label}</${tag}>` : `${head}/>`;
+}
+
+/** Graphic.xml: InDesign's own swatches, the book's colours (tints after
+ *  the colours they are tints of), and the inks: the four process ones,
+ *  then the spot inks (`inks`, already written). */
+export function graphicXml(swatches: Swatch[], inks = ''): string {
+  const own = [...swatches.filter((s) => !s.base), ...swatches.filter((s) => s.base)].map(swatchXml).join('');
   return (
     `${XML_HEAD}<idPkg:Graphic xmlns:idPkg="${PKG_NS}" DOMVersion="${DOM_VERSION}">` +
     '<Color Self="Color/Black" Model="Process" Space="CMYK" ColorValue="0 0 0 100" ColorOverride="Specialblack" AlternateSpace="NoAlternateColor" AlternateColorValue="" Name="Black" ColorEditable="false" ColorRemovable="false" Visible="true" SwatchCreatorID="7937"/>' +
@@ -128,6 +154,7 @@ export function graphicXml(swatches: Swatch[]): string {
     '<Ink Self="Ink/$ID/Process Magenta" Name="$ID/Process Magenta" Angle="15" ConvertToProcess="false" Frequency="70" NeutralDensity="0.76" PrintInk="true" TrapOrder="2" InkType="Normal"/>' +
     '<Ink Self="Ink/$ID/Process Yellow" Name="$ID/Process Yellow" Angle="0" ConvertToProcess="false" Frequency="70" NeutralDensity="0.16" PrintInk="true" TrapOrder="3" InkType="Normal"/>' +
     '<Ink Self="Ink/$ID/Process Black" Name="$ID/Process Black" Angle="45" ConvertToProcess="false" Frequency="70" NeutralDensity="1.7" PrintInk="true" TrapOrder="4" InkType="Normal"/>' +
+    inks +
     '<Swatch Self="Swatch/None" Name="None" ColorEditable="false" ColorRemovable="false" Visible="true" SwatchCreatorID="7937"/>' +
     '<StrokeStyle Self="StrokeStyle/$ID/Solid" Name="$ID/Solid"/>' +
     '<StrokeStyle Self="StrokeStyle/$ID/Dashed" Name="$ID/Dashed"/>' +
@@ -170,6 +197,9 @@ export interface TextProps {
   strike?: boolean;
   /** A stroke round the glyphs (a halo's copy of the text): swatch and pt. */
   stroke?: { color: string; weight: number };
+  /** The text's ink overprints (a white or a varnish, an overprinting
+   *  colour). */
+  overprint?: boolean;
 }
 
 /** A tab stop: pt from the text frame's text edge (InDesign measures tab
@@ -203,6 +233,17 @@ export interface ParagraphStyleDef {
   format: ParagraphFormat;
 }
 
+/** A character style: the look of the runs a named Postext style set
+ *  (a chip, a `:span`), or of words in a face or size their paragraph's
+ *  style has not (#1555). Written whole (face, size, colour, tracking), so
+ *  a reader that takes a character style for what it sets, as the
+ *  importer does, reads the run's look from the style alone. */
+export interface CharacterStyleDef {
+  self: string;
+  name: string;
+  props: TextProps;
+}
+
 /** `ParagraphStyle/<name>`: a colon in a name is written `%3a`, as InDesign does. */
 export const styleSelf = (kind: 'ParagraphStyle' | 'CharacterStyle', name: string): string => `${kind}/${name.replace(/%/g, '%25').replace(/:/g, '%3a')}`;
 
@@ -217,7 +258,8 @@ export function textPropsAttrs(p: Partial<TextProps>): string {
     attr('BaselineShift', p.baselineShift) +
     attr('Underline', p.underline) +
     attr('StrikeThru', p.strike) +
-    (p.stroke ? `${attr('StrokeColor', p.stroke.color)}${attr('StrokeWeight', p.stroke.weight)} EndJoin="RoundEndJoin"` : '')
+    (p.stroke ? `${attr('StrokeColor', p.stroke.color)}${attr('StrokeWeight', p.stroke.weight)} EndJoin="RoundEndJoin"` : '') +
+    attr('OverprintFill', p.overprint)
   );
 }
 
@@ -250,7 +292,7 @@ export const KEPT_LINES =
   ' MinimumGlyphScaling="100" DesiredGlyphScaling="100" MaximumGlyphScaling="100" SingleWordJustification="LeftAlign" KeepLinesTogether="false" KeepAllLinesTogether="false" KeepWithNext="0"' +
   ' KerningMethod="$ID/Metrics" Ligatures="true" AlignToBaseline="false" BalanceRaggedLines="NoBalancing" LastLineIndent="0"';
 
-export function stylesXml(paragraphStyles: ParagraphStyleDef[], keptLines = false): string {
+export function stylesXml(paragraphStyles: ParagraphStyleDef[], keptLines = false, characterStyles: CharacterStyleDef[] = []): string {
   const own = paragraphStyles
     .map(
       (s) =>
@@ -262,7 +304,11 @@ export function stylesXml(paragraphStyles: ParagraphStyleDef[], keptLines = fals
     .join('');
   return (
     `${XML_HEAD}<idPkg:Styles xmlns:idPkg="${PKG_NS}" DOMVersion="${DOM_VERSION}">` +
-    '<RootCharacterStyleGroup Self="ucharstyles"><CharacterStyle Self="CharacterStyle/$ID/[No character style]" Imported="false" Name="$ID/[No character style]"/></RootCharacterStyleGroup>' +
+    '<RootCharacterStyleGroup Self="ucharstyles"><CharacterStyle Self="CharacterStyle/$ID/[No character style]" Imported="false" Name="$ID/[No character style]"/>' +
+    characterStyles
+      .map((s) => `<CharacterStyle${attr('Self', s.self)}${attr('Name', s.name)} Imported="false"${textPropsAttrs(s.props)}><Properties><BasedOn type="string">$ID/[No character style]</BasedOn><AppliedFont type="string">${escapeAttr(s.props.font)}</AppliedFont></Properties></CharacterStyle>`)
+      .join('') +
+    '</RootCharacterStyleGroup>' +
     '<RootParagraphStyleGroup Self="uparastyles">' +
     '<ParagraphStyle Self="ParagraphStyle/$ID/[No paragraph style]" Name="$ID/[No paragraph style]" Imported="false"/>' +
     '<ParagraphStyle Self="ParagraphStyle/$ID/NormalParagraphStyle" Name="$ID/NormalParagraphStyle" Imported="false" NextStyle="ParagraphStyle/$ID/NormalParagraphStyle"><Properties><BasedOn type="string">$ID/[No paragraph style]</BasedOn></Properties></ParagraphStyle>' +

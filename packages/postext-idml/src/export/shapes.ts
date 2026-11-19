@@ -4,7 +4,7 @@
 import type { DisplayItem, DisplayRect } from 'postext';
 import type { VDTPathCommand } from 'postext/writer';
 import { CHIP_PLACEHOLDER } from 'postext/writer';
-import { swatch } from './colours.js';
+import { overprintAttrs, swatch } from './colours.js';
 import { fieldXml } from './fields.js';
 import { parseCssFont } from './fonts.js';
 import { boxGeometry, chipRect, opacityXml, pathGeometry, pp, toSpread, type Pt } from './geometry.js';
@@ -26,18 +26,13 @@ export function rectXml(w: Writer, item: Pick<RectItem, 'rect' | 'fill' | 'strok
 }
 
 /** Fill, stroke (inside the edge) and rounded corners of a box. */
-function paintAttrs(w: Writer, fill: { ref: string; overprint?: true } | undefined, stroke: { ref: string; overprint?: true } | undefined, strokeWidthPx: number | undefined, radiusPx: number | undefined): string {
+export function paintAttrs(w: Writer, fill: { ref: string; overprint?: boolean } | undefined, stroke: { ref: string; overprint?: boolean } | undefined, strokeWidthPx: number | undefined, radiusPx: number | undefined): string {
   const radius = radiusPx ? radiusPx * w.k : 0;
   const corners = radius > 0 ? ['TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'].map((c) => `${attr(`${c}CornerOption`, 'RoundedCorner')}${attr(`${c}CornerRadius`, radius)}`).join('') : '';
   return (
     `${attr('FillColor', fill?.ref ?? 'Swatch/None')}${attr('StrokeColor', stroke?.ref ?? 'Swatch/None')}${attr('StrokeWeight', stroke ? strokeWidthPx! * w.k : 0)}` +
     `${stroke ? ' StrokeAlignment="InsideAlignment"' : ''}${corners}${overprintAttrs(fill, stroke)}`
   );
-}
-
-/** A spot ink that overprints what is under it (a varnish, a foil). */
-export function overprintAttrs(fill: { overprint?: true } | undefined, stroke: { overprint?: true } | undefined): string {
-  return `${fill?.overprint ? ' OverprintFill="true"' : ''}${stroke?.overprint ? ' OverprintStroke="true"' : ''}`;
 }
 
 /** The boxes of a text item's chips (a label's fill, an outline) as
@@ -102,14 +97,14 @@ export function ruleXml(w: Writer, item: Extract<DisplayItem, { kind: 'rule' }>)
   const dash = item.dash?.length ? ` StrokeType="StrokeStyle/$ID/Dashed"${attr('StrokeDashAndGap', item.dash.map((d) => num(d * w.k)).join(' '))}` : '';
   return (
     `<GraphicLine${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)} ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
-    ` FillColor="Swatch/None"${attr('StrokeColor', stroke.ref)}${attr('StrokeWeight', item.widthPx * w.k)}${dash} LeftLineEnd="None" RightLineEnd="None">` +
+    ` FillColor="Swatch/None"${attr('StrokeColor', stroke.ref)}${attr('StrokeWeight', item.widthPx * w.k)}${dash}${overprintAttrs(undefined, stroke)} LeftLineEnd="None" RightLineEnd="None">` +
     `${pathGeometry([{ points: [pp(a), pp(b)], open: true }])}${opacityXml(stroke.opacity)}</GraphicLine>`
   );
 }
 
 /** Path commands (sheet px) as IDML path points: each point's left
  *  direction is the handle coming in, its right one the handle going out. */
-function subpathPoints(w: Writer, cmds: VDTPathCommand[]): { points: string[]; open: boolean } {
+export function subpathPoints(w: Writer, cmds: VDTPathCommand[]): { points: string[]; open: boolean } {
   type P = { a: Pt; l: Pt; r: Pt };
   const pts: P[] = [];
   let open = true;

@@ -472,6 +472,12 @@ const config: PostextConfig = {
       <td><code>'Continúa'</code> / <code>'Continued'</code></td>
       <td>Texto de ese indicador, alineado a la derecha bajo la parte con la tipografía de la nota (véase <a href="#estilo-de-pies-de-recurso">estilo de pies</a>). El valor por defecto sigue el idioma del documento (véase <a href="/es/docs/configuration-language#idioma-del-documento">Idioma del documento</a> para el de cada idioma).</td>
     </tr>
+    <tr>
+      <td><code>hyphenation</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Compone las celdas como texto corrido, como <code>captionStyle.hyphenation</code> el pie: cada celda se corta entera con el partidor óptimo. Las celdas van en bandera, así que sus palabras solo se dividen con <code>bodyText.hyphenation.ragged</code> activo. <code>false</code> corta las celdas línea a línea sin dividir palabras. Desde postext 1.81.</td>
+    </tr>
   </tbody>
 </table>
 
@@ -605,7 +611,7 @@ Una tabla que el documento usa y cuya cuadrícula tiene esos problemas se notifi
 
 ## Estilo de pies de recurso
 
-La propiedad `captionStyle` controla los pies de recurso (la línea `Figura 1 — …` que va bajo las imágenes, los SVG y las tablas, o sobre ellos). La etiqueta numerada y la descripción comparten tipografía y tamaño (una limitación del motor), pero la etiqueta puede tener su propio peso, su cursiva y su color. La familia tipográfica, el tamaño y el color se heredan del texto base cuando no se indican. El pie puede situarse **encima** del recurso (la convención habitual para tablas) y componerse sobre una **barra** de color que ocupa todo el ancho del bloque; una **nota** opcional más pequeña (procedencia, créditos: `Resource.note`) recibe su estilo del subobjeto `note`. Un tipo de recurso puede cambiar cualquiera de estos campos para sus propios recursos mediante `ResourceType.captionStyle` (véase [Tipos de recurso](#tipos-de-recurso)).
+La propiedad `captionStyle` controla los pies de recurso (la línea `Figura 1 — …` que va bajo las imágenes, los SVG y las tablas, o sobre ellos). La etiqueta numerada y la descripción comparten tipografía y tamaño (una limitación del motor), pero la etiqueta puede tener su propio peso, su cursiva y su color. La familia tipográfica, el tamaño y el color se heredan del texto base cuando no se indican. El pie puede situarse **encima** del recurso (la convención habitual para tablas) y componerse sobre una **barra** de color que ocupa todo el ancho del bloque; una **nota** opcional más pequeña (procedencia, créditos: `Resource.note`) recibe su estilo del subobjeto `note`. Un tipo de recurso puede cambiar cualquiera de estos campos para sus propios recursos mediante `ResourceType.captionStyle` (véase [Tipos de recurso](#tipos-de-recurso)). Desde postext 1.82, el EPUB de maquetación fluida compone también los pies y las notas de un tipo con su estilo, mediante una clase en la caja de la figura o la tabla (`pt-type-<id>`), y la exportación a Word deja enteras las palabras de un pie o una nota salvo que su `hyphenation` esté activado, como en la impresión.
 
 ```ts
 const config: PostextConfig = {
@@ -663,16 +669,16 @@ const config: PostextConfig = {
       <td>Alineación horizontal de las líneas del pie. <code>'justify'</code> lleva todas las líneas salvo la última al ancho completo. Sobre una barra de pie las líneas se alinean dentro de su relleno; un pie lateral se alinea dentro de su propio ancho.</td>
     </tr>
     <tr>
-      <td><code>bodyBreaking</code></td>
+      <td><code>hyphenation</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>Corta la leyenda como el texto general: el mismo partidor, dentro de los límites de espaciado del texto general al justificar, las palabras divididas cuando el texto general se parte y sus reglas de partición y de escaleras (<code>bodyText.hyphenation</code>, <code>bodyText.stacks</code>). La etiqueta numerada nunca se parte. Desactivado: línea a línea, sin dividir palabras.</td>
+      <td>Parte el pie como lo hace un estilo de párrafo con <code>hyphenation: true</code>: justificado, y en bandera si <code>bodyText.hyphenation.ragged</code> está activo, con el diccionario y las reglas de partición del texto general, también con <code>bodyText.hyphenation.enabled</code> desactivado. El pie se corta entonces entero con el partidor óptimo (<code>bodyText.optimalLineBreaking</code>), dentro de los límites de espaciado del texto general al justificar y con sus reglas de escaleras y de bordes de línea (<code>bodyText.stacks</code>, <code>citationBreaks</code>, <code>operatorBreaks</code>). La etiqueta numerada nunca se parte. <code>false</code> corta el pie línea a línea sin dividir palabras. Desde postext 1.81.</td>
     </tr>
     <tr>
       <td><code>lineHeight</code></td>
       <td><code>Dimension</code></td>
       <td>el del texto general, en proporción</td>
-      <td>El interlineado de la leyenda. <code>em</code> se mide sobre el cuerpo de la propia leyenda.</td>
+      <td>El interlineado del pie. <code>em</code> se mide sobre el cuerpo del propio pie. Desde postext 1.81.</td>
     </tr>
     <tr>
       <td><code>gap</code></td>
@@ -792,10 +798,16 @@ El subobjeto `note` estiliza `Resource.note`, una línea breve (procedencia, cr�
       <td>Alineación horizontal de las líneas de la nota, como <code>align</code> para el pie.</td>
     </tr>
     <tr>
-      <td><code>note.bodyBreaking</code></td>
+      <td><code>note.hyphenation</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>Corta la nota como el texto general, como <code>bodyBreaking</code> para la leyenda.</td>
+      <td>Parte la nota, como <code>hyphenation</code> el pie. Desde postext 1.81.</td>
+    </tr>
+    <tr>
+      <td><code>note.lineHeight</code></td>
+      <td><code>Dimension</code></td>
+      <td>el del texto general, en proporción</td>
+      <td>El interlineado de la nota. <code>em</code> se mide sobre el cuerpo de la propia nota. Desde postext 1.81.</td>
     </tr>
   </tbody>
 </table>

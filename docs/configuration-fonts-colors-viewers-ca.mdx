@@ -40,7 +40,7 @@ Els colors es desen amb una representació hexadecimal i amb el model de color d
 interface ColorValue {
   hex: string;         // '#ff0000', 'transparent', etc.
   model: ColorModel;   // 'hex' | 'rgb' | 'cmyk' | 'hsl' | 'spot'
-  cmyk?: CmykPercent;  // Els valors de quatricromia exactes d'un color definit en CMYK.
+  cmyk?: CmykPercent;  // Els valors de quadricromia exactes d'un color definit en CMYK.
   spot?: SpotColor;    // La tinta d'un color de tinta plana.
   overprint?: boolean; // Sobreimprimeix en una sortida d'impremta (consulta Colors que sobreimprimeixen).
   paletteId?: string;  // L'entrada de colorPalette que segueix.
@@ -564,9 +564,10 @@ interface PrintConfig {
   inkLimit?: number;                       // Cobertura total d'àrea, en percentatge.
   black?: PrintBlackConfig;
   preflight?: PrintPreflightConfig;
-  inks?: PrintInk[];                       // La taula de tintes: noms, àlies, quadricromia.
+  inks?: PrintInk[];                       // La taula de tintes: noms, àlies, quadricromia, acabats.
   plates?: PrintPlatesConfig;              // Les planxes del treball: impressió a dues tintes.
   imageColor?: PrintImageColorConfig;      // Com es llegeixen les imatges: perfils, grisos.
+  dieLine?: PrintDieLineConfig;            // La línia de troquel dels troquels del llibre.
 }
 
 interface CustomOutputProfile {
@@ -640,6 +641,12 @@ interface CustomOutputProfile {
       <td><code>PrintPreflightConfig</code></td>
       <td>vegeu <a href="/ca/docs/configuration-pdf-output#preflight">Preflight</a></td>
       <td>Què revisa el preflight i amb quins llindars.</td>
+    </tr>
+    <tr>
+      <td><code>dieLine</code></td>
+      <td><code>PrintDieLineConfig</code></td>
+      <td><code>&#123; output: 'page', ink: 'Die' &#125;</code></td>
+      <td>La línia de troquel de les pàgines amb troquel (<code>dieCuts</code>): <code>output</code> (<code>'page'</code> o <code>'none'</code>), el nom de la planxa <code>ink</code>, el seu equivalent <code>cmyk</code> (100 % magenta) i el gruix del traç <code>width</code> (0,25 pt). Vegeu <a href="/ca/docs/special-inks-die-cuts#la-línia-de-troquel-al-pdf">La línia de troquel al PDF</a>.</td>
     </tr>
   </tbody>
 </table>
@@ -739,7 +746,7 @@ interface PrintBlackConfig {
       <td><code>kOnlyNeutrals</code></td>
       <td><code>boolean</code></td>
       <td><code>true</code></td>
-      <td>Un color neutre (`#000000`, `#808080`…) s'imprimeix només amb tinta negra, amb la K triada perquè la lluminositat coincideixi, mai com un gris de quatricromia que canvia amb el registre. Les imatges conserven la generació de negre del perfil.</td>
+      <td>Un color neutre (`#000000`, `#808080`…) s'imprimeix només amb tinta negra, amb la K triada perquè la lluminositat coincideixi, mai com un gris de quadricromia que canvia amb el registre. Les imatges conserven la generació de negre del perfil.</td>
     </tr>
     <tr>
       <td><code>overprint</code></td>
@@ -1461,6 +1468,7 @@ Aquests errors de la mateixa configuració no passen mai sense avís, i cap inte
 - **Números de línia en text vertical**: `lineNumbers.enabled: true` en un document compost en vertical (`layout.writingMode: 'vertical-rl'`). Les pàgines verticals no porten números de línia, i `used` és `false` (`lineNumbersUnsupported`; vegeu [Numeració de línies](/ca/docs/configuration-notes-references#numeració-de-línies)).
 - **Text al voltant en escriptura vertical**: el `defaultPlacement.wrap` d'un tipus de recurs en un document compost en vertical. Les pàgines verticals no componen text al costat d'una figura, i `used` és `none` (`wrapUnsupported`; vegeu [Format del document › Ajust del text](/ca/docs/document-format-resources#ajust-del-text)). Un `wrap` que no indica cap costat és un valor de paràmetre desconegut.
 - **Estil de requadre basat en un altre**: un estil de requadre amb un `extends` que no correspon a cap estil de `calloutStyles` (`calloutStyleExtendsUnknown`, amb l'id més semblant a `suggestion`), o amb una cadena d'`extends` que torna a l'estil (`calloutStyleExtendsCycle`, amb el bucle `a → b → a` a `value`). L'estil queda independent, amb els valors per defecte en el que no fixa (vegeu [Estils basats en un altre](/ca/docs/configuration-callouts#estils-basats-en-un-altre)).
+- **Configuració del llibre en un estil de capítol**: un estil de capítol el `config` del qual fixa una cosa que comparteix tot el llibre: la mida, la resolució, les marques de tall o l'enquadernació de `page`, la llengua, les fonts registrades, la producció d'impremta, la generació del PDF, els visors o les comprovacions. L'estil hi conserva el valor del llibre; `path` assenyala l'ajust (`chapterStyles[0].config.locale`) i `value` l'anomena (`chapterStyleBookSetting`; vegeu [Estils de capítol](/ca/docs/configuration-styles#estils-de-capítol)).
 - **Plantilles de pàgina i estils de rètol**: un problema a `pageTemplates` o `labelStyles`: un id o un nom repetit, `extends`, ancoratges o marcs encadenats que formen un bucle, un estil, marc o plantilla que no existeix, un mínim més gran que el seu màxim, un estil de rètol d'una àncora que `labelStyles` no té (es comprova quan es passen els recursos: `collectConfigWarnings(config, { resources })`). El seu `path` és un punter JSON (`/pageTemplates/3/frames/2/style`); cada tipus apareix amb la causa i la solució a [Avisos de les plantilles de pàgina](/ca/docs/configuration-composed-pages#avisos-de-les-plantilles-de-pàgina).
 - **Contingut en un disseny**: un element de text de disseny amb un text que, sense comptar els marcadors, és més llarg que una etiqueta breu, és a dir, text del llibre desat a la configuració. Un avís per paràmetre (un estil d'encapçalament, la capçalera, el disseny de les parts), amb el camí de cada text (`contentInConfig`; vegeu [Comprovació del contingut](#comprovació-del-contingut-configuració)). A diferència dels altres, es pot desactivar: `checks.contentInConfig.enabled: false`.
 

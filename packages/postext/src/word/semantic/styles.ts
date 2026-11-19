@@ -63,7 +63,8 @@ export interface StyleDef {
 }
 
 export class StyleRegistry {
-  private readonly defs = new Map<string, StyleDef>();
+  /** The styles defined, by id (a chapter style's are read beside the book's, #1521). */
+  readonly defs = new Map<string, StyleDef>();
   private readonly byKey = new Map<string, string>();
   private readonly chipIds = new Map<string, string>();
   /** The face each paragraph style sets its text in (#1444). */
@@ -300,7 +301,7 @@ export class StyleRegistry {
     if (sameCaptionLook(cap, this.resolved.captionStyle)) return STYLE.caption;
     const u = this.units;
     const line = twips(u, this.resolved.bodyText.lineHeight, px(u, this.resolved.bodyText.fontSize));
-    const look = captionLook(u, cap, line, this.font(cap.fontFamily));
+    const look = captionLook(u, cap, line, this.font(cap.fontFamily), this.resolved.captionStyle);
     const id = this.define(`caption:${typeId}`, 'PostextCaption', typeId, () => ({ type: 'paragraph', name: `Caption: ${typeId}`, custom: true, basedOn: STYLE.caption, next: STYLE.normal, ...look }));
     return this.face(id, cap.fontFamily || this.resolved.bodyText.fontFamily, cap.fontFamily ? 400 : this.resolved.bodyText.fontWeight);
   }

@@ -3,11 +3,11 @@
 export const metadata = {
   title: 'Command line: postext in a terminal, a script or an agent',
   sidebarTitle: 'Command line',
-  description: 'A single self-contained executable for macOS, Linux and Windows. It turns a .postext book, a book folder or loose Markdown into PDF, HTML, EPUB, page images and Word, packs bundles, checks books, and gives JSON output for scripts and agents',
+  description: 'A single self-contained executable for macOS, Linux and Windows. It turns a .postext book, a book folder or loose Markdown into PDF, HTML, EPUB, page images and Word, packs bundles, checks books, and gives JSON output for scripts and agents, with Python and Rust packages that drive it from code',
   lang: 'en',
-  lastUpdated: '2026-11-06',
+  lastUpdated: '2026-11-16',
   readingTime: '14 min',
-  order: 51,
+  order: 52,
   plainSummary: "This page is for people who want to make books with Postext from a terminal instead of the website. You download one file for your computer and run it, with nothing to install. You give it your book, or a few text files, and it makes a PDF, a web page, an e-book, pictures of the pages or a Word document. It can also check a book for problems and pack its files into one. Programs and AI helpers can use it too, because it can answer in a format they read easily.",
 };
 
@@ -100,6 +100,8 @@ system from npm and runs it, and `npm install -g postext-cli` keeps it as a
 Run with no arguments, `postext` prints its help; `postext help <command>`
 lists the options of one command.
 
+To call it from a program, `pip install postext` (Python) and `cargo add postext` (Rust) wrap this same executable and download it on first use: see [Python](#python) and [Rust](#rust) below.
+
 ## A first book
 
 Three Markdown files in a folder are a book, one chapter each, in name order:
@@ -166,7 +168,8 @@ own configuration. A multilingual bundle is read in its own language unless
     <tr><td><code>docx</code></td><td>The chapters as a Word document: semantic (the content alone, in plain Word styles), formatted (the same editable text with the book's design) or a page facsimile (every line in a fixed text box).</td></tr>
     <tr><td><code>idml</code></td><td>The pages as an InDesign package (IDML), for finishing in InDesign.</td></tr>
     <tr><td><code>import-docx</code></td><td>The corrections made in an exported Word file, back into the book; any other Word document as a new book (a folder or a <code>.postext</code>).</td></tr>
-    <tr><td><code>import-idml</code></td><td>An InDesign document saved as IDML, as a new book (a folder or a <code>.postext</code>).</td></tr>
+    <tr><td><code>import-idml</code></td><td>An InDesign document saved as IDML, or a zipped InDesign package, as a new book (a folder or a <code>.postext</code>).</td></tr>
+    <tr><td><code>design</code></td><td>The design of a book (some of its parts, or all) as a design file, a <code>.postext</code> with no chapters.</td></tr>
     <tr><td><code>pack</code></td><td>A book folder or loose Markdown as one <code>.postext</code> file.</td></tr>
     <tr><td><code>unpack</code></td><td>A <code>.postext</code> file as a folder.</td></tr>
     <tr><td><code>info</code></td><td>The book's chapters, languages, resources and fonts, and with <code>--pages</code> its page count.</td></tr>
@@ -199,6 +202,9 @@ change them for one run:
 - `--accessible` / `--no-accessible`: the tagged structure for screen readers.
 - `--no-outlines`: leave out the bookmarks.
 - `--page-negative`: negative pages, for some print workflows.
+- `--die-line page|none`: the die line of a book with die-cuts, on a plate of its own
+  (`page`, the default) or left out (`none`); see
+  [The die line in the PDF](/en/docs/special-inks-die-cuts#the-die-line-in-the-pdf).
 
 ### html
 
@@ -375,7 +381,7 @@ chained by `next` share one), callout styles as paragraph styles and authored
 CMYK colours as swatches. Chips that carry a form field become InDesign form
 fields. `--lines keep` (the default) ends every line where Postext ended it,
 so InDesign shows the same lines as the PDF; `--lines reflow` leaves the
-paragraphs to InDesign's composer, and line breaks may differ. `--spreads facing`
+paragraphs to InDesign's composer, and line breaks may differ. The running text of the pages laid out in columns runs through one story, threaded through a frame per column, which the importer reads back as a flowing book; `--text frames` writes a frame and a story for each block instead (since postext 1.85.0). `--spreads facing`
 or `--spreads single` pairs the pages, or not, whatever the margins say. `--images link`
 puts the pictures beside the file in `Links/` instead of inside it. `--fonts`
 writes the font files of the faces used beside the package, in `Document
@@ -385,7 +391,7 @@ What the package cannot carry as the book has it (emphasis dots in vertical text
 table's rounded frame) is reported as an `idml.*` warning. The writer is the
 `postext-idml` package: see [Programmatic usage › InDesign
 packages](/en/docs/configuration-programmatic-usage#indesign-packages-postext-idml).
-In `build`, `--idml FILE` writes the same package, with `--idml-images`, `--idml-lines`, `--idml-spreads` and `--idml-fonts`.
+In `build`, `--idml FILE` writes the same package, with `--idml-images`, `--idml-lines`, `--idml-spreads`, `--idml-text` and `--idml-fonts`.
 Since postext 1.71; `--lines` and `--fonts` since 1.76, `--spreads` since 1.78.
 
 ### import-idml
@@ -394,11 +400,32 @@ Since postext 1.71; `--lines` and `--fonts` since 1.76, `--spreads` since 1.78.
 postext import-idml book.idml -o book/
 postext import-idml book.idml -o book.postext --layout flow --links pictures/
 postext import-idml book.idml --report --json
+postext import-idml package.zip -o book.postext
+postext import-idml package.zip --document Book/Book.idml -o book/
 ```
 
-`import-idml` reads an InDesign Markup package and writes a new book, a folder or a `.postext`: the chapters as Markdown, the configuration the document's styles and pages give, and its pictures and tables as resources. An `.indd` is not read: save it from InDesign as InDesign Markup first. `--layout pages` follows the document page for page as composed pages, each frame where it stood; `--layout flow` writes a flowing book, the text in reading order under the document's styles, for Postext to set again; `auto` (the default) picks one and says why. Linked pictures are read from `--links`, or else from beside the file and its `Links/` folder, and the ones not found are listed. The fonts the document names are listed too: a package carries no font files, so give them with `--font-dir` when the book is built.
+`import-idml` reads an InDesign Markup package and writes a new book, a folder or a `.postext`: the chapters as Markdown, the configuration the document's styles and pages give, and its pictures and tables as resources. An `.indd` is not read: save it from InDesign as InDesign Markup first. `--layout pages` follows the document page for page as composed pages, each frame where it stood; `--layout flow` writes a flowing book, the text in reading order under the document's styles, for Postext to set again; `auto` (the default) picks one and says why. The file may also be a zipped InDesign package, the folder **File › Package** makes with **Include IDML** ticked, sent as one `.zip`: the command imports its IDML with the pictures of its `Links/` folder and puts the font files of its `Document fonts/` folder into the book. When the zip holds several IDML documents, `--document` names the one to import by its path in the zip (`--document Book/Book.idml`); without it, the command lists them. A package that holds only the `.indd` is refused, with how to get the IDML. Linked pictures are read from `--links` first, then from the package, then from beside the file and its `Links/` folder, and the ones not found are listed. The fonts the document names are listed too: a bare `.idml` carries no font files, so give them with `--font-dir` when the book is built. With a package, a face found in `--font-dir` goes into the book instead of the package's file. A font collection (`.ttc`, `.otc`), in the package or in `--font-dir`, is split into single faces, and only the faces the book uses go in (since postext 1.83).
 
 A book exported from Postext comes back with the same lines. A document made in InDesign is read with losses: the command prints the verdict (`faithful`, `approximate` or `lossy`), the counts and what was lost or approximated; `--report` adds the notes and how each paragraph style was read, and `--json` carries all of it as data. `--hidden`, `--pasteboard` and `--non-printing` also read hidden layers and objects, the pasteboard and non-printing objects; `--conditions all` reads all the conditional text, `--changes reject` reads tracked changes as rejected, and `--no-masters` leaves out master-page items. `--name` and `--locale` give the title and the language. The importer is `idmlToPostext` of the `postext-idml` package: see [Programmatic usage › InDesign packages](/en/docs/configuration-programmatic-usage#indesign-packages-postext-idml). The import copies the document as it is; to port a book you will keep, with its layout rules worked out, use the agent skill instead (see [InDesign: import, export and porting](/en/docs/indesign)).
+
+### design
+
+```bash
+postext design book.postext -o novel.postext
+postext design book/ --parts page,text,headings -o type.postext
+postext pdf other/ --design novel.postext -o other.pdf
+```
+
+A design file holds a book's design and none of its text: the settings of the parts asked for (the Design panel's groups, see [Design bundles](/en/docs/configuration-bundles#design-bundles)) with the font files and colour profile they name. A font marked as not redistributable is left out. `--parts` takes some parts only, comma separated; `--design-name`, `--id` and `--description` name the design. The same book always gives the same bytes.
+
+`--design FILE`, an option of every command that reads a book, sets the book in a design file or in another book's design, before `--config` and `--set`: the settings of its parts replace the book's, named styles merge by id and the design's fonts join the book's. `--design-parts` takes some of its parts only. The Sandbox's Design panel imports and exports the same files.
+
+`--composition TAG`, also an option of every command that reads a book, sets the composition rules of a language's tradition after `--design` (since postext 1.80): `es`, `en-US` (or `en`), `en-GB`, `fr` or `de`, or `auto` for the book's language. The convention's rules replace the book's and the others go back to their defaults; the type stays as it is. See [Composition conventions](/en/docs/configuration-text#composition-conventions).
+
+```bash
+postext pdf book/ --composition auto -o book.pdf
+postext design book/ --composition es --parts composition -o house-rules.postext
+```
 
 ### pack and unpack
 
@@ -471,10 +498,14 @@ good files.
     <tr><td><code>--chapters LIST</code></td><td>Lays out some chapters only: <code>2</code>, <code>1,3-5</code>, <code>4-</code>. Faster on a long book; their pages are numbered from their own first page.</td></tr>
     <tr><td><code>--set PATH=VALUE</code></td><td>Changes one setting for this run, as a dotted path: <code>--set page.dpi=150</code>, <code>--set bodyText.fontFamily=Lora</code>, <code>--set headings.levels.0.italic=true</code>. The value is read as JSON when it can be (numbers, true and false, objects), otherwise as text. Repeatable.</td></tr>
     <tr><td><code>--config FILE</code></td><td>A configuration (or a <code>preset.json</code>) for loose Markdown, or merged over a book's own.</td></tr>
+    <tr><td><code>--design FILE</code>, <code>--design-parts LIST</code></td><td>Sets the book in the design of a design file (from <code>postext design</code> or the Sandbox) or of another book's <code>.postext</code>, before <code>--config</code> and <code>--set</code>. <code>--design-parts LIST</code> takes only some of its parts.</td></tr>
+    <tr><td><code>--composition TAG</code></td><td>Sets the composition rules of a language's tradition (<code>es</code>, <code>en-US</code>, <code>en-GB</code>, <code>fr</code>, <code>de</code>; <code>auto</code>: the book's language) after <code>--design</code>. Since postext 1.80.</td></tr>
+    <tr><td><code>--hyphenation-exceptions [LANG=]FILE</code></td><td>Merges a file of words kept whole into the book's lists for this run, after <code>--config</code> and before <code>--set</code>. It reads the same files as the Sandbox's Import (<a href="/en/docs/configuration-language#words-kept-whole">words kept whole</a>): a plain list, the <code>{'\\hyphenation{…}'}</code> blocks of a TeX file, or JSON. A plain list goes to the list of <code>LANG</code>, or to the list of every language without one; a JSON object fills one list per language, and its <code>"*"</code> key is the list of every language. Repeatable. Since postext 1.81.</td></tr>
     <tr><td><code>--resources DIR</code>, <code>--fonts DIR</code>, <code>--name TEXT</code></td><td>Pictures, fonts and title for loose Markdown.</td></tr>
     <tr><td><code>--font-dir DIR</code></td><td>A folder to look in for fonts the book does not carry. Repeatable.</td></tr>
     <tr><td><code>--offline</code></td><td>Never download fonts.</td></tr>
     <tr><td><code>--cache-dir DIR</code></td><td>Where downloaded fonts are kept.</td></tr>
+    <tr><td><code>--threads N|auto</code></td><td>Lays the chapters out on <code>N</code> threads (<code>auto</code>: as many as the length of the book and the cores of the machine call for). The pages are the same as on one thread, which is the default. Since postext 1.89.</td></tr>
   </tbody>
 </table>
 
@@ -591,27 +622,69 @@ pdf = postext.pdf_bytes(open("book.postext", "rb").read())
 ```
 
 - **One function per command**: `pdf`, `html`, `epub`, `image`, `images`,
-  `docx`, `import_docx`, `pack`, `unpack`, `info`, `check` and `build`. The
-  options keep their names, with underscores (`color_space`, `font_dirs`,
-  `dry_run`). `set` takes a dict, `config` a file or a dict, `chapters` a
-  number, a list, a `range` or `"1,3-5"`.
+  `docx`, `idml`, `import_docx`, `import_idml`, `design`, `pack`, `unpack`,
+  `info`, `check` and `build`. The options keep their names, with underscores
+  (`color_space`, `font_dirs`, `dry_run`). `set` takes a dict, `config` a file
+  or a dict, `chapters` a number, a list, a `range` or `"1,3-5"`. Every
+  function that reads a book takes `design=`, a design file as a path or as
+  bytes, `design_parts=`, a list or `"page,text"`, and `composition=`, a
+  language tag or `"auto"`.
 - **Reports as objects.** Each function runs its command with `--json` and
   returns the report: `outputs`, `pages`, `timings` and `warnings`, each a
   `Diagnostic` with `kind`, `severity`, `message`, `at` and `page`. `info` adds
   `chapters`, `resources` and `fonts`; `check` adds `passed`, `error_count` and
-  `warning_count`.
+  `warning_count`; `design` adds `name` and `parts`; `import_idml` adds
+  `layout`, `reason`, `chapters`, `quality`, `fonts`, `missing_links` and
+  `package`.
 - **Errors as exceptions.** A failure raises `PostextError`, a wrong option
   `UsageError`. When `check` finds errors it raises `ProblemsFound`, whose
   `report` lists them; with `raise_on_problems=False` it returns the report.
 - **Bytes.** A book can be given as the bytes of a `.postext` bundle. With
-  `out="-"` the file comes back in `report.content`; `pdf_bytes`,
-  `html_bytes`, `epub_bytes`, `image_bytes`, `docx_bytes` and `pack_bytes`
-  return it directly.
+  `out="-"` the file comes back in `report.content`; `pdf_bytes`, `html_bytes`,
+  `epub_bytes`, `image_bytes`, `docx_bytes`, `idml_bytes`, `pack_bytes` and
+  `design_bytes` return it directly.
 - `postext.Postext(binary, cwd=…, timeout=…)` runs a given executable, and
   `python -m postext …` is the command line itself.
 
 Each call starts the executable again. The package's
 [README](https://github.com/drnachio/postext/tree/main/packages/postext-python) lists every option.
+
+## Rust
+
+`cargo add postext` does the same for Rust. The crate's version is postext's,
+it downloads the same executable into the same cache folder on first use
+(never at build time, so offline builds work) and reads `POSTEXT_BIN` too, so
+a Python package and a Rust crate on one machine share one download.
+
+```rust
+let report = postext::pdf("book.postext").out("book.pdf").set("page.dpi", 300).locale("es").run()?;
+println!("{:?}", report.output().and_then(|o| o.pages));
+for warning in &report.warnings {
+    println!("{} {:?} {}", warning.kind, warning.at, warning.message);
+}
+
+let pdf = postext::pdf(std::fs::read("book.postext")?).bytes()?;
+```
+
+- **One builder per command**: `pdf`, `html`, `epub`, `image`, `images`,
+  `docx`, `idml`, `import_docx`, `import_idml`, `design`, `pack`, `unpack`,
+  `info`, `check` and `build`. The options are methods with the same names, in
+  snake case (`color_space`, `font_dir`, `dry_run`). `set` takes any JSON
+  value, `config_json` a `serde_json::Value`, `chapters` a number, a range, a
+  list or `"1,3-5"`. `run()` returns the report and `bytes()` the file.
+- **Typed reports**: `Report` with `outputs`, `pages`, `timings` and
+  `warnings`, and `InfoReport`, `CheckReport`, `DesignReport` and
+  `ImportIdmlReport` with the fields of their commands; `raw` keeps the whole
+  JSON.
+- **One error type**: `postext::Error` is `Failed`, `Usage`, `ProblemsFound`
+  (with the report; `allow_problems()` returns it instead), `BinaryNotFound`,
+  `InvalidArgument`, `Timeout` or `Io`.
+- `postext::Postext::with_binary(path)` runs a given executable, with its own
+  folder, environment and timeout. Without the default `download` feature the
+  crate never downloads.
+
+The crate's [README](https://github.com/drnachio/postext/tree/main/packages/postext-rust)
+and its [API documentation](https://docs.rs/postext) list every option.
 
 ## How it is made
 

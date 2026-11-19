@@ -149,6 +149,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>段落は本文として組まれます。</td>
     </tr>
     <tr>
+      <td><code>chapterStyleUnknown</code>, <code>partStyleMidChapter</code></td>
+      <td><a href="/ja/docs/configuration-styles#章スタイル">章スタイル</a></td>
+      <td>—</td>
+    </tr>
+    <tr>
       <td><code>unknownCalloutType</code></td>
       <td><code>:::callout{'{'}type{'}'}</code>の名前が<code>calloutStyles</code>のどれにも該当しません。囲みスタイルが1つ以上設定されているときにだけ発生します。</td>
       <td>囲みには最初の囲みスタイルが使われます。</td>
@@ -389,8 +394,8 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>リストは段の終わりで切られます。</td>
     </tr>
     <tr>
-      <td><code>stack</code></td>
-      <td>段落の同じ段にある連続した2行が、同じ語または同じ<code>bodyText.stackMinCharacters</code>文字で終わる（<code>edge: 'end'</code>）か始まる（<code>'start'</code>）場合です。<code>text</code>は繰り返された文字列（1行目の表記どおり）、<code>lines</code>は2行の文字列です。<code>bodyText.stacks: 'warn'</code>ではすべての重複を、<code>'avoid'</code>では改行処理が残したものを報告します。重複ごとに1件。2行を指し、そのページが付きます。postext 1.73以降。</td>
+      <td><code>stack</code>, <code>citationBreak</code>, <code>operatorBreak</code></td>
+      <td>段落の同じ段にある連続した2行が、同じ語または同じ<code>bodyText.stackMinCharacters</code>文字で終わる（<code>edge: 'end'</code>）か始まる（<code>'start'</code>）場合（<code>stack</code>、postext 1.73から）、行が語のあとの番号付き引用またはその一部で始まる場合（<code>citationBreak</code>、1.79から）、行が前後に空白を置いた単独の記号（<code>=</code> や <code>±</code>など）で終わるか始まる場合（<code>operatorBreak</code>、1.79から）です。<code>text</code>は繰り返された文字列、引用または記号、<code>lines</code>は2行です。<code>'warn'</code>（<code>bodyText.stacks</code>, <code>citationBreaks</code>, <code>operatorBreaks</code>）ではすべてを、<code>'avoid'</code>では改行処理が残したものを報告します。改行ごとに1件で、2行とそのページを指します。</td>
       <td>行はそのまま組まれます。</td>
     </tr>
     <tr>
@@ -410,7 +415,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
     </tr>
     <tr>
       <td><code>tocGroupSplit</code></td>
-      <td>まとめて組むよう指定した目次のグループ（<code>toc.groups.keepTogether</code>、<code>:::toc{'{keep="…"}'}</code>）です。先頭は<code>title</code>で、<code>columns</code>段に組まれています。1段の高さを超えているか、グループが始まる段が短い場合です（ページ幅の囲みの下、フロートの横）。グループごとに1件。<code>:::toc</code>ディレクティブを指し、グループが始まるページが付きます。解消するには、載せるレベルを減らす（<code>levels="1"</code>）、もっと下位のレベルを先頭にする（<code>toc.groups.head: 2</code>）、項目を小さくするか詰めて組む、のいずれかを行います。postext 1.34以降。</td>
+      <td>まとめて組むよう指定した目次のグループ（<code>toc.groups.keepTogether</code>、<code>:::toc{'{keep="…"}'}</code>）です。先頭は<code>title</code>で、<code>columns</code>段に組まれています。1段の高さを超えているか、グループが始まる段が短い場合です（ページ幅の囲みの下、フロートの横）。グループごとに1件。<code>:::toc</code>ディレクティブを指し、グループが始まるページが付きます。postext 1.34以降。</td>
       <td>グループは分割されます。<code>toc.groups.continuation</code>が有効なら、続きが入る各段の頭に先頭行と続きの印を組みます。</td>
     </tr>
     <tr>
@@ -441,7 +446,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
   </tbody>
 </table>
 
-表には、どの文書でも出うる種類を挙げています。1つの機能に属する種類は、その機能と一緒に説明しています。漫画（`comicPanelCount`、`comicBalloonOverflow`…）は[漫画](/ja/docs/comics)のページ、動画（`videoWithoutUrl`、`videoUrlInvalid`、`videoWithoutPoster`）は[リソース](/ja/docs/document-format-resources)、引用と索引（`unknownCitationKey`、`referencesUnreadable`、`indexMark`…）は[注と参照](/ja/docs/document-format-notes-references)、中国語・日本語・アラビア語のテキスト（`cjkLooseLine`、`rubyExceedsLeading`、`arabicMarksExceedLeading`…）はそれぞれの文字のページ、改行器の種類（`raggedLine`、`unbreakableWordOverflow`、`wordDividedByCharacter`、`wordDividedBySyllable`）は[ハイフネーションと両端そろえ](/ja/docs/justification)にあります。
+表には、どの文書でも出うる種類を挙げています。1つの機能に属する種類は、その機能と一緒に説明しています。漫画（`comicPanelCount`、`comicBalloonOverflow`…）は[漫画](/ja/docs/comics)のページ、動画（`videoWithoutUrl`、`videoUrlInvalid`、`videoWithoutPoster`）は[リソース](/ja/docs/document-format-resources)、引用と索引（`unknownCitationKey`、`referencesUnreadable`、`indexMark`…）は[注と参照](/ja/docs/document-format-notes-references)、中国語・日本語・アラビア語のテキスト（`cjkLooseLine`、`rubyExceedsLeading`、`arabicMarksExceedLeading`…）はそれぞれの文字のページ、改行器の種類（`raggedLine`、`unbreakableWordOverflow`、`numberOverflow`、`wordDividedByCharacter`、`wordDividedBySyllable`）は[ハイフネーションと両端そろえ](/ja/docs/justification)にあります。
 
 リソースに関する警告（表スタイル、グリッド、キャプションや注、セルの中の参照）は、本文の中でそのリソースが最初に埋め込まれた位置か参照された位置を指し、リソースごとに1回だけ挙がります。検査するのは文書が使うリソースだけです。本の1章は、本に含まれるすべての表ではなく、その章が参照する表について報告します。
 
@@ -795,7 +800,7 @@ const { bytes: book } = await createBundle(importBundleInput(result));
 
 - <strong>`idmlToPostext(bytes, options)`</strong>は同期関数です。`layout`は`'pages'`（元の文書を1ページずつたどるテンプレートページ）、`'flow'`（流し込みの本）、`'auto'`（既定。インポーターが決め、その理由を`reason`で返します）のいずれかです。`linkBytes(link)`はリンク画像のバイト列を渡します（`link.name`、`link.uri`）。埋め込み画像はパッケージから読み込み、バイト列が渡されなかったリンクは`missingLinks`に並びます。結果には、`chapters`（`{ title, markdown }`）、`config`（文書が設定している項目だけ）、`resources`とその`files`、本に必要な`fonts`（名前だけです。`.idml`はフォントファイルを含みません）、`report`が入ります。`report`は`verdict`（`faithful`、`approximate`、`lossy`）と`findings`を持ち、各項目に`severity`（`info`、`warning`、`loss`）、`message`、`count`、`examples`があります。<strong>`importBundleInput(result)`</strong>は、`postext/bundle`の`createBundle`に渡す入力です。
 - 元の文書が強制改行で終えている行は、そのまま本の行になります。インポーターは`bodyText.justifyHardBreaks`を有効にします。Postextから書き出した本は、同じ行のまま戻ります。InDesignで作った文書の読み込みには欠落があり、レポートがそれを一覧します。コマンドラインでは[`postext import-idml`](/ja/docs/command-line#import-idml)で、Sandboxでは本パネルの[新規メニュー](/ja/docs/sandbox-books-saving#indesignの文書を読み込む)から読み込めます。レイアウトの再現には、引き続き[エージェントスキル](/ja/docs/skill)を勧めます。2つの方法の比較は[InDesign：読み込み、書き出し、移植](/ja/docs/indesign)にあります。`spreads`は、postext 1.78以降、コマンドラインのオプション（`--spreads`）でもあります。
-- <strong>`readIdml(bytes)`</strong>と<strong>`inspectIdml(doc)`</strong>は、型付きのリーダーを単独で使うためのものです。前者はパッケージを`IdmlDocument`として読み、後者はその概要（ページ、ストーリー、フォント、使われているスタイル、画像）を返します。
+- <strong>`readIdml(bytes)`</strong>と<strong>`inspectIdml(doc)`</strong>は、型付きのリーダーを単独で使うためのものです。前者はパッケージを`IdmlDocument`として読み、後者はその概要（ページ、ストーリー、フォント、使われているスタイル、画像）を返します。<strong>`openIdmlArchive(zip)`</strong>はzipにしたパッケージを読み込みます。
 
 ## Web Workerでレイアウトを実行する
 

@@ -7,7 +7,7 @@ export const metadata = {
   lang: 'de',
   lastUpdated: '2026-10-20',
   readingTime: '21 min',
-  order: 43,
+  order: 44,
   parent: 'sandbox',
   plainSummary: "Diese Seite versammelt, was die Sandbox für zusammengesetzte Seiten bietet, also für Seiten, deren Text in Rahmen fließt, die eine Vorlage anordnet. Die Rahmen einer Vorlage zeichnen und verschieben Sie direkt auf der Seite, verbinden sie mit Linien, wiederholen eine Karte in einem Raster, legen Blöcke in einer Modulbibliothek ab und ordnen die Rahmenstile in einer Bibliothek. Das Bedienfeld Prüfungen meldet in jeder Sprache des Buchs, welche zusammengesetzten Seiten Text haben, der nicht passt, und bietet Schaltflächen an, die einen Rahmen beheben. Ein Buch, das vor den zusammengesetzten Seiten entstand, kann den Text seiner Seiten in einem Schritt ins Markdown verschieben.",
 };
@@ -53,6 +53,8 @@ Die Dekoration einer Seitenvorlage oder eines Moduls (**Dekoration**, am Fuß de
 <Screenshot src="/docs-shots/de/tree.webp" alt="Das Bedienfeld Gestaltung mit dem Modul Tree of ideas, geöffnet bei der Karte seines Verbinders, und die Wiederholungsseite mit einem Kasten oben, von dem Linien mit Pfeilen zu drei Kästen darunter führen." caption="Die Karte eines Verbinders und seine Linie von der Wurzel zu jedem Ast." />
 
 **Formen.** **Form hinzufügen** (in jedem Gestaltungsplatz: Vorlagen, Kolumnentitel, Gestaltungen von Überschriften und Teilen) schreibt einen Balken in der Hauptfarbe. Seine Karte bietet fünf Ausgangsformen an, jede auf ihre Schaltfläche gezeichnet (*Balken*, *Band*, *Pfeil*, *Winkelband*, *Welle*); ein Feld **Pfad**, das SVG-Pfaddaten annimmt und nur geschrieben wird, wenn sie sich lesen lassen (sonst nennt es das Zeichen, an dem der Fehler liegt); die Ansichtsbox, die Einpassung (strecken oder Proportionen behalten), Füllung und Kontur mit ihren Farben, Konturstärke und Strichelung; und die Größe und Lage, wie bei jedem Kasten der Dekoration.
+
+**Stanzlöcher.** In der Dekoration einer Seitenvorlage schreibt **Stanzloch hinzufügen** ein Stanzelement: ein Loch, das die Stanze durch das Blatt jeder Seite schneidet, auf der die Vorlage liegt, und das nie gemalt wird. Seine Karte wählt eine der Stanzformen des Buchs (**Stanzform**), auf den Rahmen des Elements gedehnt, oder nimmt Pfaddaten mit ihrer View-Box und Einpassung; **Gestanzte Blätter** und **Text weicht aus** übernehmen, solange sie nicht gesetzt sind, die Werte der Stanzform. Der Text der Rahmen weicht dem Loch noch nicht aus; halten Sie die Rahmen davon frei. Siehe [Stanzelemente in einer Seitenvorlage](/de/docs/special-inks-die-cuts#stanzelemente-in-einer-seitenvorlage).
 
 **Ecken und Seiten.** Kastenstile, Rahmenstile, Kästen der Dekoration und der Kasten eines Textelements teilen sich zwei Schalter. **Gleicher Radius an allen Ecken**, ausgeschaltet, gibt vier Eckenlängen. **Gleicher Rahmen auf allen Seiten**, ausgeschaltet, gibt jeder Seite einen eigenen Schalter, eine eigene Farbe und Stärke statt derer des ganzen Rahmens, jede mit ihrem Zurücksetzen: Ein Rahmen nur oben ist der ganze Rahmen aus und die Oberseite an. Ein Etikett kann **Mit dem Kasten verbunden** sein, mit seinem Ausrundungsradius (standardmäßig der Eckenradius), und an einer von vier Positionen am Fuß stehen, nicht nur an denen oben.
 

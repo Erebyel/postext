@@ -3,11 +3,11 @@
 export const metadata = {
   title: 'WebMCP : un agent au travail dans le Sandbox',
   sidebarTitle: 'WebMCP',
-  description: 'Ce qu’un agent IA dans le navigateur peut faire avec le Sandbox grâce à ses 55 outils WebMCP (regarder les pages, changer n’importe quel réglage, modifier le texte, ajouter images, tableaux et polices, lancer les vérifications, exporter) et comment appeler chacun d’eux, avec de vrais arguments et de vraies réponses',
+  description: 'Ce qu’un agent IA dans le navigateur peut faire avec le Sandbox grâce à ses 64 outils WebMCP (regarder les pages, changer n’importe quel réglage, modifier le texte, ajouter images, tableaux et polices, lancer les vérifications, exporter) et comment appeler chacun d’eux, avec de vrais arguments et de vraies réponses',
   lang: 'fr',
-  lastUpdated: '2026-11-10',
+  lastUpdated: '2026-11-12',
   readingTime: '13 min',
-  order: 52,
+  order: 53,
   plainSummary: "Cette page s’adresse aux personnes qui veulent qu’un assistant d’intelligence artificielle travaille pour elles sur un livre dans le Sandbox. Tant que le Sandbox est ouvert, il donne à l’assistant une série d’outils : regarder n’importe quelle page, changer la maquette, modifier le texte, ajouter des images et des tableaux, trouver les problèmes et enregistrer des fichiers. Vous demandez avec vos propres mots, par exemple « grossissez un peu le texte et vérifiez que le livre tient toujours en 40 pages », et l’assistant utilise les outils et vous montre les pages. Tout reste dans votre navigateur. La page explique comment connecter un assistant, ce qu’il peut faire et comment chaque outil s’appelle.",
 };
 
@@ -23,7 +23,7 @@ image de la page 12, règle `bodyText.fontSize` sur 10,5 pt, constate que le ch
 est passé de 18 à 19 pages, et revient en arrière. Il fait ce que vous faites à l’œil, et
 il le fait avec votre livre, dans votre navigateur.
 
-Il y a 55 outils dont le nom commence par `sandbox_`, enregistrés tant que le
+Il y a 64 outils dont le nom commence par `sandbox_`, enregistrés tant que le
 Sandbox est à l’écran, et 8 outils du site, `site_*`, sur chaque page de
 postext.dev. Cette page les classe selon ce que vous demanderiez à un agent, et
 donne l’appel de chacun.
@@ -329,6 +329,8 @@ valeur. Pour les modifier aussi, ouvrez chacune d’elles (`sandbox_open_book` a
 générale cesse d’être propre à l’édition. Dans un livre en une seule langue,
 `scope: "all"` est refusé, puisque tous ses réglages lui sont propres.
 
+Un livre dont les chapitres ne se ressemblent pas tous a des [styles de chapitre](/fr/docs/configuration-styles#styles-de-chapitre). `sandbox_chapter_styles` les liste avec les réglages que chacun change et les chapitres composés dans chacun, et indique d’où vient le style de chaque chapitre : de son en-tête (`chapter`), de la ligne `:::part` par laquelle il commence (`part`) ou de la partie à laquelle il appartient (`partBefore`). Il crée aussi, renomme et supprime des styles. `sandbox_get_config` et `sandbox_set_config` acceptent `chapterStyle` : avec lui, ils lisent et écrivent les réglages de ce style, comme le panneau Design pendant que le style est choisi. Un chemin que tout le livre partage (`page.width`, `locale`, les polices, l’impression) est écrit dans le livre, et `notes` le signale. `sandbox_set_chapter_style` donne son style à un chapitre en écrivant sa ligne `chapterStyle:`, et `style: null` retire la ligne. Pour composer tous les chapitres d’une partie dans un style, on écrit `style="…"` sur la ligne `:::part` de la partie avec `sandbox_edit_text`.
+
 Les polices sont aussi des réglages : `sandbox_list_fonts` avec `search: "Garamond"` trouve
 des familles dans le catalogue ouvert, et écrire le nom dans un réglage `fontFamily`
 la charge.
@@ -536,7 +538,7 @@ Ce que l’agent modifie, vous le voyez. Pour attirer votre attention sur quelqu
 
 `sandbox_set_view` choisit aussi la visionneuse (`canvas`, `pdf`, `folio`, `html`,
 `epub`, `scorm`), le mode Contenu ou Maquette (`mode`), le panneau latéral, chapitre ou livre entier, le zoom, la taille de caractère du lecteur,
-l’aperçu d’impression et le groupe du panneau Maquette, et dans l’onglet SCORM le
+l’aperçu d’impression, les tracés de découpe (`dieLines`) et l’affichage des encres spéciales (`finishes` : `flat`, `sheen` ou `map`) du Canvas, le groupe du panneau Maquette, et dans l’onglet SCORM le
 contenu (`scormLayout`), la version (`scormVersion`) et les chapitres et
 sections que prend le paquet (`scormPick`, des identifiants tirés du `contents` de l’onglet). `sandbox_go_to_page` tourne
 les pages par `step`, `page`, `position`, un passage `text`, une `anchor` ou une
@@ -587,6 +589,7 @@ La réponse prévient quand une bulle tombe sur un visage ou sort de sa case. Vo
   { "format": "pdf", "scope": "book", "deliver": "data" }
   ```
 
+- **Un livre depuis le panneau Livres.** `sandbox_export` avec `format` `pdf`, `epub` ou `html` et `book: { "kind": "project", "id": "…", "language": "en" }` écrit un projet comme le fait **Télécharger en …** sur sa ligne (depuis postext 1.81) : le livre entier dans cette langue, mis en page à part du livre à l’écran, qui est enregistré avant et reste tel quel. `html` sans `book` écrit le projet à l’écran. La réponse donne le fichier, ses pages, la langue écrite et les avertissements ; `epubLayout` choisit la présentation d’un EPUB.
 - **Importer un fichier `.postext`** avec `sandbox_import_book` (`inspect: true` indique
   quelles langues il contient sans l’importer).
 - **Créer un livre à partir d’un document InDesign** avec `sandbox_import_idml`. Avec
@@ -594,7 +597,10 @@ La réponse prévient quand une bulle tombe sur un visage ou sort de sa case. Vo
   le rapport d’importation : la mise en page qu’il retiendrait et pourquoi, le
   verdict, les constats, les polices dont le livre a besoin et les images liées
   encore manquantes. `layout` choisit `pages` ou `flow`, et `links` fournit les
-  images liées, chacune associée par son `fileName`.
+  images liées, chacune associée par son `fileName`. `file` peut aussi être un
+  assemblage InDesign compressé : ses images liées et ses polices entrent dans le
+  livre (`linksFromPackage`, `fontsFromPackage`), et `document` nomme l’IDML à
+  importer quand il en contient plusieurs (`documents`, dans la réponse, les liste).
 - **Faire entrer un manuscrit Word** avec `sandbox_import_word`. Lancez-le d’abord avec
   `dryRun: true` : il ne change rien et répond avec le rapport de qualité, chaque
   style Word avec ce qu’il deviendrait, et les chapitres et ressources qu’il
@@ -628,6 +634,8 @@ La réponse prévient quand une bulle tombe sur un visage ou sort de sa case. Vo
   les modifications appliquées vont dans les chapitres et les ressources en une
   seule étape, que `sandbox_undo` retire en entier. `sandbox_import_word` refuse
   un tel fichier et renvoie à cet outil. Depuis postext 1.68.
+
+- **Maquettes.** `sandbox_list_designs` liste la galerie du panneau Maquette (maquettes enregistrées, celles fournies par le Sandbox et celles des livres d’exemple) avec leurs parties. `sandbox_save_design` enregistre la maquette d’un livre, `sandbox_try_design` en essaie une sur le livre à l’écran et `sandbox_end_design_trial` la garde ou l’abandonne (Abandonner rétablit seulement ce que la maquette a remplacé), `sandbox_apply_design` en applique une directement ou comme style de chapitre, `sandbox_import_design` et `sandbox_export_design` lisent et écrivent des fichiers de maquette, et `sandbox_delete_design` supprime une maquette enregistrée. Toutes prennent `parts`, les groupes du panneau Maquette, et répondent avec les styles que nomme le texte et qui manquent à la maquette.
 
 ### Questions et messages
 
@@ -720,7 +728,9 @@ chacun s’obtiennent avec `postextWebMcp.listTools()`.
   `sandbox_manage_chapters`, `sandbox_remove_chapter`.
 - **La maquette** : `sandbox_get_config`, `sandbox_set_config`,
   `sandbox_find_setting`, `sandbox_reset_to_original`,
-  `sandbox_frame_styles`, `sandbox_merge_styles`.
+  `sandbox_frame_styles`, `sandbox_merge_styles`,
+  `sandbox_chapter_styles`, `sandbox_set_chapter_style`.
+- **Maquettes** : `sandbox_list_designs`, `sandbox_save_design`, `sandbox_try_design`, `sandbox_end_design_trial`, `sandbox_apply_design`, `sandbox_import_design`, `sandbox_export_design`, `sandbox_delete_design`.
 - **Annuler** : `sandbox_undo`.
 - **L’affichage** : `sandbox_set_view`, `sandbox_go_to_page`,
   `sandbox_run_viewer`.

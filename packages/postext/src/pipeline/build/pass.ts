@@ -5,16 +5,16 @@ import type { PostextContent, PostextConfig, Resource } from '../../types.js';
 import { type VDTColumn, type VDTPage } from '../../vdt.js';
 import { withFigureWords } from '../resources/figureWords.js';
 import { type MeasurementCache, initHyphenator } from '../../measure/index.js';
-import { setSymbolFont, symbolFont } from '../../measure/font.js';
+import { setSymbolFont } from '../../measure/font.js';
 import { setHyphenationLimits } from '../../hyphenation/hyphenate.js';
-import { getCjkLineBreak, setCjkLineBreak } from '../../measure/cjk/cjkClasses.js';
-import { getSlashBreaks, setSlashBreaks } from '../../measure/breakRules.js';
-import { getCjkComposition, setCjkComposition, cjkCompositionOf } from '../../measure/cjk/cjkPunctuation.js';
-import { getMeasureWritingMode, getMeasureRegion, getMeasureUprightDigits, setMeasureWritingMode, setMeasureUprightDigits } from '../../measure/vertical.js';
+import { setCjkLineBreak } from '../../measure/cjk/cjkClasses.js';
+import { setSlashBreaks } from '../../measure/breakRules.js';
+import { setCjkComposition, cjkCompositionOf } from '../../measure/cjk/cjkPunctuation.js';
+import { setMeasureWritingMode, setMeasureUprightDigits } from '../../measure/vertical.js';
 import { resolveAllConfig, resolvedLocale, resolvedDirection, arabicNumbersOf } from '../config.js';
-import { getMeasureDirection, getMeasureArabicNumbers, setMeasureArabicNumbers, setMeasureDirection } from '../../measure/rtl/bidiLines.js';
-import { getMeasureScriptContext, setMeasureScriptContext, scriptContextOfLocale, hanMarksOfLocale } from '../../measure/script.js';
-import { getMeasureLanguage, setMeasureLanguage } from '../../measure/canvas.js';
+import { setMeasureArabicNumbers, setMeasureDirection } from '../../measure/rtl/bidiLines.js';
+import { setMeasureScriptContext, scriptContextOfLocale, hanMarksOfLocale } from '../../measure/script.js';
+import { setMeasureLanguage } from '../../measure/canvas.js';
 import { shapingLanguageOf } from '../../hyphenation/locale.js';
 import { createHeadingLevelResolver } from '../sections/headingStyles.js';
 import { type BuildDocumentOptions, type PassHints, type PassResult, BuildCancelledError } from './passTypes.js';
@@ -40,6 +40,8 @@ import { createComposed } from './pass/composed.js';
 import type { PassState, PassLate } from './pass/state.js';
 import type { BlockIteration } from './pass/blocks/blockIteration.js';
 import { createBlockDispatch } from './pass/blocks/blockDispatch.js';
+import { setColumnObstacleSource } from '../floats/textWrap.js';
+import { dieWrapSource } from '../floats/dieWrap.js';
 import { createBlockMeasure } from './pass/blocks/blockMeasure.js';
 import { createResourceBlock } from './pass/blocks/resourceBlock.js';
 import { createBlockLines } from './pass/blocks/blockLines.js';
@@ -49,6 +51,10 @@ import { createContentSetup } from './pass/setup/contentSetup.js';
 import { createPassFinish } from './pass/setup/passFinish.js';
 import type { PassSetupState } from './pass/setupState.js';
 import type { PlacedSlot } from './floatPads.js';
+import { perfLap } from '../../util/perfTap.js';
+import { ClosedPageWrite, PassResume, isClosedPageWrite, passResumeCheck, withPassTape, type PassTape } from './passResume.js';
+import { withMeasuringAsFound } from './pass/measuringAsFound.js';
+import { PassRecording, dropTapePass, nextTapePass } from './passReuse.js';
 
 /**
  * Single placement pass. `hints` carries the cross-pass adjustments: the
@@ -67,36 +73,19 @@ export function buildDocumentPass(
   options?: BuildDocumentOptions,
   hints: PassHints = {},
 ): PassResult {
-  // A pass sets the CJK line-break level, the CJK composition and the
-  // writing mode text is measured in for its own measuring, and the symbol
-  // font every font string lists (#1460); what the caller had in force is put
-  // back when it ends, also when it throws (a cancelled build), so text
-  // measured outside a build reads as it did before it.
-  const lineBreak = getCjkLineBreak();
-  const composition = getCjkComposition();
-  const writingMode = getMeasureWritingMode();
-  const region = getMeasureRegion();
-  const uprightDigits = getMeasureUprightDigits();
-  const direction = getMeasureDirection();
-  const arabicNumbers = getMeasureArabicNumbers();
-  const scriptContext = getMeasureScriptContext();
-  const language = getMeasureLanguage();
-  const slashBreaks = getSlashBreaks();
-  const symbols = symbolFont();
-  try {
-    return placeDocumentPass(content, config, cache, options, hints);
-  } finally {
-    setSymbolFont(symbols);
-    setSlashBreaks(slashBreaks);
-    setMeasureLanguage(language);
-    setMeasureScriptContext(scriptContext);
-    setMeasureArabicNumbers(arabicNumbers);
-    setCjkLineBreak(lineBreak);
-    setCjkComposition(composition);
-    setMeasureWritingMode(writingMode, region);
-    setMeasureUprightDigits(uprightDigits);
-    setMeasureDirection(direction);
-  }
+  const ordinal = nextTapePass(options?.tapes);
+  return withMeasuringAsFound(() => {
+    try {
+      return withPassTape((tape) => placeDocumentPass(content, config, cache, options, hints, tape, true, ordinal));
+    } catch (error) {
+      // A pass that wrote to a page it had closed, or could not take up its
+      // checkpoint (#1639): placed again, nothing closed, no checkpoint.
+      if (!(error instanceof ClosedPageWrite)) throw error;
+      passResumeCheck()?.placedAgain?.();
+      if (options?.tapes && ordinal !== undefined) dropTapePass(options.tapes, ordinal);
+      return withPassTape((tape) => placeDocumentPass(content, config, cache, options, hints, tape, false, undefined));
+    }
+  });
 }
 
 function placeDocumentPass(
@@ -105,8 +94,16 @@ function placeDocumentPass(
   cache: MeasurementCache | undefined,
   options: BuildDocumentOptions | undefined,
   hints: PassHints,
+  tape: PassTape,
+  closes: boolean,
+  /** The pass's place among the passes of a build with tapes. */
+  ordinal: number | undefined,
 ): PassResult {
+  tape.recording = ordinal !== undefined;
+  const given = hints;
+  hints = tape.countingHints(hints);
   const setup = {} as PassSetupState;
+  const lap = perfLap();
   const state = {} as PassState;
   const late = {} as PassLate;
   const { balanceExtraPx, balanceLooseness, balanceUntracked, balanceLooseBudget, bandCaps, captionUnder, floatPages, floatPads, citingPageFloats, pullCrop } = hints;
@@ -119,6 +116,7 @@ function placeDocumentPass(
    *  band above (a page-span box, a top float band) or a caption below has
    *  shortened it, so what does not fit it may still fit a full column. */
   const shortSideColumn = (page: VDTPage, col: VDTColumn): boolean => col.bbox.height < page.contentArea.height - 0.5;
+  tape.track('pass', { state, captionUnderProposals, floatSlots, pullShortfalls, asideCutBy });
   // Rebound once the content is read when it holds exercises (#1227): the
   // config then also carries their chip and paragraph styles.
   setup.resolved = resolveAllConfig(config);
@@ -146,6 +144,7 @@ function placeDocumentPass(
   const looseOffGrid = new Set<number>();
   // Lines gained so far per column budget group (see `LooseBudget`).
   const looseGained = new Map<number, number>();
+  tape.track('pass', { looseOutcome, looseOffGrid, looseGained });
   // Level configs with heading-style overrides merged in (`{style="…"}`).
   const headingLevels = createHeadingLevelResolver(setup.resolved);
   const dpi = setup.resolved.page.dpi;
@@ -199,13 +198,15 @@ function placeDocumentPass(
     ...(hanMarksOfLocale(resolvedLocale(setup.resolved)) ? { hanMarks: true } : {}),
   });
 
+  lap('pass.config');
+  const pageSetup = createPageSetup({ content, state, setup });
   const {
     baselineGrid, doc, continuation, pageIndexOffset, afterPartPage, pageMetrics, pageWidthPx,
     pageHeightPx, freshPageFlowColumns, designFramesOn, toLeaf, frontmatterMeta, markdownBody,
     bodyOffset, parsedBody
-  } = createPageSetup({
-    content, state, setup
-  });
+  } = pageSetup;
+  tape.track('pass', { doc });
+  lap('pass.pageSetup');
   // A figure's own words (#935): its alt, caption and note replace the
   // resource's in this chapter, for the layout, the references and every
   // output alike.
@@ -214,6 +215,10 @@ function placeDocumentPass(
     if (worded !== content.resources) content = { ...content, resources: worded };
   }
 
+  const contentSetup = createContentSetup({
+    content, config, hints, hyphenationRules, doc, continuation, pageMetrics, frontmatterMeta,
+    bodyOffset, parsedBody, setup
+  });
   const {
     captionCitations, footnoteDefs, footnoteNumbering, chapterEndNotes, anchorRefContext,
     templateSource, codeBoxes, contentBlocks, carried, headingPrefixes, headingNumbers,
@@ -223,11 +228,11 @@ function placeDocumentPass(
     paragraphContainers, calloutPlan, partPlan, sectionPlan, floatPlan, composedPlans,
     comicTextPlans, floatedIds, floatsByFirstBlock, calloutFloats, cursor, forcedBreakPages,
     uncappedBottoms, openerHeadFloats
-  } = createContentSetup({
-    content, config, hints, hyphenationRules, doc, continuation, pageMetrics, frontmatterMeta,
-    bodyOffset, parsedBody, setup
-  });
+  } = contentSetup;
+  // From here on a read of a block is a read the checkpoints count.
+  tape.countsReads = true;
 
+  lap('pass.contentSetup');
   const {
     pendingFloats, pendingSideBoxes, openerPages, openerFloatRule, openerFloatNotes, noteOpenerFloat,
     awaitingSideBoxes, multiColumnBand, enqueuedFloatIds, enqueueFloatsFor, citationGates,
@@ -320,7 +325,7 @@ function placeDocumentPass(
     balanceExtraInColumn, addBalanceExtra, opensDefaultOpener, measuredAcrossPage, reserveOpenerBand,
     openerOwnColumn, openerHeadOf, underOpenerHeadFloat, atColumnHead, openerHeadSpacing,
     sideObstacleColumn, headingClaims, noteHeadingClaim, markSideObstacles, spanHeadingOpenedHere,
-    openSpanHeadingHere, rollbackHeadings, bandCapProposals, spanPlacedInBand, bandCapsApplied,
+    openSpanHeadingHere, rollbackHeadings, bandCapProposals, spanPlacedInBand, bandCapsApplied, capSlack,
     cappedBandColumns, enterBand, proposeTrailingCap
   } = createBands({
     bandCaps, floatPages, resolved: setup.resolved, headingLevels, baselineGrid, doc, designFramesOn, resourceById,
@@ -486,55 +491,94 @@ function placeDocumentPass(
     citedFootTake, tocGroupNeed
   });
 
-  for (let blockIdx = 0; blockIdx < contentBlocks.length; blockIdx++) {
-    const blockTurn = { blockIdx } as BlockIteration;
-    if (options?.shouldCancel?.()) throw new BuildCancelledError();
-    options?.onProgress?.({ pass: 1, blocks: blockIdx, totalBlocks: contentBlocks.length, pages: doc.pages.length });
-    const rawBlock = contentBlocks[blockIdx]!;
-    // Blocks a composed page set in its frames (#855) are done.
-    if (composedLaid.has(blockIdx)) continue;
+  // Die-cut holes (#1565): each column keeps its text clear of the holes
+  // its page is known to have when the flow first reaches it.
+  let dieAt = 0;
+  setColumnObstacleSource(dieWrapSource(doc, contentBlocks, () => ({ blockIdx: dieAt, pageIndex: cursor.pageIndex })));
 
-    // The styled section this block sits in: its geometry applies to the
-    // pages opened from here (a heading with `breakBefore` opens one).
-    const blockSection = sectionPlan.byBlock[blockIdx];
-    if (blockSection !== state.currentSection) enterSection(blockSection);
+  // What the setup made, for the checkpoints: kept by reference in one
+  // that serves this pass (the check), named by number in one that is to
+  // serve the next build (the tapes), where the setups are also compared.
+  const check = ordinal === undefined ? passResumeCheck() : undefined;
+  const made = check || ordinal !== undefined ? {
+    content: { ...content, markdown: undefined }, config: config ?? {}, setup, hints: given,
+    pageSetup: { ...pageSetup, markdownBody: undefined, parsedBody: undefined }, contentSetup,
+  } : undefined;
+  const resume = check && new PassResume(tape, check, made);
+  if (resume) Object.assign(resume, { doc, closes });
+  const recording = ordinal !== undefined && options?.tapes
+    ? new PassRecording(options.tapes, ordinal, tape, { roots: made!, body: markdownBody, blocks: codeBoxes.blocks, doc, bodyOffset, numbersLines: setup.resolved.lineNumbers?.enabled === true })
+    : undefined;
 
-    // The repeat of a contents block's head row (#850): set where a cut
-    // block goes on in a fresh column, skipped everywhere else.
-    if (rawBlock.toc?.group?.role === 'continuation' && !tocContinuationOpens(blockIdx)) continue;
+  lap('pass.wiring');
+  /** Place the blocks from `from` to the end of the document. `again`: a
+   *  run of the check, which reports no progress and saves nothing. */
+  const placeFrom = (from: number, again: boolean): void => {
+    for (let blockIdx = from; blockIdx < contentBlocks.length; blockIdx++) {
+      const blockTurn = { blockIdx } as BlockIteration;
+      dieAt = blockIdx;
+      if (options?.shouldCancel?.()) throw new BuildCancelledError();
+      if (!again) {
+        options?.onProgress?.({ pass: 1, blocks: blockIdx, totalBlocks: contentBlocks.length, pages: doc.pages.length });
+        resume?.atBlock(blockIdx, doc.pages.length, contentBlocks.length);
+        if (recording?.atBlock(blockIdx)) return;
+      }
+      const rawBlock = contentBlocks[blockIdx]!;
+      // Blocks a composed page set in its frames (#855) are done.
+      if (composedLaid.has(blockIdx)) continue;
 
-    // Floats whose reference landed in an earlier iteration take the first
-    // free slot of the current page now — after their reference in reading
-    // order. Then enqueue the floats first-referenced in this block, so the
-    // next page opened while placing it (or any later block) reserves their
-    // band and the next iteration offers them the slots that follow. A text
-    // block holds its floats back until the line citing them is placed
-    // (`gateCitedFloats`).
-    settleAwaitingSideBoxes(false);
-    releaseStaleCitationGates(blockIdx);
-    tryPlacePendingFloatsOnCurrentPage(spanBoxAt(blockIdx), blockIdx);
-    enqueueFloatsFor(blockIdx);
+      // The styled section this block sits in: its geometry applies to the
+      // pages opened from here (a heading with `breakBefore` opens one).
+      const blockSection = sectionPlan.byBlock[blockIdx];
+      if (blockSection !== state.currentSection) enterSection(blockSection);
 
-    blockTurn.rawBlock = rawBlock;
-    const jump = dispatchBlock(blockTurn);
-    blockIdx = blockTurn.blockIdx;
-    if (jump === 'continue') continue;
+      // The repeat of a contents block's head row (#850): set where a cut
+      // block goes on in a fresh column, skipped everywhere else.
+      if (rawBlock.toc?.group?.role === 'continuation' && !tocContinuationOpens(blockIdx)) continue;
 
-    if (measureBlock(blockTurn) === 'continue') continue;
+      // Floats whose reference landed in an earlier iteration take the first
+      // free slot of the current page now — after their reference in reading
+      // order. Then enqueue the floats first-referenced in this block, so the
+      // next page opened while placing it (or any later block) reserves their
+      // band and the next iteration offers them the slots that follow. A text
+      // block holds its floats back until the line citing them is placed
+      // (`gateCitedFloats`).
+      settleAwaitingSideBoxes(false);
+      releaseStaleCitationGates(blockIdx);
+      tryPlacePendingFloatsOnCurrentPage(spanBoxAt(blockIdx), blockIdx);
+      enqueueFloatsFor(blockIdx);
 
-    if (placeResourceBlock(blockTurn) === 'continue') continue;
+      blockTurn.rawBlock = rawBlock;
+      const jump = dispatchBlock(blockTurn);
+      blockIdx = blockTurn.blockIdx;
+      if (jump === 'continue') continue;
 
-    prepareLines(blockTurn);
+      if (measureBlock(blockTurn) === 'continue') continue;
 
-    placeLines(blockTurn);
-    blockIdx = blockTurn.blockIdx;
+      if (placeResourceBlock(blockTurn) === 'continue') continue;
 
-    flushPendingNumberingAtBoundary();
+      prepareLines(blockTurn);
+
+      placeLines(blockTurn);
+      blockIdx = blockTurn.blockIdx;
+
+      flushPendingNumberingAtBoundary();
+    }
+
+    // End of the document: level the closing band and place any floats still
+    // pending (referenced on the last page) on pages appended after it.
+    closeFlowSegment(contentBlocks.length);
+  };
+  try {
+    placeFrom(recording?.start() ?? 0, false);
+    recording?.done();
+    resume?.again(placeFrom);
+  } catch (error) {
+    throw isClosedPageWrite(tape, error) ? new ClosedPageWrite() : error;
   }
-
-  // End of the document: level the closing band and place any floats still
-  // pending (referenced on the last page) on pages appended after it.
-  closeFlowSegment(contentBlocks.length);
+  // What follows sets things on every page: on pages of its own.
+  tape.open();
+  lap('pass.blocks');
 
   const {
     citingPageProposals, citingPageRefused
@@ -550,5 +594,7 @@ function placeDocumentPass(
     setup
   });
 
-  return { doc, forcedBreakPages, bandCapProposals, spanPlacedInBand, bandCapsApplied, looseOutcome, looseOffGrid, captionUnderProposals, citingPageProposals, citingPageRefused, pullShortfalls, floatSlots };
+  tape.afterFinish?.();
+  lap('pass.finish');
+  return { doc, forcedBreakPages, bandCapProposals, spanPlacedInBand, bandCapsApplied, capSlack, looseOutcome, looseOffGrid, captionUnderProposals, citingPageProposals, citingPageRefused, pullShortfalls, floatSlots };
 }

@@ -36,6 +36,8 @@ export function titleFor(payload: WarningPayload, labels: SandboxLabels): string
       return labels.warningsRaggedLineTitle;
     case 'unbreakableWordOverflow':
       return labels.warningsUnbreakableWordOverflowTitle;
+    case 'numberOverflow':
+      return labels.warningsNumberOverflowTitle;
     case 'wordDividedByCharacter':
       return labels.warningsWordDividedByCharacterTitle;
     case 'wordDividedBySyllable':
@@ -84,6 +86,10 @@ export function titleFor(payload: WarningPayload, labels: SandboxLabels): string
       return labels.warningsStrayFenceTitle;
     case 'unknownParagraphStyle':
       return labels.warningsUnknownParagraphStyleTitle;
+    case 'chapterStyleUnknown':
+      return labels.warningsChapterStyleUnknownTitle;
+    case 'partStyleMidChapter':
+      return payload.source === 'section' ? labels.warningsSectionLineTitle : labels.warningsPartStyleMidChapterTitle;
     case 'unknownCalloutType':
       return labels.warningsUnknownCalloutTypeTitle;
     case 'exerciseUnknownType':
@@ -102,6 +108,8 @@ export function titleFor(payload: WarningPayload, labels: SandboxLabels): string
       return labels.warningsSolutionOutsideTitle;
     case 'columnsFlowUnknown':
       return labels.warningsColumnsFlowUnknownTitle;
+    case 'dieCutUnknown':
+      return labels.warningsDieCutUnknownTitle;
     case 'templateUnknown':
       return labels.warningsTemplateUnknownTitle;
     case 'slotUnknown':
@@ -287,6 +295,10 @@ export function titleFor(payload: WarningPayload, labels: SandboxLabels): string
       return labels.warningsShortListSplitTitle;
     case 'stack':
       return labels.warningsStackTitle;
+    case 'citationBreak':
+      return labels.warningsCitationBreakTitle;
+    case 'operatorBreak':
+      return labels.warningsOperatorBreakTitle;
     case 'hyphenLadder':
       return labels.warningsHyphenLadderTitle;
     case 'lastWordDivided':
@@ -305,6 +317,8 @@ export function titleFor(payload: WarningPayload, labels: SandboxLabels): string
       return labels.warningsCalloutStyleExtendsUnknownTitle;
     case 'calloutStyleExtendsCycle':
       return labels.warningsCalloutStyleExtendsCycleTitle;
+    case 'chapterStyleBookSetting':
+      return labels.warningsChapterStyleBookSettingTitle;
     case 'templateDuplicate':
       return labels.warningsTemplateDuplicateTitle;
     case 'templateExtendsCycle':

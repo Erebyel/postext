@@ -21,6 +21,10 @@ pub(crate) struct Pass {
     /// edges of a node's line (see `looseness::limited`). Gives up past
     /// [`EXACT_MAX_ACTIVE`] active nodes.
     pub exact_limits: bool,
+    /// Take the short cut for loose lines where the paragraph allows it
+    /// (see [`Search::run`]); the search may then give up, with
+    /// [`Search::gave_up_short_cut`] set, and is run again without.
+    pub skip_loose: bool,
 }
 
 /// Every buffer a search uses, kept between searches.
@@ -40,7 +44,22 @@ pub(crate) struct Search {
     /// above that.
     slot_by_exact: HashMap<(u32, u32, u32, u32), u32>,
     avoid: Vec<bool>,
+    /// The last search took the short cut and could not vouch for its
+    /// answer: it has to be run again without.
+    pub gave_up_short_cut: bool,
+    /// Searches that took the short cut, and those of them that gave up:
+    /// a document whose paragraphs mostly give up stops trying.
+    short_cuts: u32,
+    short_cuts_given_up: u32,
+    /// Never take the short cut: for tests and benchmarks that compare the
+    /// two searches.
+    pub no_short_cut: bool,
 }
+
+/// Short cuts tried before their record counts, and the share of them
+/// given up (one in this many) past which no more are tried.
+const SHORT_CUT_TRIAL: u32 = 32;
+const SHORT_CUT_GIVE_UP_SHARE: u32 = 4;
 
 /// Whether a short looseness target gates word spacing.
 pub(crate) fn gates_short(o: &Options, looseness: i32) -> bool {
@@ -51,7 +70,32 @@ impl Search {
     /// Runs the search over `items`. Leaves the surviving nodes in
     /// `active`; false when a constrained search ran out of nodes, or an
     /// exact one passed [`EXACT_MAX_ACTIVE`] active nodes.
+    ///
+    /// The short cut for loose lines (`pass.skip_loose`). Most of what a
+    /// natural search evaluates are lines far too short for their measure,
+    /// word spaces past their limit (`r > 1`): every active node gives one
+    /// at every break until its line fills up. Such a line costs at least
+    /// `loose_floor` demerits, so a setting that holds one is taken only
+    /// when nothing cheaper reaches the end. The short cut does not price
+    /// them. A loose line still leaves its node, so that the nodes of the
+    /// search and their order are the ones of the full search (the order
+    /// decides between two settings of the same cost), but the node costs
+    /// infinity; and since the active nodes are in the order of their
+    /// positions, and a line from a later position is shorter and has less
+    /// stretch, the first loose line at a break ends that break: every node
+    /// after it gives a loose line too. The settings under `loose_floor`
+    /// are then the ones the full search finds, cost for cost. When any
+    /// priced line reaches the floor, or no priced setting reaches the end,
+    /// the search gives up (`gave_up_short_cut`) and the caller runs the
+    /// full one.
+    ///
+    /// Taken only where that argument holds as it stands: the natural
+    /// search, every line after the first of one width, no tracking, no
+    /// hyphenation zone, no fixed break, no line that should not end on a
+    /// hyphen, no stacks, and items whose totals only grow
+    /// (`Prefix::monotone`).
     pub fn run(&mut self, items: &Items, o: &Options, pass: Pass) -> bool {
+        self.gave_up_short_cut = false;
         let n = items.len();
         let tracking = o.tracking_per_char > 0.0;
         let ragged = o.ragged_stretch.max(0.0);
@@ -86,7 +130,36 @@ impl Search {
         } else {
             -1
         };
-        let Search { prefix: p, arena, active, candidates, slot_by_key, keys, slot_by_exact, avoid } = self;
+        let fast = pass.skip_loose
+            && !self.no_short_cut
+            && pass.looseness == 0
+            && !pass.constrained
+            && !pass.exact_limits
+            && !tracking
+            && uniform_from == Some(1)
+            && o.hyphenation_zone.is_none()
+            && fixed.is_empty()
+            && o.avoid_hyphen_at_lines.is_empty()
+            && stacks.is_none()
+            && self.prefix.monotone
+            && o.consecutive_hyphen_demerit >= 0.0
+            && o.fitness_class_demerit >= 0.0
+            && rules.ladder_demerits >= 0.0
+            && (self.short_cuts < SHORT_CUT_TRIAL
+                || self.short_cuts_given_up * SHORT_CUT_GIVE_UP_SHARE <= self.short_cuts);
+        let ends_at_loose = pass.constrained
+            && !pass.exact_limits
+            && !tracking
+            && o.uniform_from.is_some_and(|u| u <= 1)
+            && self.prefix.monotone;
+        // The least a loose line costs: its badness is 100 at least and
+        // its stretch past the limit costs more than the floor of it.
+        let loose_eff = 1.0 + 100.0 + OVER_STRETCH_BADNESS.max(2.0 * o.runt_penalty);
+        let loose_floor = loose_eff * loose_eff;
+        if fast {
+            self.short_cuts += 1;
+        }
+        let Search { prefix: p, arena, active, candidates, slot_by_key, keys, slot_by_exact, avoid, .. } = self;
         arena.clear();
         active.clear();
         let start = arena.push(Node::start());
@@ -108,6 +181,9 @@ impl Search {
             let is_flagged = items.is_flagged_penalty(i);
             let post_width = if is_penalty { items.post_width[i] } else { 0.0 };
             let post_chars = if is_penalty { items.post_chars[i] } else { 0.0 };
+            // A word space that costs a break (#1519): a citation or a lone
+            // operator it would leave at a line edge. Demerits, as a stack's.
+            let space_cost = if is_penalty { 0.0 } else { items.penalty[i] };
             // `fewerHyphens`: every hyphen's penalty raised alike.
             let pen = if !is_penalty {
                 0.0
@@ -144,6 +220,40 @@ impl Search {
                 active[keep] = id;
                 keep += 1;
                 if r > KP_INFINITY {
+                    continue;
+                }
+                // A search that keeps no very loose line (`constrained`)
+                // makes no node of a loose one: past the first line, the
+                // first of them ends the break, as in the short cut.
+                if ends_at_loose && r > 1.0 && a.line >= 1 {
+                    let rest = active.len() - (ai + 1);
+                    active.copy_within(ai + 1.., keep);
+                    keep += rest;
+                    break;
+                }
+                if fast && r > 1.0 {
+                    // A loose line: its node, at no known cost.
+                    let node = Node {
+                        position: i as i32,
+                        line: a.line + 1,
+                        fitness: 3,
+                        total_width: p.width[i + 1] - post_width,
+                        total_stretch: p.stretch[i + 1],
+                        total_shrink: p.shrink[i + 1],
+                        total_demerits: f64::INFINITY,
+                        run: if is_flagged { (a.run + 1).min(MAX_RUN) } else { 0 },
+                        previous: id,
+                        ..Node::default()
+                    };
+                    offer(candidates, slot_by_key, keys, 3, node);
+                    // Past the paragraph's first line every measure is the
+                    // same: the nodes after this one are as loose or looser.
+                    if a.line >= 1 {
+                        let rest = active.len() - (ai + 1);
+                        active.copy_within(ai + 1.., keep);
+                        keep += rest;
+                        break;
+                    }
                     continue;
                 }
                 if (a.line as usize) < fixed.len() && i != fixed[a.line as usize] as usize {
@@ -205,8 +315,8 @@ impl Search {
                 if run > 1 {
                     d += o.consecutive_hyphen_demerit;
                 }
-                d += stack_demerits;
-                let mut faults = stacked;
+                d += stack_demerits + space_cost;
+                let mut faults = stacked + u32::from(space_cost > 0.0);
                 // A hyphen ladder past its limit (#1466).
                 if ladder_run > 0 && run > ladder_run {
                     d += rules.ladder_demerits;
@@ -231,6 +341,13 @@ impl Search {
                     continue;
                 }
                 let total_demerits = a.total_demerits + d;
+                // A priced line as dear as a loose one: the short cut can
+                // no longer tell which the full search would keep.
+                if fast && total_demerits >= loose_floor && total_demerits < f64::INFINITY {
+                    self.gave_up_short_cut = true;
+                    self.short_cuts_given_up += 1;
+                    return false;
+                }
 
                 let mut loosest = a.loosest;
                 let mut ragged_lines = a.ragged;
@@ -328,7 +445,24 @@ impl Search {
                 active.push(id);
             }
         }
+        // The short cut answers only with a priced setting that ends the
+        // paragraph.
+        if fast
+            && !active.iter().any(|&id| {
+                let a = arena.get(id);
+                a.position == terminal as i32 && a.total_demerits < f64::INFINITY
+            })
+        {
+            self.gave_up_short_cut = true;
+            self.short_cuts_given_up += 1;
+            return false;
+        }
         true
+    }
+
+    /// Short cuts taken and given up (see [`Search::run`]).
+    pub fn short_cuts(&self) -> (u32, u32) {
+        (self.short_cuts, self.short_cuts_given_up)
     }
 
     /// Marks the lines that should not end on a hyphen; returns the last.

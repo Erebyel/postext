@@ -149,6 +149,11 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>Les paragraphes sont composés comme du texte courant.</td>
     </tr>
     <tr>
+      <td><code>chapterStyleUnknown</code>, <code>partStyleMidChapter</code></td>
+      <td><a href="/fr/docs/configuration-styles#styles-de-chapitre">Styles de chapitre</a></td>
+      <td>—</td>
+    </tr>
+    <tr>
       <td><code>unknownCalloutType</code></td>
       <td><code>:::callout{'{'}type{'}'}</code> ne désigne aucun des <code>calloutStyles</code> ; déclenché seulement une fois que certains sont configurés.</td>
       <td>L’encadré prend le premier style d’encadré.</td>
@@ -389,8 +394,8 @@ console.log(`Document has ${vdt.pages.length} pages`);
       <td>La liste est coupée là où la colonne se termine.</td>
     </tr>
     <tr>
-      <td><code>stack</code></td>
-      <td>Deux lignes de suite d'un paragraphe, dans une même colonne, qui finissent (<code>edge: 'end'</code>) ou commencent (<code>'start'</code>) par le même mot ou les mêmes <code>bodyText.stackMinCharacters</code> caractères : <code>text</code> est ce qu'elles répètent, tel que la première ligne l'imprime, et <code>lines</code> les deux lignes. Sous <code>bodyText.stacks: 'warn'</code>, chaque répétition est signalée ; sous <code>'avoid'</code>, celles que l'algorithme a gardées. Un par répétition ; pointe sur les deux lignes, avec leur page. Depuis postext 1.73.</td>
+      <td><code>stack</code>, <code>citationBreak</code>, <code>operatorBreak</code></td>
+      <td>Deux lignes de suite d'un paragraphe, dans une même colonne, qui finissent (<code>edge: 'end'</code>) ou commencent (<code>'start'</code>) par le même mot ou les mêmes <code>bodyText.stackMinCharacters</code> caractères (<code>stack</code>, depuis postext 1.73) ; une ligne qui commence par une citation numérotée après un mot, ou par un morceau de celle-ci (<code>citationBreak</code>, 1.79) ; une ligne qui finit ou commence par un signe isolé entre espaces, <code>=</code> ou <code>±</code> (<code>operatorBreak</code>, 1.79). <code>text</code> est ce qui se répète, la citation ou le signe, et <code>lines</code> les deux lignes. Avec <code>'warn'</code> (<code>bodyText.stacks</code>, <code>citationBreaks</code>, <code>operatorBreaks</code>), chaque cas est signalé ; avec <code>'avoid'</code>, ceux que la coupure des lignes a gardés. Un par coupure ; pointe vers les deux lignes, avec leur page.</td>
       <td>Les lignes sont composées telles quelles.</td>
     </tr>
     <tr>
@@ -410,7 +415,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
     </tr>
     <tr>
       <td><code>tocGroupSplit</code></td>
-      <td>Un bloc de la table des matières à garder entier (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), ouvert par <code>title</code>, composé sur <code>columns</code> colonnes : il est plus haut qu’une colonne entière, ou la colonne où il commence est courte (sous un encadré sur toute la largeur de la page, à côté d’un flottant). Un par bloc ; pointe sur la directive <code>:::toc</code>, avec la page où commence le bloc. Pour le faire disparaître, listez moins de niveaux (<code>levels="1"</code>), ouvrez les blocs par un niveau inférieur (<code>toc.groups.head: 2</code>), ou rendez les entrées plus petites ou plus serrées. Depuis postext 1.34.</td>
+      <td>Un bloc de la table des matières à garder entier (<code>toc.groups.keepTogether</code>, <code>:::toc{'{keep="…"}'}</code>), ouvert par <code>title</code>, composé sur <code>columns</code> colonnes : il est plus haut qu’une colonne entière, ou la colonne où il commence est courte (sous un encadré sur toute la largeur de la page, à côté d’un flottant). Un par bloc ; pointe sur la directive <code>:::toc</code>, avec la page où commence le bloc. Depuis postext 1.34.</td>
       <td>Le bloc est coupé ; avec <code>toc.groups.continuation</code>, chaque colonne où il se poursuit s’ouvre sur sa tête et la marque de continuation.</td>
     </tr>
     <tr>
@@ -441,7 +446,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
   </tbody>
 </table>
 
-Le tableau liste les types que n’importe quel document peut produire. Les types propres à une fonctionnalité sont décrits avec elle : la bande dessinée (`comicPanelCount`, `comicBalloonOverflow`…) sur la page [Bande dessinée](/fr/docs/comics), les vidéos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) dans [Ressources](/fr/docs/document-format-resources), les citations et l’index (`unknownCitationKey`, `referencesUnreadable`, `indexMark`…) dans [Notes et références](/fr/docs/document-format-notes-references), le texte chinois, japonais et arabe (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading`…) sur les pages de ces écritures, et ceux de l’algorithme de coupure des lignes (`raggedLine`, `unbreakableWordOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) dans [Justification](/fr/docs/justification).
+Le tableau liste les types que n’importe quel document peut produire. Les types propres à une fonctionnalité sont décrits avec elle : la bande dessinée (`comicPanelCount`, `comicBalloonOverflow`…) sur la page [Bande dessinée](/fr/docs/comics), les vidéos (`videoWithoutUrl`, `videoUrlInvalid`, `videoWithoutPoster`) dans [Ressources](/fr/docs/document-format-resources), les citations et l’index (`unknownCitationKey`, `referencesUnreadable`, `indexMark`…) dans [Notes et références](/fr/docs/document-format-notes-references), le texte chinois, japonais et arabe (`cjkLooseLine`, `rubyExceedsLeading`, `arabicMarksExceedLeading`…) sur les pages de ces écritures, et ceux de l’algorithme de coupure des lignes (`raggedLine`, `unbreakableWordOverflow`, `numberOverflow`, `wordDividedByCharacter`, `wordDividedBySyllable`) dans [Justification](/fr/docs/justification).
 
 Les avertissements qui concernent une ressource (son style de tableau, sa grille, une référence dans sa légende, sa note ou ses cellules) pointent sur la première insertion ou la première référence de la ressource dans le texte, et chacun n’est listé qu’une fois par ressource. Seules les ressources que le document utilise sont vérifiées : un chapitre d’un livre signale les tableaux qu’il cite, pas tous les tableaux du livre.
 
@@ -795,7 +800,7 @@ const { bytes: book } = await createBundle(importBundleInput(result));
 
 - **`idmlToPostext(bytes, options)`** est synchrone. `layout` vaut `'pages'` (des pages composées qui suivent l’original page à page), `'flow'` (un livre en texte courant) ou `'auto'` (par défaut : l’importateur choisit et donne sa `reason`). `linkBytes(link)` fournit les octets d’une image liée (`link.name`, `link.uri`) ; les images incorporées sont lues dans le paquet, et les liens restés sans octets sont listés dans `missingLinks`. Le résultat contient `chapters` (`{ title, markdown }`), `config` (seulement ce que le document fixe), `resources` avec leurs `files`, les `fonts` dont le livre a besoin (les noms seulement : un `.idml` ne porte pas de fichiers de police) et `report` : un `verdict` (`faithful`, `approximate` ou `lossy`) et des `findings`, chacun avec sa `severity` (`info`, `warning`, `loss`), `message`, `count` et `examples`. **`importBundleInput(result)`** est l’entrée de `createBundle` de `postext/bundle`.
 - Les lignes que l’original finit par des sauts de ligne forcés restent les lignes du livre : l’importateur active `bodyText.justifyHardBreaks`. Un livre exporté depuis Postext revient avec les mêmes lignes. Un document fait dans InDesign est lu avec des pertes, que le rapport liste. La ligne de commande importe avec [`postext import-idml`](/fr/docs/command-line#import-idml) ; le Sandbox, depuis le menu **Nouveau** du [panneau Livres](/fr/docs/sandbox-books-saving#importer-un-document-indesign), et le [skill pour agents](/fr/docs/skill) reste la voie recommandée pour reproduire la mise en page d’un livre InDesign : [InDesign : import, export et portage](/fr/docs/indesign) compare les deux voies. `spreads` est aussi une option de la ligne de commande (`--spreads`) depuis postext 1.78.
-- **`readIdml(bytes)`** et **`inspectIdml(doc)`** sont le lecteur typé seul : le paquet sous forme d’`IdmlDocument`, et un résumé de celui-ci (pages, articles, polices, styles utilisés, images).
+- **`readIdml(bytes)`** et **`inspectIdml(doc)`** sont le lecteur typé seul : le paquet sous forme d’`IdmlDocument`, et un résumé de celui-ci (pages, articles, polices, styles utilisés, images). **`openIdmlArchive(zip)`** lit un assemblage compressé.
 
 ## Mise en page dans un Web Worker
 

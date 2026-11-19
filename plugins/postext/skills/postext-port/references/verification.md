@@ -363,6 +363,15 @@ those lines, or run the script.
 - `WARN calloutStyleExtendsUnknown` / `calloutStyleExtendsCycle` (postext ≥ 1.39): `calloutStyles[i].extends`
   names no style, or the chain loops (`a → b → a`); the style stands alone, without the parent's fields.
   `lint_project.py` reports both before the engine does.
+- `WARN chapterStyleUnknown` / `partStyleMidChapter` / `chapterStyleBookSetting` (postext ≥ 1.79): a
+  `chapterStyle:` or `:::part{style}` names no entry of `chapterStyles` (the chapter takes the book's settings);
+  a part fence naming a style stands after the chapter's text has started (move it to the top of the chapter,
+  before the `# H1`; until then the style starts with the next chapter); a chapter style sets a book-wide key or
+  the page trim (configuration.md §19g2), which the style cannot change: move it to the book's config.
+  `partStyleMidChapter` with `source: 'section'` is a `::section{style}` line written for postext 1.78: no longer
+  read, its text stays in the chapter; make that text a chapter inside `:::part{style}` or give it `chapterStyle:`.
+  `bodyText.bindCitations` / `bindOperators: true` (also 1.78) read as `citationBreaks` / `operatorBreaks: 'avoid'`;
+  `lint_project.py` warns on both 1.78 shapes so the port writes the 1.79 ones.
 - `WARN dropCap` reason `inBox` (postext ≥ 1.38): a drop cap asked inside a `:::callout` is not set (a frame
   of a composed page is running text and takes it). Reason `split` (≥ 1.39): a paragraph whose piece with the
   initial has fewer lines than the initial sinks and goes on in another piece: the frame is too short for the
@@ -618,7 +627,7 @@ await run('sandbox_import_book', { file: { base64: b64, fileName: 'my-book.poste
 await run('sandbox_get_warnings', { scope: 'book' });               // the Checks panel: kind, category, chapter, line, offsets, page
 await run('sandbox_render_page', { chapter: 3, page: 41, count: 2, width: 1200, format: 'jpeg' }); // { content: [json text, image parts (base64)] }
 await run('sandbox_get_composed_checks', {});                       // every edition (`language` keeps one)
-await run('sandbox_export', { format: 'pdf', scope: 'book', deliver: 'data' }); // pdf|epub|postext|docx|markdown|config; `epubLayout: 'reflowable'`
+await run('sandbox_export', { format: 'pdf', scope: 'book', deliver: 'data' }); // pdf|epub|html|postext|docx|idml|markdown|config; `epubLayout: 'reflowable'`; `book: { kind: 'project', id }` writes a project not on screen (≥ 1.81)
 ```
 
 - Every tool waits for the layout before it answers and gives each chapter's page count. Answers are `{ ok, … }`

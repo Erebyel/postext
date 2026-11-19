@@ -2,11 +2,13 @@
 // it returns (#1276: split out of viewer.ts).
 import type { FolioPaperConfig, FolioConfig } from 'postext';
 import type { PageSource, PageVideoFrame } from '../pageFlip.js';
+import type { EdgeOutline } from '../bookGeometry.js';
+import type { FaceFinish } from '../pageFlip/finish.js';
 
 /** A page of the book: its source, or its source with a text alternative
  *  and the paper it is printed on when that is not the book's (a plate
  *  section on gloss in a matte book). */
-export type FolioPage = PageSource | { src: PageSource; alt?: string; paper?: FolioPaperConfig };
+export type FolioPage = PageSource | { src: PageSource; alt?: string; paper?: FolioPaperConfig; finish?: FaceFinish };
 
 /** How the 3D book is presented. */
 export interface FolioAppearance {
@@ -34,6 +36,10 @@ export interface FolioAppearance {
    *  spineImage` resource names, as a URL (or a drawn canvas or image).
    *  See `FlipAppearance.spineImage`. */
   spineImage?: PageSource;
+  /** The leaves' outline past the spine (see `FlipAppearance.
+   *  edgeOutline`); `createFolioFromDocument` takes it from the pages'
+   *  die-cut outline. */
+  edgeOutline?: EdgeOutline;
 }
 
 /** What the left button (or one finger) does on the book: `hand` takes

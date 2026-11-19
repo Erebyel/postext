@@ -10,8 +10,8 @@
 // on a later one.
 
 import type { DesignElement, FrameConfig, PageTemplate } from 'postext';
-import type { IdmlPage } from '../model/document.js';
-import { apply, boxCentre, boxHeight, boxWidth, decompose, isRectangle, overlap, pathExtent, type Box } from '../model/geometry.js';
+import type { IdmlPage, IdmlPageItem } from '../model/document.js';
+import { boxHeight, boxWidth, isRectangle, overlap, type Box } from '../model/geometry.js';
 import { graphicCrop, pageSize } from '../resolve/geometry.js';
 import { masterItems } from '../resolve/masters.js';
 import type { OrderedStory } from '../resolve/order.js';
@@ -19,13 +19,16 @@ import { blocksOf, joinChunks, type Chunk } from './blocks.js';
 import type { Context } from './context.js';
 import { masterElements, placeAt, shapeElement, type MasterWords } from './design.js';
 import { customAnchors, type HostFrame } from './fidelity/anchorPlaces.js';
+import { crossesSpine, emptyBoxFence, exactCover, paintOrder } from './fidelity/pageItems.js';
 import { firstLineShift, frameSetup, fromTop, openingLines, runningLines } from './fidelity/baseline.js';
 import { makeHooks } from './hooks.js';
 import { boxLook, calloutStyleFor } from './objects.js';
 import { numberingDirective } from './pagesetup.js';
 import { pictureResource } from './pictures.js';
+import { freeBands, jumpObjectOf, meetsWithOffsets, spansColumns, type JumpObject } from './jumps.js';
 import { hasContent, leavesOf, type Leaf } from './scan.js';
 import { pt } from './values.js';
+import { FOOT_ROOM, frameBox, VERTICAL } from './frames.js';
 
 interface Slot {
   leaf: Leaf;
@@ -40,6 +43,11 @@ interface Slot {
   onPath?: boolean;
   resource?: string;
   style?: string;
+  /** A band of a text frame cut round a jump object (#1554) after the
+   *  first: the frame's text goes on in it. */
+  continues?: boolean;
+  /** The next band of the same frame, which the text runs into. */
+  nextPiece?: Slot;
 }
 
 interface PagePlan {
@@ -47,30 +55,17 @@ interface PagePlan {
   slots: Slot[];
   decoration: DesignElement[];
   words: MasterWords;
+  /** Objects whose wrap keeps text off their whole width (#1554). */
+  jumps: JumpObject[];
 }
 
-const VERTICAL: Record<string, FrameConfig['verticalAlign']> = { CenterAlign: 'middle', BottomAlign: 'bottom', JustifyAlign: 'justify' };
 const snap = (n: number): number => Math.round(n / 2.835) * 2.835;
-
-/** A frame's own rectangle on the page and its turn. */
-function frameBox(leaf: Leaf): { box: Box; rotation: number; flipped: boolean } | undefined {
-  const own = pathExtent(leaf.at.item.paths);
-  if (!own) return undefined;
-  const d = decompose(leaf.g.toPage);
-  const w = boxWidth(own) * d.scaleX;
-  const h = boxHeight(own) * d.scaleY;
-  const c = apply(leaf.g.toPage, boxCentre(own));
-  if (![w, h, c.x, c.y].every(Number.isFinite)) return undefined;
-  return { box: { left: c.x - w / 2, top: c.y - h / 2, right: c.x + w / 2, bottom: c.y + h / 2 }, rotation: Math.abs(d.rotation) < 0.01 ? 0 : d.rotation, flipped: d.flipped };
-}
 
 export interface PagesResult {
   templates: PageTemplate[];
   chapters: { title: string; markdown: string }[];
 }
 
-/** The room under a plain text frame, in leadings (see where it is used). */
-const FOOT_ROOM = 0.2;
 
 export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): PagesResult {
   const doc = ctx.doc;
@@ -85,7 +80,7 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
   for (const spread of doc.spreads) {
     const leaves = leavesOf(ctx, spread);
     for (const page of spread.pages) {
-      const plan: PagePlan = { page, slots: [], decoration: [], words: { attrs: new Map() } };
+      const plan: PagePlan = { page, slots: [], decoration: [], words: { attrs: new Map() }, jumps: [] };
       plans.push(plan);
       const mine = leaves.filter((l) => l.g.page === page);
       const size = pageSize(page);
@@ -98,6 +93,8 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
       for (const leaf of mine) {
         const item = leaf.at.item;
         const where = `page ${page.name}`;
+        const jump = jumpObjectOf(item, leaf.g.box);
+        if (jump) plan.jumps.push(jump);
         const fb = frameBox(leaf);
         if (!fb || !(boxWidth(fb.box) > 0.01) || !(boxHeight(fb.box) > 0.01)) {
           // A rule has no height: it is still a shape.
@@ -107,7 +104,7 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
           continue;
         }
         if (fb.flipped) ctx.rep.add('flippedFrame', 'warning', 'A mirrored frame is set unmirrored', where);
-        if (leaf.g.box.right > size.width + 1 && leaf.g.box.left < size.width - 1 && spread.pages.length > 1) ctx.rep.add('acrossSpine', 'warning', 'An object that runs across the spine is set on the page that holds most of it', where);
+        if (crossesSpine(page, leaf.g.box, size.width, spread.pages.length)) ctx.rep.add('acrossSpine', 'warning', 'An object that runs across the spine is set on the page that holds most of it', where);
         const held = item.textFrame?.story;
         const story = held && wanted.has(held) ? wanted.get(held)!.story.self : held;
         const base = { leaf, box: fb.box, rotation: fb.rotation, name: '', page: page.index };
@@ -119,17 +116,20 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
           plan.slots.push(slot);
           slotOf.set(item.self, slot);
         } else if (item.graphic) {
-          const id = pictureResource(ctx, item);
           // A picture its frame crops is drawn by the template, which
           // can cover a box with a picture about a point of it; a frame
           // of the page would show the whole picture.
           const crop = graphicCrop(item);
-          if (id && crop && !fb.rotation && crop.width > 0 && crop.height > 0 && (crop.width < 0.995 || crop.height < 0.995) && Math.abs(crop.rotation) < 0.01) {
+          const cropped = !!crop && !fb.rotation && crop.width > 0 && crop.height > 0 && (crop.width < 0.995 || crop.height < 0.995) && Math.abs(crop.rotation) < 0.01;
+          const exact = cropped && exactCover(crop!);
+          const id = pictureResource(ctx, item, exact ? { drawnCropped: true } : {});
+          if (id && crop && cropped) {
             const look = boxLook(ctx, item, where);
             const r4 = (n: number): number => Math.round(n * 10000) / 10000;
             plan.decoration.push({ kind: 'image', id: `s${leaf.z}`, pin: true, reserve: false, placement: placeAt(fb.box), resourceId: id, decorative: !item.altText, fit: 'cover', focus: { x: r4(crop.x + crop.width / 2), y: r4(crop.y + crop.height / 2) } });
             if (look.stroke) plan.decoration.push({ kind: 'box', id: `s${leaf.z}-edge`, pin: true, reserve: false, placement: placeAt(fb.box), style: { borderColor: look.stroke, borderWidth: pt(look.strokeWeight) } });
-            ctx.rep.add('croppedPictureAsDecoration', 'warning', 'A picture its frame crops is drawn by the page template (cover, about the cropped part\'s centre): it keeps its crop on the page and is not part of reflowable output', item.graphic.link?.name ?? where);
+            if (exact) ctx.rep.add('croppedPictureCover', 'info', 'A picture its frame crops is drawn by the page template, cover about the cropped part\'s centre, which shows the part the frame showed; it is not part of reflowable output', item.graphic.link?.name ?? where);
+            else ctx.rep.add('croppedPictureAsDecoration', 'warning', 'A picture its frame crops is drawn by the page template (cover, about the cropped part\'s centre): it keeps its crop on the page and is not part of reflowable output', item.graphic.link?.name ?? where);
             continue;
           }
           const slot: Slot = { ...base, kind: 'picture', ...(id ? { resource: id } : {}) };
@@ -160,6 +160,7 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
           plan.decoration.push(s.element);
         }
       }
+      plan.decoration = paintOrder(plan.decoration);
     }
   }
 
@@ -197,6 +198,9 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
       else ctx.rep.add('anchoredObjectFrame', 'info', 'An object anchored to its frame or its page (custom position) stands in a frame of its own where its rule puts it', `${what} (${where})`);
     }
   }
+
+  // Text frames behind a jump object are cut round it (#1554).
+  const jumped = cutRoundJumps(ctx, plans);
 
   for (const plan of plans) {
     {
@@ -241,7 +245,8 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
       let top = setup.inset[0];
       let box = slot.box;
       if (slot.kind === 'text' && tf && entry && !slot.onPath && fromTop(setup) && entry.story.orientation !== 'vertical') {
-        const opens = !entry.frames.length || entry.frames[0]!.item === item;
+        // A band after the first goes on with the frame's text.
+        const opens = !slot.continues && (!entry.frames.length || entry.frames[0]!.item === item);
         const shift = firstLineShift(ctx, setup, opens ? openingLines(ctx, entry.story.paragraphs) : runningLines(ctx, entry.story.paragraphs), `page ${page.name}`);
         if (top + shift >= 0) top += shift;
         else if (!slot.style && !slot.rotation) {
@@ -263,7 +268,10 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
       if (slot.rotation) f.rotate = Math.round(slot.rotation * 100) / 100;
       if (slot.style) f.style = slot.style;
       if (plan.slots.some((o) => o !== slot && overlap(o.box, slot.box) > 1)) f.overlap = 'allow';
-      if (item.wrap && item.wrap.mode !== 'None' && !(slot.kind === 'text' && item.textFrame?.ignoreWrap)) f.exclude = 'push';
+      // A jump object whose text frames were all cut round it pushes
+      // nothing: the bands keep clear of it, its offsets included, and a
+      // push would set their first lines short by the wrap gap.
+      if (item.wrap && item.wrap.mode !== 'None' && !jumped.has(item) && !(slot.kind === 'text' && item.textFrame?.ignoreWrap)) f.exclude = 'push';
       if (slot.kind === 'text' && tf && !slot.onPath) {
         if (top || left || bottom || right || slot.style) f.padding = { top: pt(top), left: pt(left), bottom: pt(bottom), right: pt(right) };
         if (tf.columns > 1) {
@@ -277,8 +285,9 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
         if (story?.direction === 'rtl') f.direction = 'rtl';
         if (tf.autoSizing && tf.autoSizing !== 'Off') ctx.rep.add('autoSizeFrames', 'info', 'An auto-sizing text frame keeps the size it had when the document was saved', `page ${page.name}`);
         // The thread: on the same page a chain, on a later page a jump.
+        // A band cut round a jump object runs into the next band first.
         const at = entry ? entry.frames.findIndex((fp) => fp.item === item) : -1;
-        const next = at >= 0 ? entry!.frames.slice(at + 1).map((fp) => slotOf.get(fp.item.self)).find((s) => s !== undefined && s !== slot) : undefined;
+        const next = slot.nextPiece ?? (at >= 0 ? entry!.frames.slice(at + 1).map((fp) => slotOf.get(fp.item.self)).find((s) => s !== undefined && s !== slot && !s.continues) : undefined);
         if (next && next.page === slot.page) f.next = next.name;
         else if (next && next.page > slot.page) {
           f.overflow = { continueIn: `page:{attr.to_${slot.name}}#${next.name}`, mark: false };
@@ -290,6 +299,8 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
 
       // Content: a story where its thread starts, a picture in its frame.
       if (slot.kind === 'picture' && slot.resource) pieces.push(`::resource{id="${slot.resource}" slot="${slot.name}"}`);
+      const boxFence = emptyBoxFence(slot.kind, slot.name, slot.style);
+      if (boxFence) pieces.push(boxFence);
       if (slot.kind === 'text' && slot.story && !written.has(slot.story)) {
         if (!entry) continue;
         const first = entry.frames.map((fp) => slotOf.get(fp.item.self)).find((s) => s !== undefined);
@@ -365,4 +376,49 @@ export function layoutPages(ctx: Context, stories: readonly OrderedStory[]): Pag
   if (loose.length) current.push(...loose);
   flush();
   return { templates, chapters };
+}
+
+/** Cut each upright text frame that stands behind a jump object into the
+ *  bands the objects leave free, chained top to bottom (see `jumps.ts`).
+ *  The slot keeps the first band, so the thread from the frame before
+ *  still reaches it; the bands after it are new slots of the same frame.
+ *  Returns the jump objects every frame they meet was cut round; one
+ *  that meets a frame it cannot cut (turned, set on a path, several
+ *  columns it does not span, or no band left) keeps pushing it. */
+function cutRoundJumps(ctx: Context, plans: readonly PagePlan[]): Set<IdmlPageItem> {
+  const handled = new Set<IdmlPageItem>();
+  const kept = new Set<IdmlPageItem>();
+  // A band shorter than most of a line holds no text: dropped.
+  const minHeight = 0.75 * (ctx.looks.body?.cf.leading ?? 12);
+  let cut = 0;
+  for (const plan of plans) {
+    if (plan.jumps.length === 0) continue;
+    for (const slot of [...plan.slots]) {
+      const item = slot.leaf.at.item;
+      const tf = item.textFrame;
+      if (slot.kind !== 'text' || !tf || tf.ignoreWrap) continue;
+      const mine = plan.jumps.filter((j) => j.item !== item && meetsWithOffsets(j, slot.box));
+      if (mine.length === 0) continue;
+      const fits = !slot.rotation && !slot.onPath && (tf.columns <= 1 || mine.every((j) => spansColumns(j, slot.box, tf.inset)));
+      const bands = fits ? freeBands(slot.box, mine, minHeight) : undefined;
+      if (!bands || (bands.length === 1 && bands[0] === slot.box)) {
+        for (const j of mine) kept.add(j.item);
+        if (!fits || !bands) ctx.rep.add('jumpWrapApproximated', 'warning', 'A text frame behind a Jump Object or Jump to Next Column wrap that cannot be cut round it (turned, on a path, several columns the object does not span, or no room left) runs round the object beside it', `page ${plan.page.name}`);
+        continue;
+      }
+      for (const j of mine) handled.add(j.item);
+      cut++;
+      slot.box = bands[0]!;
+      let prev = slot;
+      for (const band of bands.slice(1)) {
+        const piece: Slot = { ...slot, box: band, continues: true };
+        prev.nextPiece = piece;
+        plan.slots.push(piece);
+        prev = piece;
+      }
+    }
+  }
+  if (cut) ctx.rep.add('jumpWrap', 'info', 'A text frame behind an object whose wrap is Jump Object (or Jump to Next Column) is cut into chained frames above and below it, its offsets kept', undefined, cut);
+  for (const k of kept) handled.delete(k);
+  return handled;
 }

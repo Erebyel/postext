@@ -32,9 +32,11 @@ describe('the reference document InDesign wrote', () => {
     const r = idmlToPostext(reference(), { layout: 'pages' });
     expect(pins(r)).toEqual(sorted([
       ...LOSSES, ['effects', 'loss', 1], ['opacity', 'loss', 1],
-      ['acrossSpine', 'warning', 1], ['anchoredObjectFrameEstimated', 'warning', 1], ['croppedPictureAsDecoration', 'warning', 1], ['gradient', 'warning', 1], ['inlineTracking', 'warning', 1],
+      ['acrossSpine', 'warning', 1], ['anchoredObjectFrameEstimated', 'warning', 1], ['gradient', 'warning', 1], ['inlineTracking', 'warning', 1],
       ['pageLinkTarget', 'warning', 1], ['shapeOverFrame', 'warning', 2], ['tableFooterRows', 'warning', 1],
-      ...INFO, ['firstBaselineEstimated', 'info', 14], ['spotColour', 'info', 2],
+      // Its cropped picture fills the frame across and is scaled evenly:
+      // the template's cover fit shows what the frame showed (#1555).
+      ...INFO, ['croppedPictureCover', 'info', 1], ['firstBaselineEstimated', 'info', 14], ['spotColour', 'info', 2],
     ]));
     expect(r.report.verdict).toBe('lossy');
   });
@@ -63,8 +65,11 @@ describe('the reference document InDesign wrote', () => {
 describe('a book exported and imported back', () => {
   const MD = `# First chapter\n\n${LOREM}\n\nA second paragraph with *italic* and **bold** words, and a [link](https://postext.dev/).\n\n- one\n- two\n\n## A section\n\n${Array(12).fill(LOREM).join('\n\n')}\n`;
   const cfg = config({ page: { dpi: 72, width: mm(140), height: mm(200), margins: { top: mm(15), bottom: mm(20), left: mm(18), right: mm(12), mirror: true } } } as unknown as Partial<PostextConfig>);
-  const { bytes } = idmlDocument({ docs: [build(MD, cfg)], title: 'Round trip' });
-  const COMMON: Pin[] = [['baselineGrid', 'info', 1], ['colouredText', 'info', 4], ['continuedParagraphs', 'info', 2], ['fontStatus', 'info', 4], ['localOverrides', 'info', 1]];
+  // A block a frame, as #1555 exported every book (`text: 'frames'`).
+  const { bytes } = idmlDocument({ docs: [build(MD, cfg)], title: 'Round trip', text: 'frames' });
+  // No localOverrides: every paragraph of the export carries only its
+  // style, which takes the format most of its paragraphs share (#1555).
+  const COMMON: Pin[] = [['baselineGrid', 'info', 1], ['colouredText', 'info', 4], ['continuedParagraphs', 'info', 2], ['fontStatus', 'info', 4]];
 
   it('comes back as composed pages with nothing lost and nothing approximated', () => {
     const r = idmlToPostext(bytes, { layout: 'pages' });
@@ -82,5 +87,16 @@ describe('a book exported and imported back', () => {
     expect(md).toMatch(/^# First chapter\n\nTypesetting is/);
     expect(md).not.toContain(':::callout');
     expect(md.indexOf('## A section')).toBeGreaterThan(md.indexOf('A second paragraph'));
+  });
+
+  it('comes back as the flowing book it was when its text is threaded (#1559)', () => {
+    const threaded = idmlDocument({ docs: [build(MD, cfg)], title: 'Round trip' }).bytes;
+    const r = idmlToPostext(threaded, { layout: 'auto' });
+    expect(r.layout).toBe('flow');
+    expect(r.report.verdict).toBe('faithful');
+    const md = r.chapters.map((c) => c.markdown).join('\n');
+    expect(md).toMatch(/^# First chapter\n\nTypesetting is/);
+    expect(md.match(/Typesetting is the composition/g)).toHaveLength(13);
+    expect(md).not.toMatch(/\\\n/);
   });
 });

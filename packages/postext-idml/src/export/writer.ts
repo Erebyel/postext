@@ -6,7 +6,9 @@ import type { DisplayItem, DisplayRun } from 'postext';
 import type { VDTPage } from 'postext';
 import type { VDTDocument } from 'postext/writer';
 import type { BlockStyle } from 'postext/writer';
-import type { ParagraphStyleDef, Swatch } from './parts.js';
+import type { CharacterStyleDef, ParagraphStyleDef, Swatch } from './parts.js';
+import type { StyleSurvey } from './styles.js';
+import type { InkDef, InkPlan } from './inks.js';
 import type { FontNames } from './sfnt.js';
 
 import type { IdmlWarning } from '../model/document.js';
@@ -48,6 +50,11 @@ export interface IdmlOptions {
    *  alone, as a book is made up in InDesign; `single`: a page a spread.
    *  Default: `facing` for a book with mirrored margins, else `single`. */
   spreads?: 'facing' | 'single';
+  /** `thread` (default): the running text of the pages Postext laid out
+   *  in columns runs through one story threaded through a frame per
+   *  column, as in a book set in InDesign (`thread.ts`, #1559); `frames`:
+   *  a frame and a story for each block, where the engine painted it. */
+  text?: 'thread' | 'frames';
   /** The font file of a face (TrueType or OpenType bytes; a WOFF2 decoded
    *  first). With it a face is named as the file names it, which is how
    *  InDesign finds it, and the files come back in `fonts`. */
@@ -108,8 +115,6 @@ export interface Writer {
    *  the right of the spine (or alone), minus its width at the left. */
   px: number;
   swatches: Map<string, Swatch>;
-  /** Spot inks by `#rrggbb` (the configuration's spot colours). */
-  spots: Map<string, { name: string; cmyk: { c: number; m: number; y: number; k: number }; overprint: boolean }>;
   /** The layer the item being written stands on (`ItemLayer`). */
   layer: string;
   /** The layer an item goes to (see `IdmlOptions.layers`). */
@@ -117,6 +122,10 @@ export interface Writer {
   /** Swatch names taken, lower-cased: InDesign's own and those written. */
   swatchNames: Set<string>;
   cmyk: Map<string, { c: number; m: number; y: number; k: number }>;
+  /** The spot inks of the book and the colours printed on them. */
+  inks: InkPlan;
+  /** The die line's ink and stroke, when a page of the book is die-cut. */
+  die?: InkDef & { widthPt: number; printable: boolean };
   palette: Map<string, string>;
   /** Faces written, by InDesign family then style name; the file's names
    *  when the face has a file. */
@@ -134,6 +143,17 @@ export interface Writer {
   /** Pages of the documents before the one being written. */
   pageBase: number;
   paraStyles: Map<string, ParagraphStyleDef>;
+  /** Character styles written, by name: a run whose look a named style
+   *  gave (a chip, a `:span`), or whose face or size its paragraph's
+   *  style does not have (#1555). */
+  charStyles: Map<string, CharacterStyleDef>;
+  /** What the first of the two passes over the pages saw of every
+   *  paragraph style, and in the second, what each style settled on
+   *  (`styles.ts`). */
+  styles: StyleSurvey;
+  /** The callout style of each block of the page being written that
+   *  stands in a box of the flow, by block key (`calloutOf`). */
+  callouts?: Map<string, string>;
   /** The document being written, and the engine's block styles of its
    *  paragraphs by frame style and paragraph style (`engineStyle`). */
   doc: VDTDocument;
@@ -142,6 +162,16 @@ export interface Writer {
   page?: VDTPage;
   blockStyles: Map<string, BlockStyle>;
   stories: { id: string; xml: string }[];
+  /** While the thread's story is written: what each of its breaks and
+   *  paragraph ends was (`thread.ts`). */
+  joins?: string[];
+  /** The page being written is one of the thread's. */
+  threaded?: boolean;
+  /** The paragraph styles chapter titles are set in, with how many
+   *  titles each sets (`masters.ts`). */
+  titleStyles?: Map<string, number>;
+  /** The chapter titles the running heads show, as `titleKey` has them. */
+  chapterTitles?: Set<string>;
   media: Map<string, { path: string; bytes: Uint8Array }>;
   opts: IdmlOptions;
   warn: (code: string, message: string) => void;
@@ -150,7 +180,15 @@ export interface Writer {
 export type TextItem = Extract<DisplayItem, { kind: 'text' }>;
 /** A text item in a story: `joinsPrevious` when it is the rest of the
  *  paragraph the item before it holds (a paragraph a frame break split). */
-export type StoryItem = TextItem & { joinsPrevious?: boolean };
+export type StoryItem = TextItem & {
+  joinsPrevious?: boolean;
+  /** The first item of a thread's frame after a column the author broke. */
+  columnBreak?: boolean;
+  /** Frames anchored above its first line (the thread's boxes), and the
+   *  sheet height (px) they take in its column. */
+  anchors?: string[];
+  anchorHeight?: number;
+};
 
 /** A frame's name in its template (`cp3:body` → `body`). */
 export const frameName = (id: string) => id.replace(/^cp\d+:/, '');

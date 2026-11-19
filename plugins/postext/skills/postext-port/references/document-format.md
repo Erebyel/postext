@@ -375,14 +375,16 @@ de damas tan bien servido
 | `number` | any text (`I`, `IV`, `3`) | Printed as written (`{partNumber}`). Also parsed as decimal or roman for `{numberDecimal}`/`{numberRoman}` etc. in the part design. Optional. |
 | `title` | text | `{partTitle}`, on the opener. `\\` is a forced break. Optional. |
 | `palette` | `id=#hex` pairs separated by `,`, `;` or whitespace, joined with `=` or `:`, the `#` optional, 3/6/8 hex digits | Recolours palette-linked design colours, and the text colours sharing their base value, from this part until the next part. Example: `palette="band=#9bcdbf, band-grey:#fadec7"`. Malformed pairs are skipped. |
+| `style` | a `chapterStyles` id | Sets the chapter the fence opens and every chapter after it, until the next part, in that chapter style (configuration.md §19g2). A chapter's own `chapterStyle:` wins. Unknown id → `chapterStyleUnknown`; a styled fence after the chapter's text has started → `partStyleMidChapter`, the style starts with the next chapter. |
+| `page` | `false` (`no`, `0`, `off`) | This part opens no divider page and its body is not set, as `parts.page:false` does for every part; number, title, palette and style take effect from the next content. Only turns the page off. |
 
 - The part opens its own page: a break of `parts.breakBefore.parity` before it, the opener design over a single-column page, and another break after it (`parts.breakAfter`, default enabled, parity `any`).
 - The body (often the list of the part's chapters, or nothing) is set with `parts.bodyStyle`.
-- With config `parts.page:false`, the part opens no page and its body is not set. It only switches running heads and palette from the next content onward.
+- With config `parts.page:false`, or `page=false` on one fence, the part opens no page and its body is not set. It only switches running heads, palette and chapter style from the next content onward.
 - A part nested in a part is flattened into the outer one.
 - Parts are listed in `:::toc` as part rows.
 - A part is also a float barrier: pending floats are placed before it.
-- **Book tip:** put the `:::part` at the top of the first chapter file of that part, before its `# H1`. The part's palette carries across later chapters through the continuation.
+- **Book tip:** put the `:::part` at the top of the first chapter file of that part, before its `# H1`. The part's palette and chapter style carry across later chapters through the continuation.
 
 ```md
 :::part{number="I" title="Foundations" palette="band=#9bcdbf"}
@@ -1088,6 +1090,7 @@ The Markdown's only role is to provide values:
 **Sandbox warnings tied to the document format** (the engine reports the unknown ids, directives,
 styles, malformed embeds and ragged table grids itself, in `doc.contentWarnings` / `collectContentWarnings`):
 - `unknownDirective`, `malformedEmbed`, `unclosedContainer`, `unclosedMath`, `invalidMath`
+- `chapterStyleUnknown` (a `chapterStyle:` or `:::part{style}` naming no chapter style), `partStyleMidChapter` (a styled part fence after the chapter text started)
 - `unknownParagraphStyle`, `unknownCalloutType`, `unknownChipStyle`, `unknownMarkStyle` (≥ 1.34.1), `unknownHeadingStyle`, `unknownTableStyle`, `chipOverlap`
 - `raggedTableGrid` (a merged grid that is not rectangular), `missingImage` (an image with nothing to draw)
 - `numberingInvalidFormat`, `numberingInvalidStartAt`, `pagebreakInvalidParity`
@@ -1097,7 +1100,7 @@ styles, malformed embeds and ragged table grids itself, in `doc.contentWarnings`
 - `afterText` (≥ 1.25: a side box or side figure set on a page with no text, after its chapter's text ended) and `unplaced` (≥ 1.25: a box or float on no page); `hereNotEmbedded` (a `here` resource cited but never embedded) and `paragraphCitedInNote` (a `paragraph` resource only footnotes cite: on no page)
 - `floatShrunk` (a picture scaled to its slot), `floatCropped` (a picture cropped within its safe area by `layout.pullFloatsToCitation`, which is not recommended) and `floatPinMissed` (a `placement.pin` the layout did not follow; remove pins from a port)
 - `shortListSplit` (≥ 1.28, only with `bodyText.shortListSplit: 'warn' | 'avoid'`: a list of up to `shortListMaxItems` items cut between two columns) and `openerFloat` (≥ 1.28, only with `layout.openerFloats: 'warn'`: a float on a chapter or part opener page)
-- `stack` (≥ 1.73, only with `bodyText.stacks: 'warn' | 'avoid'`: two lines in a row of a paragraph that end (`edge: 'end'`) or start (`'start'`) on the same word or the same `stackMinCharacters` characters; `text` is what they repeat, `lines` the two lines; under `'avoid'`, the stacks the line breaker kept)
+- `stack` (≥ 1.73, only with `bodyText.stacks: 'warn' | 'avoid'`: two lines in a row of a paragraph that end (`edge: 'end'`) or start (`'start'`) on the same word or the same `stackMinCharacters` characters; `text` is what they repeat, `lines` the two lines; under `'avoid'`, the stacks the line breaker kept). From 1.80 `stack`, `citationBreak` and `operatorBreak` also come from captions, notes and table cells, with `resourceId`, `part` (`'caption' | 'note' | 'cell'`) and `cell` (`{ row, col }` from 0); the source range is the block that cites or embeds the resource)
 - `unclosedCodeBlock` (≥ 1.23: a code fence with no closing fence; the rest of the chapter is code) and `codeOverflow` (a listing's line wider than its box, turned over, shrunk or cut, per `codeStyle.overflow`)
 - `tabInVerticalText` (≥ 1.23: a `:tab` in vertical text, set as a word space), and the config warnings `unknownConfigKey` / `unknownConfigValue` for a tab stop's unknown key, `align` or position (configuration.md §4a)
 - `lineNumberOverlap` (≥ 1.23: a line number in the side column falls on a side box, side caption or float; painted anyway), and the config warning `lineNumbersUnsupported` (`lineNumbers.enabled` on a vertical document, which gets no numbers)
