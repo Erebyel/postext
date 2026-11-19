@@ -121,6 +121,10 @@ export interface ProductionVersion {
    *  price: the ISBN agency only allows it starting with 9, for the
    *  publisher's own use (90000: no price). */
   isbnAddOn?: string;
+  /** The ISBN of the whole work, for a volume of a collection or of a work
+   *  in several volumes: the barcode carries the volume's (`isbn`), and
+   *  this one is printed as text beside it. */
+  workIsbn?: string;
   /** A profile id of the library, or the profile itself. */
   binding: string | BindingProfile;
   /** Softcover: flaps; case: a dust jacket. */

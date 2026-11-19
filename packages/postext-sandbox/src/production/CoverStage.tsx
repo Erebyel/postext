@@ -36,14 +36,14 @@ export function CoverStage() {
   // A screen picture carries no finishes: they are plates for the press.
   const input = useMemo(
     () => (sheet && version && record
-      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, {
+      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption,
         logos: library,
         gallery,
         ...(mirror ? { mirror } : {}),
         ...(isPromo(shown) ? { hidden: new Set(['finishes'] as const) } : {}),
       })
       : null),
-    [sheet, version, record, config, design, bookResources, library, gallery, mirror, shown],
+    [sheet, version, record, config, design, bookResources, library, gallery, mirror, shown, labels.productionWorkIsbnCaption],
   );
 
   return (

@@ -134,9 +134,9 @@ function CoverDesigner() {
   const mirror = useMirror(design, bookResources, sheets?.measures.designMargin, gallery);
   const input = useMemo(
     () => (sheet && version && record
-      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { hidden, logos: library, gallery, ...(mirror ? { mirror } : {}) })
+      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, hidden, logos: library, gallery, ...(mirror ? { mirror } : {}) })
       : null),
-    [sheet, version, record, config, design, bookResources, hidden, library, gallery, mirror],
+    [sheet, version, record, config, design, bookResources, hidden, library, gallery, mirror, labels.productionWorkIsbnCaption],
   );
   // The cover's own pictures (its gallery), apart from the book's figures;
   // a design made before the gallery may still place the book's.

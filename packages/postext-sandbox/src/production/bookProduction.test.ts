@@ -222,3 +222,31 @@ describe('the cover’s type', () => {
     expect(styles.find((s) => s.id.includes('front') && s.id.includes('title'))!.textAlign).toBe('center');
   });
 });
+
+describe('the book’s paper', () => {
+  it('counts the inserts on their own paper, and the rest on the main one', async () => {
+    const { bookRuns, readBookProduction } = await import('./bookProduction.js');
+    const config = { folio: { paper: { grammage: 90, bulk: 1.25 } } } as never;
+    const library = [{ id: 'offset80', name: 'Offset 80', grammage: 80, bulk: 1.3 }];
+    expect(bookRuns(240, config)).toEqual([{ pages: 240, grammage: 90, bulk: 1.25 }]);
+    const paper = { profileId: 'offset80', inserts: [{ pages: 16, grammage: 115, bulk: 0.9, name: 'Estucado' }] };
+    expect(bookRuns(240, config, paper, library)).toEqual([{ pages: 224, grammage: 80, bulk: 1.3 }, { pages: 16, grammage: 115, bulk: 0.9 }]);
+    // A profile gone from the library: the design's paper again.
+    expect(bookRuns(240, config, { profileId: 'gone' }, library)[0]).toMatchObject({ grammage: 90 });
+    const read = readBookProduction({ projectId: 'p', versions: [], texts: {}, paper: { profileId: 'offset80', inserts: [{ pages: 16, grammage: 115, bulk: 0.9 }, { pages: -2 }] } });
+    expect(read!.paper).toEqual({ profileId: 'offset80', inserts: [{ pages: 16, grammage: 115, bulk: 0.9 }] });
+  });
+
+  it('prints the whole work’s ISBN over the barcode, introduced as asked', async () => {
+    const { coverDocumentInput, newVersion, sheetsOf } = await import('./bookProduction.js');
+    const config = { page: { width: { value: 150, unit: 'mm' }, height: { value: 230, unit: 'mm' } } } as never;
+    const version = { ...newVersion('paperback', 'Rústica'), isbn: '978-0-306-40615-7', workIsbn: '9788498350005' };
+    const sheets = sheetsOf(version, config, 240, []);
+    if (!('cover' in sheets)) throw new Error('no profile');
+    const input = coverDocumentInput(sheets.cover, version, {}, config, undefined, [], { workIsbnLabel: 'ISBN obra completa' });
+    const text = input.cover.template.decoration!.elements.find((e) => 'id' in e && e.id === 'isbn-work') as { content: string } | undefined;
+    expect(text?.content).toBe('ISBN obra completa 9788498350005');
+    const bad = coverDocumentInput(sheets.cover, { ...version, workIsbn: '123' }, {}, config);
+    expect(bad.cover.template.decoration!.elements.some((e) => 'id' in e && e.id === 'isbn-work')).toBe(false);
+  });
+});

@@ -7,12 +7,11 @@ import {
   exportProductionProfiles,
   importProductionProfiles,
   parseIsbn,
-  resolveFolioConfig,
-  resolvePageConfig,
   resolveBodyTextConfig,
   resolveColorValue,
   resolveBindingMeasures,
   type BindingProfile,
+  type PaperProfile,
   type PostextConfig,
   type ProductionVersion,
   type ProductionWarning,
@@ -35,6 +34,8 @@ import {
   planPageCount,
   sheetChoices,
   sheetsOf,
+  bookMainPaper,
+  type BookPaper,
   type BookProduction,
   type CoverTextZone,
   type SheetChoice,
@@ -45,6 +46,7 @@ import { LogoLibrary } from './LogoLibrarySection.js';
 import { DesignSection, ZoneStylesSection } from './CoverDesignSections.js';
 import { SheetPreview } from './SheetPreview.js';
 import { Fold } from './Fold.js';
+import { PaperSection } from './PaperSection.js';
 import { CoverGallerySection } from './CoverGallerySection.js';
 import { CoverIdmlImportButton } from './CoverIdmlImportButton.js';
 import { galleryResource } from './coverGallery.js';
@@ -128,9 +130,12 @@ export function ProductionPanel() {
   const versions = record?.versions ?? [];
   const version = versions.find((v) => v.id === record?.activeVersionId) ?? versions[0];
   const sheets = useMemo(
-    () => (version && pages > 0 ? sheetsOf(version, config, pages, bindings) : null),
-    [version, config, pages, bindings],
+    () => (version && pages > 0 ? sheetsOf(version, config, pages, bindings, { setting: record?.paper, library: papers }) : null),
+    [version, config, pages, bindings, record?.paper, papers],
   );
+  // The text sets pages on another paper: the spine counts them only as
+  // inserts.
+  const usesPaperFences = useMemo(() => chapters.some((c) => /^\s*:{3,}\s*paper\b/m.test(c.markdown)), [chapters]);
   const ready = sheets && isSheets(sheets) ? sheets : null;
   const choice = useCoverSheet();
   const choices = ready ? sheetChoices(ready) : [];
@@ -238,7 +243,22 @@ export function ProductionPanel() {
                   <p className="m-0 text-xs text-(--slate)">{labels.productionSpinePending}</p>
                 </>
               ) : (
-                <SpineSummary config={config} sheets={ready} labels={labels} />
+                <SpineSummary config={config} sheets={ready} labels={labels} paper={record?.paper} papers={papers} />
+              )}
+              {record && (
+                <PaperSection
+                  paper={record.paper}
+                  papers={papers}
+                  config={config}
+                  usesPaperFences={usesPaperFences}
+                  labels={labels}
+                  onChange={(paper) => {
+                    const next = { ...record };
+                    if (paper) next.paper = paper;
+                    else delete next.paper;
+                    update(next);
+                  }}
+                />
               )}
               {sheets && sheets.warnings.length > 0 && (
                 <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs">
@@ -382,6 +402,7 @@ function VersionForm({ version, labels, bindingOptions, library, trim, onChange,
   const profile = BUILT_IN_BINDING_PROFILES.find((p) => p.id === bindingId) ?? library.find((p) => p.id === bindingId);
   const isCase = profile?.style === 'caseFlat' || profile?.style === 'caseRound';
   const isbnBad = !!version.isbn?.trim() && !parseIsbn(version.isbn).ok;
+  const workBad = !!version.workIsbn?.trim() && !parseIsbn(version.workIsbn).ok;
   const [override, setOverride] = useState(version.spineOverride !== undefined ? String(version.spineOverride) : '');
   // The design margin the profile gives, and this version's own.
   const profileMargin = profile ? resolveBindingMeasures(profile, trim).designMargin : undefined;
@@ -425,6 +446,21 @@ function VersionForm({ version, labels, bindingOptions, library, trim, onChange,
           className={cn(INPUT, isbnBad && 'border-(--danger,#c0392b)')}
         />
         {isbnBad && <span role="alert" className="text-(--danger,#c0392b)">{labels.productionIsbnInvalid}</span>}
+      </label>
+      <label className="flex flex-col gap-1 text-xs">
+        {labels.productionWorkIsbn}
+        <input
+          type="text"
+          inputMode="numeric"
+          value={version.workIsbn ?? ''}
+          placeholder="978-84-…"
+          aria-invalid={workBad || undefined}
+          onChange={(e) => onChange(e.target.value.trim() ? { ...version, workIsbn: e.target.value } : without('workIsbn'))}
+          className={cn(INPUT, workBad && 'border-(--danger,#c0392b)')}
+        />
+        {workBad
+          ? <span role="alert" className="text-(--danger,#c0392b)">{labels.productionIsbnInvalid}</span>
+          : <span className="text-(--slate)">{labels.productionWorkIsbnHint}</span>}
       </label>
       <label className="flex flex-col gap-1 text-xs">
         {labels.productionBinding}
@@ -491,12 +527,15 @@ function VersionForm({ version, labels, bindingOptions, library, trim, onChange,
   );
 }
 
-function SpineSummary({ config, sheets, labels }: {
+function SpineSummary({ config, sheets, labels, paper, papers }: {
   config: PostextConfig;
   sheets: VersionSheets;
   labels: Labels;
+  paper: BookPaper | undefined;
+  papers: readonly PaperProfile[];
 }) {
-  const paper = resolveFolioConfig(config.folio, resolvePageConfig(config.page).sizePreset).paper;
+  const main = bookMainPaper(config, paper, papers);
+  const inserts = (paper?.inserts ?? []).filter((i) => i.pages > 0);
   const s = sheets.spine;
   return (
     <>
@@ -504,13 +543,19 @@ function SpineSummary({ config, sheets, labels }: {
       <p className="m-0 text-base font-semibold tabular-nums">{mm1(s.used)} mm</p>
       <p className="m-0 text-xs text-(--slate)">
         {fill(labels.productionSpineSummary, {
-          pages: String(s.pages),
-          grammage: String(paper.grammage),
-          bulk: paper.bulk.toLocaleString(),
+          // The pages on the main paper: the inserts are told apart below.
+          pages: String(Math.max(0, s.pages - inserts.reduce((n, i) => n + i.pages, 0))),
+          grammage: String(main.grammage),
+          bulk: main.bulk.toLocaleString(),
           block: mm1(s.block),
           spine: mm1(s.used),
         })}
       </p>
+      {inserts.map((i, k) => (
+        <p key={k} className="m-0 text-xs text-(--slate)">
+          {fill(labels.productionSpineInsert, { pages: String(i.pages), name: i.name ?? labels.productionInsertManual, grammage: String(i.grammage), bulk: i.bulk.toLocaleString() })}
+        </p>
+      ))}
       {s.caseSpine !== undefined && <p className="m-0 text-xs">{fill(labels.productionSpineCase, { spine: mm1(s.caseSpine) })}</p>}
     </>
   );

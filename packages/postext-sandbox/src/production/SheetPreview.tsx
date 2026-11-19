@@ -92,13 +92,13 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
   const sheet = pickSheet(sheets, shown, bookTrimMm(config));
   // A screen picture carries no finishes: they are plates for the press.
   const input = useMemo(
-    () => coverDocumentInput(sheet, version, texts, config, design, bookResources, {
+    () => coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption,
       logos: library,
       gallery,
       ...(mirror ? { mirror } : {}),
       ...(isPromo(shown) ? { hidden: new Set(['finishes'] as const) } : {}),
     }),
-    [sheet, version, texts, config, design, bookResources, library, gallery, shown, mirror],
+    [sheet, version, texts, config, design, bookResources, library, gallery, shown, mirror, labels.productionWorkIsbnCaption],
   );
   const isCaseCover = sheet.kind === 'case';
   // What to put right before printing (./coverChecks.ts), on the sheet as
@@ -181,7 +181,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
       // Finishes go to the press as solid plates that overprint: the sheet
       // is laid out again with them so, when it has any.
       const press = design?.finishes?.length
-        ? coverDocumentInput(sheet, version, texts, config, design, bookResources, { logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) })
+        ? coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) })
         : built.input;
       const pressDoc = press === built.input ? built.doc : await build({ markdown: press.markdown, resources: press.resources }, press.config);
       const own = new Set(Object.keys(press.cover.files));
@@ -215,7 +215,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
     try {
       const file = await buildCoverIdml({
         sheet,
-        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) }),
+        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, barcodePdf: true, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) }),
         title: sheetFileName(fileTitle, version.name, built.sheet, 'idml').replace(/\.idml$/, ''),
         layers: coverLayerNamesOf(labels),
       });

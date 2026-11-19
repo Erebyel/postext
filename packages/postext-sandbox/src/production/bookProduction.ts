@@ -9,6 +9,8 @@
 import {
   coverMarkdown,
   coverPage,
+  isbnCaption,
+  parseIsbn,
   promoSheet,
   PROMO_FORMATS,
   resolveFolioConfig,
@@ -23,6 +25,7 @@ import {
   type MirrorPicture,
   type Dimension,
   type PageRun,
+  type PaperProfile,
   type PromoFormat,
   type ParagraphStyleConfig,
   type PostextConfig,
@@ -68,6 +71,15 @@ export interface CoverDesignSettings {
   finishes?: CoverFinishSetting[];
 }
 
+/** The paper of a book's text block, the same for every version: a paper
+ *  profile of the library (else the book design's own, `config.folio`),
+ *  and inserts on other papers (a section of plates on coated stock), each
+ *  by its pages. */
+export interface BookPaper {
+  profileId?: string;
+  inserts?: { pages: number; grammage: number; bulk: number; name?: string }[];
+}
+
 /** A book's production, kept per project. */
 export interface BookProduction {
   projectId: string;
@@ -76,6 +88,7 @@ export interface BookProduction {
   /** The cover's text by zone, Markdown; the same for every version. */
   texts: Partial<Record<CoverTextZone, string>>;
   design?: CoverDesignSettings;
+  paper?: BookPaper;
   updatedAt: number;
 }
 
@@ -138,12 +151,29 @@ export function bookTrimMm(config: PostextConfig): TrimMm {
   return { width: dimensionMm(page.width, page.dpi), height: dimensionMm(page.height, page.dpi) };
 }
 
-/** The book's pages on its own paper (`config.folio.paper`), as one run.
- *  Pages set on another stock with `:::paper` are not told apart here: the
- *  plan knows page counts, not papers. */
-export function bookRuns(pages: number, config: PostextConfig): PageRun[] {
-  const paper = resolveFolioConfig(config.folio, resolvePageConfig(config.page).sizePreset).paper;
-  return pages > 0 ? [{ pages, grammage: paper.grammage, bulk: paper.bulk }] : [];
+/** The book's main paper: the profile it names in the library, else the
+ *  book design's own (`config.folio.paper`). */
+export function bookMainPaper(config: PostextConfig, paper?: BookPaper, library: readonly PaperProfile[] = []): { grammage: number; bulk: number; name?: string } {
+  const profile = paper?.profileId ? library.find((p) => p.id === paper.profileId) : undefined;
+  const own = profile
+    ? resolveFolioConfig({ paper: profile }).paper
+    : resolveFolioConfig(config.folio, resolvePageConfig(config.page).sizePreset).paper;
+  return { grammage: own.grammage, bulk: own.bulk, ...(profile ? { name: profile.name } : {}) };
+}
+
+/** The book's pages as runs of one paper: its inserts, each on its own,
+ *  and the rest on its main paper. Pages set on another stock with
+ *  `:::paper` count only as inserts: the plan knows page counts, not
+ *  papers. */
+export function bookRuns(pages: number, config: PostextConfig, paper?: BookPaper, library: readonly PaperProfile[] = []): PageRun[] {
+  if (pages <= 0) return [];
+  const main = bookMainPaper(config, paper, library);
+  const inserts = (paper?.inserts ?? []).filter((i) => i.pages > 0 && i.grammage > 0 && i.bulk > 0);
+  const taken = Math.min(pages, inserts.reduce((n, i) => n + i.pages, 0));
+  return [
+    ...(pages - taken > 0 ? [{ pages: pages - taken, grammage: main.grammage, bulk: main.bulk }] : []),
+    ...inserts.map((i) => ({ pages: i.pages, grammage: i.grammage, bulk: i.bulk })),
+  ];
 }
 
 /** The book's page count from its plan: the end of the last chapter laid
@@ -193,9 +223,10 @@ export function sheetsOf(
   config: PostextConfig,
   pages: number,
   library: readonly BindingProfile[],
+  paper?: { setting?: BookPaper; library: readonly PaperProfile[] },
 ): ReturnType<typeof versionSheets> {
   const rtl = resolvePageConfig(config.page, config.locale).binding === 'right';
-  return versionSheets(version, bookTrimMm(config), bookRuns(pages, config), { library, rtl });
+  return versionSheets(version, bookTrimMm(config), bookRuns(pages, config, paper?.setting, paper?.library), { library, rtl });
 }
 
 /** What to lay out for a sheet: the book's design with the sheet's page
@@ -355,9 +386,14 @@ export function coverDocumentInput(
     /** The book's cover gallery: the pictures the design places from it
      *  come along, their bytes in the cover's files. */
     gallery?: CoverGallery;
+    /** How the whole work's ISBN is introduced over the barcode
+     *  (`ISBN obra completa`). Default `ISBN`. */
+    workIsbnLabel?: string;
   } = {},
 ): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
+  const work = version.workIsbn?.trim() ? parseIsbn(version.workIsbn) : undefined;
+  const workIsbn = work?.ok ? work.isbn13 : undefined;
   const hidden = options.hidden ?? new Set<CoverLayer>();
   const design = isCover ? coverDesignOf(designShowing(settings, hidden)) : undefined;
   const styles = settings?.zoneStyles ?? {};
@@ -371,6 +407,7 @@ export function coverDocumentInput(
     templateId: 'production-sheet',
     ...(isCover && version.isbn ? { isbn: version.isbn } : {}),
     ...(version.isbnAddOn ? { isbnAddOn: version.isbnAddOn } : {}),
+    ...(isCover && workIsbn ? { workIsbnCaption: isbnCaption(version.workIsbn!, workIsbn).replace(/^ISBN/, options.workIsbnLabel ?? 'ISBN') } : {}),
     ...(version.spineText ? { spineText: version.spineText } : {}),
     ...(design ? { design } : {}),
     ...(Object.keys(verticalAlign).length > 0 ? { verticalAlign } : {}),
@@ -446,6 +483,7 @@ export function readBookProduction(raw: unknown): BookProduction | null {
     }
   }
   const design = readDesign(raw.design);
+  const paper = readPaper(raw.paper);
   const active = typeof raw.activeVersionId === 'string' && versions.some((v) => v.id === raw.activeVersionId)
     ? raw.activeVersionId
     : undefined;
@@ -455,11 +493,29 @@ export function readBookProduction(raw: unknown): BookProduction | null {
     ...(active ? { activeVersionId: active } : {}),
     texts,
     ...(design ? { design } : {}),
+    ...(paper ? { paper } : {}),
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
   };
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
+
+function readPaper(raw: unknown): BookPaper | undefined {
+  if (!isRecord(raw)) return undefined;
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
+  const inserts = (Array.isArray(raw.inserts) ? raw.inserts : []).flatMap((i) => {
+    if (!isRecord(i)) return [];
+    const pages = n(i.pages);
+    const grammage = n(i.grammage);
+    const bulk = n(i.bulk);
+    return pages && grammage && bulk ? [{ pages: Math.round(pages), grammage, bulk, ...(typeof i.name === 'string' && i.name.trim() ? { name: i.name } : {}) }] : [];
+  });
+  const out: BookPaper = {
+    ...(typeof raw.profileId === 'string' && raw.profileId ? { profileId: raw.profileId } : {}),
+    ...(inserts.length ? { inserts } : {}),
+  };
+  return Object.keys(out).length ? out : undefined;
+}
 
 function readDesign(raw: unknown): CoverDesignSettings | undefined {
   if (!isRecord(raw)) return undefined;

@@ -208,6 +208,10 @@ export interface CoverPageOptions {
   /** The ISBN as written: its barcode goes in the back cover. */
   isbn?: string;
   isbnAddOn?: string;
+  /** Printed as text above the barcode: the whole work's ISBN as the
+   *  caller words it (`ISBN obra completa 978-…`), for a volume of a
+   *  collection or a work in several volumes. */
+  workIsbnCaption?: string;
   /** Barcode size against nominal (0.8 … 2). Default 1. */
   barcodeMagnification?: number;
   design?: CoverDesign;
@@ -732,6 +736,25 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
       },
     };
     elements.push(element);
+    // The whole work's ISBN, as text over the barcode, as wide as it.
+    if (options.workIsbnCaption) {
+      const height = 3.5;
+      elements.push({
+        kind: 'text',
+        id: 'isbn-work',
+        over: true,
+        content: options.workIsbnCaption.replace(/\{/g, '{{').replace(/\}/g, '}}'),
+        fontSize: { value: 6.5, unit: 'pt' },
+        color: { hex: '#000000', model: 'hex' },
+        align: 'center',
+        verticalAlign: 'bottom',
+        placement: {
+          anchor: { to: 'page', edge: 'top-left' },
+          offset: { x: mm(s.x + s.width - barcode.width - sheet.trim.x), y: mm(s.y + s.height - barcode.height - height - sheet.trim.y) },
+          size: { width: mm(barcode.width), height: mm(height) },
+        },
+      } as DesignElement);
+    }
   }
   elements.push(...finishElements(sheet, options.design, options.finishes ?? 'screen', options.resources ?? []));
   if (elements.length > 0) template.decoration = { elements };

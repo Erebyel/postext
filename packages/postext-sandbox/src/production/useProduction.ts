@@ -133,15 +133,16 @@ export function useCoverWorkspace(): {
   const [record, update] = useBookProduction(activeProjectId ?? WORKING_BOOK);
   const stored = useProfiles();
   const bindings = useMemo(() => stored.flatMap((p) => (p.kind === 'binding' ? [p.profile] : [])), [stored]);
+  const papers = useMemo(() => stored.flatMap((p) => (p.kind === 'paper' ? [p.profile] : [])), [stored]);
   const complete = plan.chapters.length > 0 && plan.chapters.every((c) => plan.bookPages[c.chapterId]);
   const pages = planPageCount(plan.bookPages);
   const versions = record?.versions ?? [];
   const version = versions.find((v) => v.id === record?.activeVersionId) ?? versions[0];
   const sheets = useMemo(() => {
     if (!version || pages <= 0 || !complete) return null;
-    const s = sheetsOf(version, config, pages, bindings);
+    const s = sheetsOf(version, config, pages, bindings, { setting: record?.paper, library: papers });
     return isSheets(s) ? s : null;
-  }, [version, config, pages, bindings, complete]);
+  }, [version, config, pages, bindings, complete, record?.paper, papers]);
   const metadata = useMemo(() => bookMetadata(chapters) as Record<string, unknown>, [chapters]);
   const metaTitle = typeof metadata.title === 'string' ? metadata.title.trim() : '';
   const title = projects.find((p) => p.id === activeProjectId)?.name ?? (metaTitle || 'book');

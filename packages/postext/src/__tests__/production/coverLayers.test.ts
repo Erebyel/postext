@@ -140,4 +140,17 @@ describe('finish inks', () => {
     expect(els.find((e) => e.id === 'cover-fx-shine')!.resourceId).toBe('gloss');
     expect(cover.clipSkipped).toEqual(['gloss']);
   });
+
+  it('prints the whole work’s ISBN as text over the barcode, as wide as it', () => {
+    const cover = coverPage(sheet, { isbn: '978-0-306-40615-7', workIsbnCaption: 'ISBN obra completa 978-84-9835-000-2' });
+    const els = cover.template.decoration!.elements as { id: string; kind: string; content?: string; placement: { offset: { y: { value: number } }; size: { width: { value: number } } } }[];
+    const code = els.find((e) => e.id === 'isbn-barcode')!;
+    const text = els.find((e) => e.id === 'isbn-work')!;
+    expect(text.kind).toBe('text');
+    expect(text.content).toBe('ISBN obra completa 978-84-9835-000-2');
+    expect(text.placement.size.width.value).toBeCloseTo(code.placement.size.width.value, 3);
+    expect(text.placement.offset.y.value).toBeLessThan(code.placement.offset.y.value);
+    // Without the volume's barcode, nothing to print it by.
+    expect((coverPage(sheet, { workIsbnCaption: 'x' }).template.decoration?.elements ?? []).some((e) => 'id' in e && e.id === 'isbn-work')).toBe(false);
+  });
 });
