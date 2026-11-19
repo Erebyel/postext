@@ -239,6 +239,7 @@ export function pageItemsXml(w: Writer, page: DisplayPage, frames: Map<string, V
   if (page.background && !/^#f{3}(f{3})?$/i.test(page.background.trim())) out.push(rectXml(w, { rect: { x: 0, y: 0, width: page.width, height: page.height }, fill: page.background }, 'Paper'));
   for (const it of page.items) {
     if (w.layerOf) w.layer = w.layerOf({ ...(it.element ? { element: it.element } : {}), text: it.kind === 'text' || it.kind === 'table' });
+    if (w.nameItems) w.element = it.element;
     switch (it.kind) {
       case 'rect':
         // A box of the thread is anchored in its story.

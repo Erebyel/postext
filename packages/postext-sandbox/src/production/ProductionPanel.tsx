@@ -31,6 +31,7 @@ import {
   metadataIsbn,
   metadataTexts,
   newVersion,
+  pickSheet,
   planPageCount,
   sheetChoices,
   sheetsOf,
@@ -45,6 +46,7 @@ import { DesignSection, ZoneStylesSection } from './CoverDesignSections.js';
 import { SheetPreview } from './SheetPreview.js';
 import { Fold } from './Fold.js';
 import { CoverGallerySection } from './CoverGallerySection.js';
+import { CoverIdmlImportButton } from './CoverIdmlImportButton.js';
 import { galleryResource } from './coverGallery.js';
 import { useBookProduction, useCoverGallery, useProfiles } from './useProduction.js';
 import { chooseCoverSheet, openCoverDesigner, useCoverSheet } from './coverDesignerStore.js';
@@ -109,7 +111,7 @@ export function ProductionPanel() {
   const projectId = activeProjectId ?? WORKING_BOOK;
   const [record, update] = useBookProduction(projectId);
   const stored = useProfiles();
-  const [gallery] = useCoverGallery();
+  const [gallery, updateGallery] = useCoverGallery();
   // The background picture is one of the cover's gallery (or the book's
   // picture a design made before the gallery already uses).
   const coverPictures = useMemo(
@@ -268,6 +270,17 @@ export function ProductionPanel() {
               onChoose={chooseCoverSheet}
               labels={labels}
               fileTitle={title}
+            />
+          )}
+
+          {version && record && ready && complete && (
+            <CoverIdmlImportButton
+              sheet={pickSheet(ready, shown === 'jacket' ? 'jacket' : 'cover', bookTrimMm(config))}
+              record={record}
+              gallery={gallery}
+              labels={labels}
+              onRecord={update}
+              onGallery={updateGallery}
             />
           )}
 

@@ -1,0 +1,102 @@
+import { describe, expect, it } from 'vitest';
+import { basicShape, caseSheet, resolveBindingMeasures, type ProductionSheet } from 'postext';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { coverDocumentInput, newVersion, type CoverDesignSettings } from './bookProduction.js';
+import { elementRect } from './coverLayers.js';
+import { coverIdmlLayers, type CoverLayerNames } from './coverIdml.js';
+import { importCoverIdml } from './coverIdmlImport.js';
+
+class StubCtx {
+  font = '';
+  measureText(s: string) { return { width: s.length * 7 }; }
+}
+(globalThis as unknown as { OffscreenCanvas: unknown }).OffscreenCanvas = class { getContext() { return new StubCtx(); } };
+
+const names: CoverLayerNames = { background: 'Fondo', elements: 'Elementos', mirror: 'Espejo', texts: 'Textos', effects: 'Efectos', logos: 'Logos', finishes: 'Acabados' };
+const trim = { width: 150, height: 230 };
+const sheet: ProductionSheet = caseSheet(trim, 26, resolveBindingMeasures({ id: 'c', name: 'C', style: 'caseFlat' }, trim));
+const version = { ...newVersion('hardcover', 'Cartoné') };
+
+const design = (dotX: number): CoverDesignSettings => ({
+  background: '#123456',
+  elements: [
+    { id: 'dot', kind: 'box', color: '#ff0000', zone: 'front', x: dotX, y: 20, width: 30, height: 30 },
+    { id: 'star', kind: 'shape', color: '#00ff00', path: basicShape('star'), zone: 'back', x: 10, y: 10, width: 40, height: 40 },
+  ],
+  effects: [{ id: 'veil', kind: 'box', color: '#000000', opacity: 0.4, zone: 'front', x: 0, y: 0, width: 50, height: 20 }],
+  finishes: [{ id: 'gloss', kind: 'varnish', ink: 'Barniz UVI', shape: { box: { zone: 'front', x: 20, y: 80, width: 30, height: 20 } } }],
+});
+
+/** The cover of `d` and `texts` as the designer sends it to InDesign. */
+async function exported(d: CoverDesignSettings, texts: Record<string, string>): Promise<Uint8Array> {
+  const { buildDocument } = await import('postext');
+  const { idmlDocument } = await import('postext-idml');
+  const input = coverDocumentInput(sheet, version, texts, { page: { dpi: 72 } }, d, [], { press: true });
+  const doc = buildDocument({ markdown: input.markdown, resources: input.resources }, input.config);
+  return idmlDocument({ docs: [doc], layers: coverIdmlLayers(names), nameItems: true, resourceBytes: (id) => input.cover.files[id] }).bytes;
+}
+
+/** An IDML edited as InDesign would: `edit` on its spread's XML. */
+function edited(bytes: Uint8Array, edit: (spread: string) => string): Uint8Array {
+  const files = unzipSync(bytes);
+  const path = Object.keys(files).find((p) => p.startsWith('Spreads/'))!;
+  files[path] = strToU8(edit(strFromU8(files[path]!)));
+  return zipSync(files);
+}
+
+describe('a cover back from InDesign', () => {
+  const texts = { front: '# El título\n\nAutora', spine: 'Autora · Título' };
+
+  it('comes back as it went', async () => {
+    const d = design(40);
+    const back = importCoverIdml(await exported(d, texts), { sheet, design: d, texts, layerNames: names });
+    expect(back.report.added).toEqual([]);
+    expect(back.report.missing).toEqual([]);
+    expect(back.report.texts).toEqual([]);
+    const before = elementRect(sheet, d.elements![0]!)!;
+    const after = elementRect(sheet, back.design.elements![0]!)!;
+    for (const k of ['x', 'y', 'width', 'height'] as const) expect(after[k]).toBeCloseTo(before[k], 1);
+    expect(back.design.elements![1]!.path).toEqual(d.elements![1]!.path);
+    expect(back.design.effects![0]!.opacity).toBeCloseTo(0.4);
+    expect(back.design.background).toBe('#123456');
+  });
+
+  it('takes what InDesign moved, the texts it changed, and what was added there', async () => {
+    const moved = await exported(design(70), { ...texts, front: '# Otro título\n\nAutora' });
+    // A finish drawn in InDesign: an item with no name of the design's,
+    // on the finishes' layer, in the varnish's spot ink.
+    const idml = edited(moved, (xml) => xml.replace(/Name="cover-finish-gloss"/, 'Name="Brillo nuevo"'));
+    const d = design(40);
+    const back = importCoverIdml(idml, { sheet, design: d, texts, layerNames: names });
+    const dot = elementRect(sheet, back.design.elements!.find((e) => e.id === 'dot')!)!;
+    const want = elementRect(sheet, design(70).elements![0]!)!;
+    expect(dot.x).toBeCloseTo(want.x, 1);
+    expect(back.report.updated).toContain('cover-el-dot');
+    // The text, its heading kept.
+    expect(back.texts.front).toBe('# Otro título\n\nAutora');
+    expect(back.report.texts).toEqual(['front']);
+    // The renamed varnish is new; the old one is missing and kept.
+    const added = back.design.finishes!.find((f) => f.name === 'Brillo nuevo')!;
+    expect(added).toMatchObject({ kind: 'varnish', ink: 'Barniz UVI' });
+    expect(back.report.missing).toEqual(['gloss']);
+    expect(back.design.finishes!.some((f) => f.id === 'gloss')).toBe(true);
+  });
+
+  it('leaves out a picture whose linked file is not given, and says which', async () => {
+    const d = design(40);
+    const idml = edited(await exported(d, texts), (xml) => xml.replace('</Spread>',
+      '<Rectangle Self="new1" ContentType="GraphicType" ItemTransform="1 0 0 1 0 0"><Properties><PathGeometry><GeometryPathType PathOpen="false"><PathPointArray>'
+      + '<PathPointType Anchor="10 -100" LeftDirection="10 -100" RightDirection="10 -100"/><PathPointType Anchor="10 -50" LeftDirection="10 -50" RightDirection="10 -50"/>'
+      + '<PathPointType Anchor="60 -50" LeftDirection="60 -50" RightDirection="60 -50"/><PathPointType Anchor="60 -100" LeftDirection="60 -100" RightDirection="60 -100"/>'
+      + '</PathPointArray></GeometryPathType></PathGeometry></Properties>'
+      + '<Image Self="img1" ItemTransform="1 0 0 1 10 -100"><Properties><GraphicBounds Left="0" Top="0" Right="50" Bottom="50"/></Properties><Link Self="l1" LinkResourceURI="file:///Links/foto.jpg" StoredState="Normal"/></Image></Rectangle></Spread>'));
+    const back = importCoverIdml(idml, { sheet, design: d, texts, layerNames: names });
+    expect(back.report.links).toEqual(['foto.jpg']);
+    expect(back.pictures).toEqual([]);
+    // Given the file, it comes in as a picture of the gallery.
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
+    const withFile = importCoverIdml(idml, { sheet, design: d, texts, layerNames: names, links: new Map([['foto.jpg', jpeg]]) });
+    expect(withFile.pictures).toHaveLength(1);
+    expect(withFile.design.elements!.some((e) => e.resourceId === `cover:${withFile.pictures[0]!.id}`)).toBe(true);
+  });
+});

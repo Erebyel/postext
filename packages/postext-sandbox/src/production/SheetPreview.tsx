@@ -22,7 +22,7 @@ import { loadPrintProfile, outputProfileBaseUrl } from '../print/printSetup.js';
 import { createPdfFontProvider } from '../viewport/pdf/pdfFontProvider.js';
 import { useLayoutWorker } from '../worker/useLayoutWorker.js';
 import { promoImage } from './promoImage.js';
-import { buildCoverIdml } from './coverIdml.js';
+import { buildCoverIdml, coverLayerNamesOf } from './coverIdml.js';
 import {
   bookTrimMm,
   isPromo,
@@ -184,15 +184,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
         sheet,
         input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) }),
         title: sheetFileName(fileTitle, version.name, built.sheet, 'idml').replace(/\.idml$/, ''),
-        layers: {
-          background: labels.coverLayerBackground,
-          elements: labels.coverLayerElements,
-          mirror: labels.coverLayerMirror,
-          texts: labels.coverLayerTexts,
-          effects: labels.coverLayerEffects,
-          logos: labels.coverLayerLogos,
-          finishes: labels.coverLayerFinishes,
-        },
+        layers: coverLayerNamesOf(labels),
       });
       downloadBytes(file.bytes, file.name, file.mime);
       announce(fill(labels.productionExported, { name: file.name }));

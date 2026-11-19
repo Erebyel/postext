@@ -67,6 +67,10 @@ export interface IdmlOptions {
    *  (a design element by its id, a text frame); an item no layer takes
    *  goes into the one marked `default`, else the first. */
   layers?: readonly IdmlExportLayer[];
+  /** Name each shape and picture frame after the design element it draws
+   *  (`cover-el-…`), so a reader can tell them again: a cover sent to
+   *  InDesign and read back. Default `false`. */
+  nameItems?: boolean;
   onWarning?: (w: IdmlWarning) => void;
 }
 
@@ -119,6 +123,10 @@ export interface Writer {
   layer: string;
   /** The layer an item goes to (see `IdmlOptions.layers`). */
   layerOf?: (item: { element?: string; text: boolean }) => string;
+  /** The design element the item being written draws, when items are
+   *  named after theirs (`IdmlOptions.nameItems`). */
+  element?: string;
+  nameItems?: boolean;
   /** Swatch names taken, lower-cased: InDesign's own and those written. */
   swatchNames: Set<string>;
   cmyk: Map<string, { c: number; m: number; y: number; k: number }>;

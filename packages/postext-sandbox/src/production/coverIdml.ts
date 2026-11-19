@@ -4,6 +4,7 @@
 // guides on a layer of their own, the barcode as a vector PDF (an SVG
 // places only in recent InDesign), and the pictures and fonts beside it.
 
+import type { Labels } from './productionUi.js';
 import {
   BARCODE_PDF_FILE_ID,
   BARCODE_RESOURCE_ID,
@@ -40,6 +41,20 @@ export interface CoverLayerNames {
   effects: string;
   logos: string;
   finishes: string;
+}
+
+/** The layers' names as the designer's labels give them: the export
+ *  writes them, the import reads items back by them. */
+export function coverLayerNamesOf(labels: Pick<Labels, 'coverLayerBackground' | 'coverLayerElements' | 'coverLayerMirror' | 'coverLayerTexts' | 'coverLayerEffects' | 'coverLayerLogos' | 'coverLayerFinishes'>): CoverLayerNames {
+  return {
+    background: labels.coverLayerBackground,
+    elements: labels.coverLayerElements,
+    mirror: labels.coverLayerMirror,
+    texts: labels.coverLayerTexts,
+    effects: labels.coverLayerEffects,
+    logos: labels.coverLayerLogos,
+    finishes: labels.coverLayerFinishes,
+  };
 }
 
 /** A cover's InDesign layers, bottom to top, each holding its designer
@@ -154,6 +169,9 @@ export async function buildCoverIdml({ sheet, input, title, layers, onWarning }:
     files,
     guides: coverIdmlGuides(sheet),
     ...(layers ? { layers: coverIdmlLayers(layers) } : {}),
+    // Each item named after its element, so the cover comes back from
+    // InDesign onto its design (./coverIdmlImport.ts).
+    nameItems: true,
     ...(onWarning ? { onWarning } : {}),
   });
 }

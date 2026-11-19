@@ -98,6 +98,7 @@ function writePackage(options: IdmlOptions, styles: StyleSurvey): IdmlResult | u
     swatchNames: new Set(RESERVED_SWATCH_NAMES.map((n) => n.toLowerCase())),
     cmyk: authoredCmykColors(first.config),
     layer: 'ulayer',
+    ...(options.nameItems ? { nameItems: true } : {}),
     inks,
     ...(dieCut ? { die: dieLineInk(first) } : {}),
     palette,

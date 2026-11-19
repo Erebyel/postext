@@ -20,7 +20,7 @@ export function rectXml(w: Writer, item: Pick<RectItem, 'rect' | 'fill' | 'strok
   const g = boxGeometry(w, item.rect, item.rotate);
   return (
     `<Rectangle${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)}${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
-    `${paintAttrs(w, fill, stroke, item.strokeWidthPx, item.radius)}${attr('Name', name ?? (item.frame ? `${frameName(item.frame)} (box)` : undefined))}>` +
+    `${paintAttrs(w, fill, stroke, item.strokeWidthPx, item.radius)}${attr('Name', w.element ?? name ?? (item.frame ? `${frameName(item.frame)} (box)` : undefined))}>` +
     `${g.geometry}${opacityXml(fill?.opacity ?? stroke?.opacity ?? 1)}</Rectangle>`
   );
 }
@@ -96,7 +96,7 @@ export function ruleXml(w: Writer, item: Extract<DisplayItem, { kind: 'rule' }>)
   const b = toSpread(w, item.x2, item.y2);
   const dash = item.dash?.length ? ` StrokeType="StrokeStyle/$ID/Dashed"${attr('StrokeDashAndGap', item.dash.map((d) => num(d * w.k)).join(' '))}` : '';
   return (
-    `<GraphicLine${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)} ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
+    `<GraphicLine${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)}${attr('Name', w.element)} ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
     ` FillColor="Swatch/None"${attr('StrokeColor', stroke.ref)}${attr('StrokeWeight', item.widthPx * w.k)}${dash}${overprintAttrs(undefined, stroke)} LeftLineEnd="None" RightLineEnd="None">` +
     `${pathGeometry([{ points: [pp(a), pp(b)], open: true }])}${opacityXml(stroke.opacity)}</GraphicLine>`
   );
@@ -150,7 +150,7 @@ export function pathXml(w: Writer, item: Extract<DisplayItem, { kind: 'path' }>)
   const cap = item.stroke?.cap === 'round' ? ' EndCap="RoundEndCap"' : item.stroke?.cap === 'square' ? ' EndCap="ProjectingEndCap"' : '';
   const join = item.stroke?.join === 'round' ? ' EndJoin="RoundEndJoin"' : item.stroke?.join === 'bevel' ? ' EndJoin="BevelEndJoin"' : '';
   return (
-    `<Polygon${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)} ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
+    `<Polygon${attr('Self', w.next())} ContentType="Unassigned"${attr('ItemLayer', w.layer)}${attr('Name', w.element)} ItemTransform="1 0 0 1 0 0" AppliedObjectStyle="ObjectStyle/$ID/[None]"` +
     `${attr('FillColor', fill?.ref ?? 'Swatch/None')}${attr('StrokeColor', stroke?.ref ?? 'Swatch/None')}${attr('StrokeWeight', stroke ? item.stroke!.widthPx * w.k : 0)}${dash}${cap}${join}${overprintAttrs(fill, stroke)}>` +
     `${pathGeometry(paths)}${opacityXml(fill?.opacity ?? stroke?.opacity ?? 1)}</Polygon>`
   );

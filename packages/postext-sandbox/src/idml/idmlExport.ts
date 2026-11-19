@@ -148,6 +148,9 @@ export interface IdmlExportInput {
   /** Layers to sort the page items into (a cover's, one per designer
    *  layer). */
   layers?: readonly IdmlExportLayer[];
+  /** Name each shape and picture after the design element it draws (a
+   *  cover read back from InDesign). */
+  nameItems?: boolean;
   onWarning?: (w: IdmlWarning) => void;
 }
 
@@ -190,6 +193,7 @@ export async function buildIdmlExport(input: IdmlExportInput): Promise<IdmlExpor
     ...(input.title ? { title: input.title } : {}),
     ...(input.guides?.length ? { guides: input.guides } : {}),
     ...(input.layers?.length ? { layers: input.layers } : {}),
+    ...(input.nameItems ? { nameItems: true } : {}),
     ...(input.onWarning ? { onWarning: input.onWarning } : {}),
   });
   const name = idmlFileName(input.title ?? '');

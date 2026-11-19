@@ -13,7 +13,7 @@ export function imageXml(w: Writer, item: Extract<DisplayItem, { kind: 'image' }
   const fileId = usePdf ? item.pdfFileId! : item.fileId;
   const bytes = w.opts.resourceBytes?.(fileId);
   const g = boxGeometry(w, item.rect, item.rotate);
-  const frameOpen = `<Rectangle${attr('Self', w.next())} ContentType="GraphicType"${attr('ItemLayer', w.layer)}${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0"${attr('Name', item.alt || (fileId.startsWith('data:') ? undefined : fileId))}>${g.geometry}`;
+  const frameOpen = `<Rectangle${attr('Self', w.next())} ContentType="GraphicType"${attr('ItemLayer', w.layer)}${attr('ItemTransform', g.transform)} AppliedObjectStyle="ObjectStyle/$ID/[None]" FillColor="Swatch/None" StrokeColor="Swatch/None" StrokeWeight="0"${attr('Name', w.element ?? (item.alt || (fileId.startsWith('data:') ? undefined : fileId)))}>${g.geometry}`;
   if (!bytes) {
     w.warn('image.missing', `Page ${pageIndex + 1}: no bytes for picture ${fileId.slice(0, 80)}; an empty graphics frame stands in its place`);
     return `${frameOpen}</Rectangle>`;
