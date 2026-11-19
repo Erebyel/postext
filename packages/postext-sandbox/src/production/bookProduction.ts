@@ -291,7 +291,8 @@ const pt = (value: number): Dimension => ({ value, unit: 'pt' });
 
 /** The cover's paragraph styles: per zone, a title set as the book's
  *  level-1 heading and text set as its body, each with the zone's own
- *  changes, in the design's text colour when it has one. */
+ *  changes, in the design's text colour when it has one. Neither breaks
+ *  words nor indents its first line, as the book's body may. */
 export function coverParagraphStyles(config: PostextConfig, settings: CoverDesignSettings | undefined): ParagraphStyleConfig[] {
   const headings = resolveHeadingsConfig(config.headings);
   const h1 = headings.levels.find((l) => l.level === 1);
@@ -313,6 +314,14 @@ export function coverParagraphStyles(config: PostextConfig, settings: CoverDesig
         : { id: coverStyleId(zone, role), ...(color ? { color } : {}) };
       out.push({
         ...base,
+        // A cover's text is set as display, not as running text: no word
+        // broken at a line's end, no first-line indent, flush to the start
+        // unless the zone says otherwise, off the book's baseline grid.
+        hyphenation: false,
+        firstLineIndent: pt(0),
+        indent: pt(0),
+        textAlign: 'start',
+        snapToGrid: false,
         ...(own.fontFamily ? { fontFamily: own.fontFamily } : {}),
         ...(own.fontSize ? { fontSize: pt(own.fontSize), lineHeight: pt(Math.round(own.fontSize * 1.2 * 10) / 10) } : {}),
         ...(own.bold !== undefined ? { fontWeight: own.bold ? 700 : 400 } : {}),

@@ -17,10 +17,19 @@
  *
  * The page of the IDML is the sheet's trim, so its coordinates are the
  * sheet's less the bleed.
+ *
+ * An IDML not exported from here (no item named after an element) is read
+ * by what its items are and where they stand: its pages, side by side,
+ * are the cover's trim, fitted to the sheet's if they differ; a box over
+ * the whole sheet is its background colour, a picture over it its
+ * background picture, a box over a whole zone that zone's colour; a fill
+ * in a spot ink that overprints is a finish; a picture named like a
+ * barcode is left to the one the sheet draws; the text frames give each
+ * zone its text, top to bottom; groups are read item by item.
  */
 
 import type { CoverPath, ProductionSheet, SheetRect } from 'postext';
-import { isNoColour, itemGeometry, plainText, readIdml, resolveColour, type IdmlDocument, type IdmlPageItem, type Path } from 'postext-idml';
+import { isNoColour, itemGeometry, pageBoxInSpread, plainText, readIdml, resolveColour, type IdmlDocument, type IdmlPageItem, type Path } from 'postext-idml';
 import { COVER_TEXT_ZONES, type CoverDesignSettings, type CoverTextZone, type DesignZone } from './bookProduction.js';
 import { elementAt, FINISH_KINDS, newElementId, type CoverElementSetting, type CoverFinishSetting } from './coverLayers.js';
 import { galleryResourceId, newGalleryId, type GalleryPicture } from './coverGallery.js';
@@ -41,7 +50,10 @@ export interface CoverIdmlReport {
   /** Linked pictures whose file was not given. */
   links: string[];
   /** Items left out, and why. */
-  skipped: { name: string; why: 'rotated' | 'group' | 'text' | 'empty' }[];
+  skipped: { name: string; why: 'rotated' | 'group' | 'text' | 'empty' | 'barcode' }[];
+  /** An IDML not exported from here: its pages fitted to the sheet's trim,
+   *  and their size and the trim's when they differ, mm. */
+  generic?: { from?: [number, number]; to?: [number, number] };
 }
 
 export interface CoverIdmlImport {
@@ -138,12 +150,51 @@ export function importCoverIdml(bytes: Uint8Array, options: {
   if (!spread) return { design, texts, pictures, report };
 
   const layerName = (it: IdmlPageItem) => d.layers.find((l) => l.self === it.layer)?.name;
-  const toSheet = (b: { left: number; top: number; right: number; bottom: number }): SheetRect => ({
-    x: sheet.trim.x + b.left * PT_TO_MM,
-    y: sheet.trim.y + b.top * PT_TO_MM,
-    width: (b.right - b.left) * PT_TO_MM,
-    height: (b.bottom - b.top) * PT_TO_MM,
-  });
+  // Every item, a group's read one by one.
+  const flat: IdmlPageItem[] = [];
+  const walk = (items: readonly IdmlPageItem[]) => {
+    for (const it of items) {
+      if (it.kind === 'Group') walk(it.children);
+      else flat.push(it);
+    }
+  };
+  walk(spread.items);
+  const ours = flat.some((it) => /^cover-/.test(it.name ?? ''));
+
+  // Our IDML: its page is the trim. Another: its pages side by side are,
+  // fitted to the trim.
+  const pages = spread.pages.map(pageBoxInSpread);
+  const union = pages.reduce((u, b) => ({ left: Math.min(u.left, b.left), top: Math.min(u.top, b.top), right: Math.max(u.right, b.right), bottom: Math.max(u.bottom, b.bottom) }), pages[0] ?? { left: 0, top: 0, right: 1, bottom: 1 });
+  const fromMm: [number, number] = [(union.right - union.left) * PT_TO_MM, (union.bottom - union.top) * PT_TO_MM];
+  const sx = ours ? 1 : sheet.trim.width / (fromMm[0] || 1);
+  const sy = ours ? 1 : sheet.trim.height / (fromMm[1] || 1);
+  if (!ours) {
+    const r1 = (v: number) => Math.round(v * 10) / 10;
+    report.generic = Math.abs(fromMm[0] - sheet.trim.width) > 1 || Math.abs(fromMm[1] - sheet.trim.height) > 1
+      ? { from: [r1(fromMm[0]), r1(fromMm[1])], to: [r1(sheet.trim.width), r1(sheet.trim.height)] }
+      : {};
+  }
+  const toSheet = (g: { box: { left: number; top: number; right: number; bottom: number }; spreadBox: { left: number; top: number; right: number; bottom: number } }): SheetRect => {
+    if (ours) {
+      const b = g.box;
+      return { x: sheet.trim.x + b.left * PT_TO_MM, y: sheet.trim.y + b.top * PT_TO_MM, width: (b.right - b.left) * PT_TO_MM, height: (b.bottom - b.top) * PT_TO_MM };
+    }
+    const b = g.spreadBox;
+    return {
+      x: sheet.trim.x + (b.left - union.left) * PT_TO_MM * sx,
+      y: sheet.trim.y + (b.top - union.top) * PT_TO_MM * sy,
+      width: (b.right - b.left) * PT_TO_MM * sx,
+      height: (b.bottom - b.top) * PT_TO_MM * sy,
+    };
+  };
+  const sheetArea = sheet.width * sheet.height;
+  const zoneUnder = (r: SheetRect) => {
+    const cx = r.x + r.width / 2;
+    const cy = r.y + r.height / 2;
+    return sheet.zones.find((z) => cx >= z.rect.x && cx <= z.rect.x + z.rect.width && cy >= z.rect.y && cy <= z.rect.y + z.rect.height);
+  };
+  /** A generic IDML's text frames by zone, their stories once each. */
+  const zoneTexts = new Map<CoverTextZone, { y: number; story: string }[]>();
   const lists = {
     elements: design.elements ?? [],
     effects: design.effects ?? [],
@@ -169,11 +220,23 @@ export function importCoverIdml(bytes: Uint8Array, options: {
     return next;
   };
 
-  for (const it of spread.items) {
+  for (const it of flat) {
     const name = it.name ?? '';
     const g = itemGeometry(d, it);
     if (!g) continue;
-    // Text frames: the zones' texts.
+    // Text frames: the zones' texts; in another IDML, by where they stand.
+    if (it.kind === 'TextFrame' && !ours) {
+      const z = zoneUnder(toSheet(g));
+      const zone = COVER_TEXT_ZONES.find((x) => x === z?.name);
+      if (!zone || !it.textFrame) {
+        report.skipped.push({ name: name || it.self, why: 'text' });
+        continue;
+      }
+      const list = zoneTexts.get(zone) ?? [];
+      if (!list.some((x) => x.story === it.textFrame!.story)) list.push({ y: g.spreadBox.top, story: it.textFrame.story });
+      zoneTexts.set(zone, list);
+      continue;
+    }
     if (it.kind === 'TextFrame') {
       const zone = COVER_TEXT_ZONES.find((z) => z === name);
       const story = it.textFrame ? d.stories.get(it.textFrame.story) : undefined;
@@ -189,15 +252,11 @@ export function importCoverIdml(bytes: Uint8Array, options: {
       }
       continue;
     }
-    if (it.kind === 'Group') {
-      report.skipped.push({ name: name || it.self, why: 'group' });
-      continue;
-    }
     if (Math.abs(g.rotation) > 0.5 || g.flipped) {
       report.skipped.push({ name: name || it.self, why: 'rotated' });
       continue;
     }
-    const rect = toSheet(g.box);
+    const rect = toSheet(g);
 
     // The ground and the zones' colours.
     if (name === 'cover-ground') {
@@ -246,14 +305,46 @@ export function importCoverIdml(bytes: Uint8Array, options: {
       continue;
     }
 
-    // An item added in InDesign.
+    // In another IDML: what an item is by what it covers.
+    if (!ours) {
+      const link = it.graphic?.link;
+      const looks = `${name} ${link?.name ?? ''} ${link?.uri ?? ''}`;
+      if (it.graphic && /isbn|ean[-_ ]?13|barcode|c[oó]digo/i.test(looks)) {
+        report.skipped.push({ name: link?.name || name || it.self, why: 'barcode' });
+        continue;
+      }
+      const path = pathIn(g.outline, g.box);
+      const fill = hexOf(d, it.attrs.FillColor, it.attrs.FillTint);
+      const covers = (rect.width * rect.height) / sheetArea;
+      if (!it.graphic && fill && !fill.spot && isBox(path) && covers >= 0.9) {
+        design.background = fill.hex;
+        report.added.push(name || it.self);
+        continue;
+      }
+      const zone = zoneUnder(rect);
+      if (!it.graphic && fill && !fill.spot && isBox(path) && zone && zone.name !== 'pastedown' && zone.name !== 'flyleaf' && zone.name !== 'hinge') {
+        const zr = zone.rect;
+        const share = (Math.max(0, Math.min(rect.x + rect.width, zr.x + zr.width) - Math.max(rect.x, zr.x)) * Math.max(0, Math.min(rect.y + rect.height, zr.y + zr.height) - Math.max(rect.y, zr.y))) / (zr.width * zr.height);
+        if (share >= 0.95 && rect.width * rect.height <= zr.width * zr.height * 1.5) {
+          const key = (zone.name === 'flapFront' || zone.name === 'flapBack' ? 'flaps' : zone.name) as DesignZone;
+          design.zones = { ...design.zones, [key]: fill.hex };
+          report.added.push(name || it.self);
+          continue;
+        }
+      }
+    }
+
+    // An item added in InDesign (or of another IDML).
     const layer = layerName(it);
-    const target = layer === layerNames.finishes ? 'finishes' : layer === layerNames.effects ? 'effects' : layer === layerNames.logos ? 'logos' : 'elements';
+    const fillInk = hexOf(d, it.attrs.FillColor, it.attrs.FillTint);
+    // A spot ink that overprints is a finish wherever it stands.
+    const overprintSpot = !!fillInk?.spot && it.attrs.OverprintFill === 'true';
+    const target = layer === layerNames.finishes || overprintSpot ? 'finishes' : layer === layerNames.effects ? 'effects' : layer === layerNames.logos ? 'logos' : 'elements';
     const label = name || it.self;
     if (it.graphic) {
       const link = it.graphic.link;
       const fileName = link ? decodeURIComponent((link.uri || link.name).split(/[\\/]/).pop() ?? '') : '';
-      const bytes = fileName ? options.links?.get(fileName) ?? options.links?.get(link?.name ?? '') : undefined;
+      const bytes = (fileName ? options.links?.get(fileName) ?? options.links?.get(link?.name ?? '') : undefined) ?? it.graphic.data;
       const mime = bytes ? sniffLogoMime(bytes) : undefined;
       if (!bytes || !mime) {
         report.links.push(fileName || label);
@@ -270,6 +361,11 @@ export function importCoverIdml(bytes: Uint8Array, options: {
         updatedAt: Date.now(),
       };
       pictures.push(picture);
+      if (!ours && (rect.width * rect.height) / sheetArea >= 0.9) {
+        design.image = { resourceId: galleryResourceId(picture.id), area: 'sheet' };
+        report.added.push(picture.name);
+        continue;
+      }
       const el = elementAt(sheet, { id: newElementId(), kind: 'image', resourceId: galleryResourceId(picture.id), zone: 'front', x: 0, y: 0, width: 1, height: 1 }, rect);
       if (target === 'logos') lists.logos = [...lists.logos, { ...el, kind: 'image', clearance: 0 }];
       else (lists[target === 'finishes' ? 'elements' : target] as CoverElementSetting[]).push(el);
@@ -300,6 +396,20 @@ export function importCoverIdml(bytes: Uint8Array, options: {
     report.added.push(label);
   }
 
+  // Another IDML's texts: each zone's frames top to bottom.
+  for (const [zone, list] of zoneTexts) {
+    const paragraphs = list
+      .sort((a, b) => a.y - b.y)
+      .flatMap((x) => d.stories.get(x.story)?.paragraphs ?? [])
+      .map((p) => plainText([p]).replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    const old = texts[zone] ?? '';
+    if (paragraphs.join('\n') !== plainOf(old).join('\n')) {
+      texts[zone] = textFrom(paragraphs, old);
+      report.texts.push(zone);
+    }
+  }
+
   // What the design had and the IDML no longer does: kept, and said. A
   // finish shaped by an element is drawn with it, not on its own.
   const had: [string, readonly { id: string; name?: string }[] | undefined][] = [
@@ -308,7 +418,7 @@ export function importCoverIdml(bytes: Uint8Array, options: {
     ['logo', options.design?.logos],
     ['finish', options.design?.finishes?.filter((f) => !('element' in f.shape))],
   ];
-  for (const [kind, list] of had) for (const x of list ?? []) if (!seen.has(`${kind}:${x.id}`)) report.missing.push(x.name ?? x.id);
+  if (ours) for (const [kind, list] of had) for (const x of list ?? []) if (!seen.has(`${kind}:${x.id}`)) report.missing.push(x.name ?? x.id);
 
   const out: CoverDesignSettings = { ...design };
   for (const key of ['elements', 'effects', 'logos', 'finishes'] as const) {

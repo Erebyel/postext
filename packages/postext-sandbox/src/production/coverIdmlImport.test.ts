@@ -99,4 +99,28 @@ describe('a cover back from InDesign', () => {
     expect(withFile.pictures).toHaveLength(1);
     expect(withFile.design.elements!.some((e) => e.resourceId === `cover:${withFile.pictures[0]!.id}`)).toBe(true);
   });
+
+  it('reads a cover made elsewhere by what its items are and where they stand, fitted to the sheet', async () => {
+    const d = design(40);
+    // No name of the design's on any item: a cover made in InDesign.
+    const foreign = edited(await exported(d, texts), (xml) => xml.replace(/ Name="[^"]*"/g, ''));
+    // Onto a thicker book: the spine and the sheet are wider.
+    const thick = caseSheet(trim, 40, resolveBindingMeasures({ id: 'c', name: 'C', style: 'caseFlat' }, trim));
+    const back = importCoverIdml(foreign, { sheet: thick, design: undefined, texts: {}, layerNames: names });
+    expect(back.report.generic!.from![0]).toBeCloseTo(sheet.trim.width, 0);
+    expect(back.report.generic!.to![0]).toBeCloseTo(thick.trim.width, 0);
+    // The box over the whole sheet is its ground.
+    expect(back.design.background).toBe('#123456');
+    // The varnish, a spot ink that overprints, is a finish.
+    expect(back.design.finishes).toHaveLength(1);
+    expect(back.design.finishes![0]).toMatchObject({ kind: 'varnish', ink: 'Barniz UVI' });
+    // The red box and the star are elements, the star with its curves.
+    const red = back.design.elements!.find((e) => e.color === '#ff0000')!;
+    expect(red.kind).toBe('box');
+    expect(back.design.elements!.find((e) => e.kind === 'shape')!.path![0]!.nodes).toHaveLength(10);
+    // The texts by the zone their frames stand in.
+    expect(back.texts.front).toBe('El título\n\nAutora');
+    expect(back.texts.spine).toBe('Autora · Título');
+    expect(back.report.missing).toEqual([]);
+  });
 });

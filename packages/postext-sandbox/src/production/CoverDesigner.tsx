@@ -8,8 +8,9 @@
  * layers, bottom to top (./coverLayers.ts): the background, the movable
  * elements, the editable texts, the effects, the logos and the finishes.
  * Each layer can be hidden while working; one is open at a time (the
- * background with the cover's look, an item layer to edit), and the
- * canvas moves the items of the one being edited. It is opened from the Cover panel and from the
+ * background with the cover's look, an item layer to edit). The canvas
+ * picks and moves the items of every shown layer: picking one opens its
+ * layer. It is opened from the Cover panel and from the
  * book's preview (./coverDesignerStore.ts).
  */
 
@@ -169,22 +170,44 @@ function CoverDesigner() {
 
   // What the canvas moves: the active layer's items, a finish by its own
   // box (one shaped by an element follows that element).
-  const canvasItems = useMemo((): CoverElementSetting[] => {
-    if (hidden.has(active)) return [];
-    if (active === 'elements') return elements;
-    if (active === 'effects') return effects;
-    if (active === 'logos') return logos;
-    return finishes.flatMap((f) => finishAsElement(f, COVER_FINISH_INKS[f.kind].screen) ?? []);
-  }, [active, hidden, elements, effects, logos, finishes]);
+  // What the canvas picks and moves: every shown layer's items, bottom to
+  // top (a finish by its own box; one shaped by an element follows that
+  // element). Picking one makes its layer the one edited.
+  const { canvasItems, layerOfId } = useMemo(() => {
+    const layerOf = new Map<string, ItemLayer>();
+    const items: CoverElementSetting[] = [];
+    const take = (layer: ItemLayer, list: readonly CoverElementSetting[]) => {
+      if (hidden.has(layer)) return;
+      for (const el of list) {
+        layerOf.set(el.id, layer);
+        items.push(el);
+      }
+    };
+    take('elements', elements);
+    take('effects', effects);
+    take('logos', logos);
+    take('finishes', finishes.flatMap((f) => finishAsElement(f, COVER_FINISH_INKS[f.kind].screen) ?? []));
+    return { canvasItems: items, layerOfId: (id: string) => layerOf.get(id) };
+  }, [hidden, elements, effects, logos, finishes]);
+  const pick = (id: string | null) => {
+    const layer = id ? layerOfId(id) : undefined;
+    if (layer) {
+      setActive(layer);
+      setOpen(layer);
+    }
+    setSelected(id);
+  };
 
   const changeItem = (el: CoverElementSetting) => {
-    if (active === 'elements') setDesign('elements', elements.map((e) => (e.id === el.id ? el : e)));
-    else if (active === 'effects') setDesign('effects', effects.map((e) => (e.id === el.id ? el : e)));
-    else if (active === 'logos') setDesign('logos', logos.map((e) => (e.id === el.id ? { ...e, ...el, kind: 'image' as const } : e)));
+    const layer = layerOfId(el.id) ?? active;
+    if (layer === 'elements') setDesign('elements', elements.map((e) => (e.id === el.id ? el : e)));
+    else if (layer === 'effects') setDesign('effects', effects.map((e) => (e.id === el.id ? el : e)));
+    else if (layer === 'logos') setDesign('logos', logos.map((e) => (e.id === el.id ? { ...e, ...el, kind: 'image' as const } : e)));
     else setDesign('finishes', finishes.map((f) => (f.id === el.id ? finishFromElement(f, el) : f)));
   };
   const deleteItem = (id: string) => {
-    setDesign(active, (active === 'elements' ? elements : active === 'effects' ? effects : active === 'logos' ? logos : finishes).filter((e) => e.id !== id));
+    const layer = layerOfId(id) ?? active;
+    setDesign(layer, (layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes).filter((e) => e.id !== id));
     if (selected === id) setSelected(null);
   };
   const add = (layer: ItemLayer, item: { id: string } | undefined) => {
@@ -374,10 +397,10 @@ function CoverDesigner() {
                   input={input}
                   mode={mode}
                   elements={canvasItems}
-                  clearance={active === 'logos' ? (id) => logos.find((l) => l.id === id)?.clearance ?? 0 : undefined}
+                  clearance={(id) => logos.find((l) => l.id === id)?.clearance ?? 0}
                   selected={selected}
                   points={points}
-                  onSelect={setSelected}
+                  onSelect={pick}
                   onChange={changeItem}
                   onDelete={deleteItem}
                   onLaid={(doc) => setOverflow(overflowZones(doc))}

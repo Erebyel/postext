@@ -5748,6 +5748,9 @@ export interface SandboxLabels {
   coverFinishShapeBox: string;
   coverFinishShapeElement: string;
   coverFinishPlateHint: string;
+  coverIdmlBarcode: string;
+  coverIdmlGeneric: string;
+  coverIdmlFitted: string;
   coverChecksCount: string;
   coverCheckOffSheet: string;
   coverCheckMissingPicture: string;

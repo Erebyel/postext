@@ -72,7 +72,7 @@ export function CoverIdmlImportButton({ sheet, record, gallery, labels, onRecord
   };
 
   const r = done?.report;
-  const why = (w: CoverIdmlReport['skipped'][number]['why']) => labels[({ rotated: 'coverIdmlRotated', group: 'coverIdmlGroup', text: 'coverIdmlText', empty: 'coverIdmlEmpty' } as const)[w]];
+  const why = (w: CoverIdmlReport['skipped'][number]['why']) => labels[({ rotated: 'coverIdmlRotated', group: 'coverIdmlGroup', text: 'coverIdmlText', empty: 'coverIdmlEmpty', barcode: 'coverIdmlBarcode' } as const)[w]];
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -83,6 +83,13 @@ export function CoverIdmlImportButton({ sheet, record, gallery, labels, onRecord
       {r && (
         <div role="status" className="flex flex-col gap-1 border-s-2 border-(--brand) bg-(--surface) px-2 py-1.5 text-xs">
           <p className="m-0 font-semibold">{fill(labels.coverIdmlDone, { updated: String(r.updated.length), added: String(r.added.length) })}</p>
+          {r.generic && (
+            <p className="m-0">
+              {r.generic.from && r.generic.to
+                ? fill(labels.coverIdmlFitted, { from: r.generic.from.map((v) => v.toLocaleString()).join(' × '), to: r.generic.to.map((v) => v.toLocaleString()).join(' × ') })
+                : labels.coverIdmlGeneric}
+            </p>
+          )}
           {r.added.length > 0 && <p className="m-0">{fill(labels.coverIdmlAdded, { items: r.added.join(', ') })}</p>}
           {r.texts.length > 0 && <p className="m-0">{fill(labels.coverIdmlTexts, { zones: r.texts.map((z) => String(labels[ZONE_LABEL[z]])).join(', ') })}</p>}
           {r.missing.length > 0 && <p className="m-0">{fill(labels.coverIdmlMissing, { items: r.missing.join(', ') })}</p>}

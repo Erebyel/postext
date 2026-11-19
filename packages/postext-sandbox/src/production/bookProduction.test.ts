@@ -145,7 +145,15 @@ describe('book production', () => {
     expect(title.lineHeight).toEqual({ value: 43.2, unit: 'pt' });
     expect(title.textAlign).toBe('center');
     expect(title.fontWeight).toBe(700);
-    expect(styles.find((p) => p.id === 'cover-front-text')).toEqual({ id: 'cover-front-text', italic: true });
+    expect(styles.find((p) => p.id === 'cover-front-text')).toEqual({
+      id: 'cover-front-text',
+      italic: true,
+      hyphenation: false,
+      firstLineIndent: { value: 0, unit: 'pt' },
+      indent: { value: 0, unit: 'pt' },
+      textAlign: 'start',
+      snapToGrid: false,
+    });
     expect(styles.find((p) => p.id === 'cover-back-title')?.fontFamily).toBeTruthy();
     expect(styles.length).toBe(8);
   });
@@ -200,5 +208,17 @@ describe('book production', () => {
     if (!('cover' in paper)) throw new Error('no profile');
     const soft = coverDocumentInput(paper.cover, newVersion('paperback', 'R'), {}, config, { background: '#112233' }, [], { mirror: { margin: paper.measures.designMargin, pictures: {} } });
     expect(soft.cover.designed).toBeUndefined();
+  });
+});
+
+describe('the cover’s type', () => {
+  it('breaks no words and indents no first line, whatever the book’s body does', async () => {
+    const { coverParagraphStyles } = await import('./bookProduction.js');
+    const styles = coverParagraphStyles({ bodyText: { firstLineIndent: { value: 1, unit: 'em' }, hyphenation: { enabled: true } } } as never, { zoneStyles: { front: { title: { align: 'center' } } } });
+    for (const s of styles) {
+      expect(s.hyphenation).toBe(false);
+      expect(s.firstLineIndent).toEqual({ value: 0, unit: 'pt' });
+    }
+    expect(styles.find((s) => s.id.includes('front') && s.id.includes('title'))!.textAlign).toBe('center');
   });
 });
