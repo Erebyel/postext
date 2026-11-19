@@ -94,4 +94,24 @@ describe('finish inks', () => {
     expect(a).not.toBe(b);
     expect(a).toMatch(/^#[0-9a-f]{6}$/);
   });
+
+  it('draws a veil with an outline as a path, and a finish laid on a saved outline', () => {
+    const tri = [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0.5, y: 1 }]];
+    const cover = coverPage(sheet, {
+      design: {
+        effects: [{ id: 'shade', kind: 'shape', color: ink('#000000'), opacity: 0.5, outline: tri, zone: 'front', x: 0, y: 0, width: 40, height: 40 }],
+        finishes: [
+          { id: 'traced', kind: 'varnish', ink: 'Barniz', shape: { outline: tri, box: { zone: 'front', x: 10, y: 10, width: 20, height: 20 } } },
+          { id: 'onShade', kind: 'foilGold', ink: 'Oro', shape: { element: 'shade' } },
+        ],
+      },
+    });
+    const els = cover.template.decoration!.elements as { id: string; kind: string; d?: string; fill?: { hex: string } }[];
+    const shade = els.find((e) => e.id === 'cover-fx-shade')!;
+    expect(shade.kind).toBe('path');
+    expect(shade.d).toBe('M 0 0 L 1 0 L 0.5 1 Z');
+    expect(shade.fill!.hex).toBe('#00000080');
+    expect(els.find((e) => e.id === 'cover-finish-traced')!.kind).toBe('path');
+    expect(els.find((e) => e.id === 'cover-finish-onShade')!.d).toBe('M 0 0 L 1 0 L 0.5 1 Z');
+  });
 });

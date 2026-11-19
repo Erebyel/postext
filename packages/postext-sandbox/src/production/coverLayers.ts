@@ -12,7 +12,7 @@
  * out.
  */
 
-import { coverElementRect, placeCoverElement, type CoverElement, type CoverFinishKind, type CoverZoneName, type ProductionSheet, type Resource, type SheetRect } from 'postext';
+import { coverElementRect, placeCoverElement, type CoverElement, type CoverFinishKind, type CoverOutline, type CoverZoneName, type ProductionSheet, type Resource, type SheetRect } from 'postext';
 import type { CoverDesignSettings } from './bookProduction.js';
 
 export const COVER_LAYERS = ['background', 'elements', 'texts', 'effects', 'logos', 'finishes'] as const;
@@ -27,7 +27,11 @@ export const ITEM_LAYERS: readonly ItemLayer[] = ['elements', 'effects', 'logos'
  *  box of colour (`#rrggbb`), its box mm from its zone's top-left corner. */
 export interface CoverElementSetting {
   id: string;
-  kind: 'image' | 'box';
+  /** A picture, a box of colour, or a shape of colour (an outline traced
+   *  from a picture, laid in its box). */
+  kind: 'image' | 'box' | 'shape';
+  /** A shape's outline, in fractions of its box. */
+  outline?: CoverOutline;
   resourceId?: string;
   color?: string;
   zone: CoverZoneName;
@@ -37,6 +41,9 @@ export interface CoverElementSetting {
   height: number;
   /** A box's opacity, 0 … 1 (an effect's); absent: opaque. */
   opacity?: number;
+  /** A movable element painted as it is past the design margin, over the
+   *  mirror, instead of folded out with the background. */
+  bleed?: 'own';
 }
 
 /** A logo on the cover: a picture of the logo library (`logoId`) or of
@@ -56,7 +63,25 @@ export interface CoverFinishSetting {
   id: string;
   kind: CoverFinishKind;
   ink: string;
-  shape: { box: { zone: CoverZoneName; x: number; y: number; width: number; height: number } } | { element: string };
+  shape:
+    | { box: FinishBox }
+    | { element: string }
+    | { outline: CoverOutline; box: FinishBox };
+}
+
+type FinishBox = { zone: CoverZoneName; x: number; y: number; width: number; height: number };
+
+/** A stored outline that reads: polygons of three points or more, each
+ *  point within its box. */
+export function readOutline(raw: unknown): CoverOutline | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: CoverOutline = [];
+  for (const poly of raw) {
+    if (!Array.isArray(poly)) continue;
+    const pts = poly.filter((p): p is { x: number; y: number } => isRecord(p) && finite(p.x) && finite(p.y) && p.x >= -0.01 && p.x <= 1.01 && p.y >= -0.01 && p.y <= 1.01);
+    if (pts.length >= 3) out.push(pts.map((p) => ({ x: p.x, y: p.y })));
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 const ZONE_NAMES: ReadonlySet<string> = new Set(['flapBack', 'back', 'jointBack', 'spine', 'jointFront', 'front', 'flapFront', 'pastedown', 'flyleaf', 'hinge']);
@@ -69,21 +94,25 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 export function readCoverElements(raw: unknown): CoverElementSetting[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((e): CoverElementSetting[] => {
-    if (!isRecord(e) || typeof e.id !== 'string' || (e.kind !== 'image' && e.kind !== 'box')) return [];
+    if (!isRecord(e) || typeof e.id !== 'string' || (e.kind !== 'image' && e.kind !== 'box' && e.kind !== 'shape')) return [];
     if (typeof e.zone !== 'string' || !ZONE_NAMES.has(e.zone)) return [];
     if (!finite(e.x) || !finite(e.y) || !finite(e.width) || !finite(e.height) || e.width <= 0 || e.height <= 0) return [];
     if (e.kind === 'image' && typeof e.resourceId !== 'string') return [];
-    if (e.kind === 'box' && (typeof e.color !== 'string' || !HEX.test(e.color))) return [];
+    if (e.kind !== 'image' && (typeof e.color !== 'string' || !HEX.test(e.color))) return [];
+    const outline = e.kind === 'shape' ? readOutline(e.outline) : undefined;
+    if (e.kind === 'shape' && !outline) return [];
     return [{
       id: e.id,
       kind: e.kind,
       ...(e.kind === 'image' ? { resourceId: e.resourceId as string } : { color: e.color as string }),
+      ...(outline ? { outline } : {}),
       zone: e.zone as CoverZoneName,
       x: e.x,
       y: e.y,
       width: e.width,
       height: e.height,
       ...(finite(e.opacity) && e.opacity >= 0 && e.opacity < 1 ? { opacity: e.opacity } : {}),
+      ...(e.bleed === 'own' ? { bleed: 'own' as const } : {}),
     }];
   });
 }
@@ -113,12 +142,15 @@ export function readCoverFinishes(raw: unknown): CoverFinishSetting[] {
     if (typeof shape.element === 'string') return [{ id: f.id, kind: f.kind as CoverFinishKind, ink, shape: { element: shape.element } }];
     const [box] = readCoverElements([{ id: f.id, kind: 'box', color: '#000000', ...(isRecord(shape.box) ? shape.box : {}) }]);
     if (!box) return [];
-    return [{ id: f.id, kind: f.kind as CoverFinishKind, ink, shape: { box: { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height } } }];
+    const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height };
+    const outline = readOutline(shape.outline);
+    return [{ id: f.id, kind: f.kind as CoverFinishKind, ink, shape: outline ? { outline, box: at } : { box: at } }];
   });
 }
 
-/** A finish with a box of its own as an element the canvas can move, in
- *  its colour on screen; undefined for one shaped by an element. */
+/** A finish with a box of its own (bare or holding an outline) as an
+ *  element the canvas can move, in its colour on screen; undefined for one
+ *  shaped by an element. */
 export function finishAsElement(finish: CoverFinishSetting, screen: string): CoverElementSetting | undefined {
   if (!('box' in finish.shape)) return undefined;
   return { id: finish.id, kind: 'box', color: screen, ...finish.shape.box };
@@ -126,7 +158,8 @@ export function finishAsElement(finish: CoverFinishSetting, screen: string): Cov
 
 /** The finish moved to where its element now stands. */
 export function finishFromElement(finish: CoverFinishSetting, el: CoverElementSetting): CoverFinishSetting {
-  return { ...finish, shape: { box: { zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height } } };
+  const box = { zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height };
+  return { ...finish, shape: 'outline' in finish.shape ? { outline: finish.shape.outline, box } : { box } };
 }
 
 /** The design with the hidden layers' parts left out. */
@@ -216,11 +249,35 @@ export function newLogo(
   };
 }
 
-/** A new finish: a box of its own in the middle of the front cover. */
-export function newFinish(sheet: ProductionSheet, kind: CoverFinishKind, ink: string): CoverFinishSetting | undefined {
-  const box = newElement(sheet, 'box');
+/** A new finish in the middle of the front cover: a box of its own, or
+ *  an outline at its own proportions. */
+export function newFinish(sheet: ProductionSheet, kind: CoverFinishKind, ink: string, trace?: { outline: CoverOutline; aspect: number }): CoverFinishSetting | undefined {
+  const box = trace ? newShape(sheet, trace, '#000000') : newElement(sheet, 'box');
   if (!box) return undefined;
-  return { id: box.id, kind, ink, shape: { box: { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height } } };
+  const at = { zone: box.zone, x: box.x, y: box.y, width: box.width, height: box.height };
+  return { id: box.id, kind, ink, shape: trace ? { outline: trace.outline, box: at } : { box: at } };
+}
+
+/** A new shape of colour in the middle of the front cover, half of it
+ *  wide, an outline at its own proportions. */
+export function newShape(sheet: ProductionSheet, trace: { outline: CoverOutline; aspect: number }, color: string, opacity?: number): CoverElementSetting | undefined {
+  const front = sheet.zones.find((z) => z.name === 'front');
+  if (!front) return undefined;
+  const round = (v: number) => Math.round(v * 100) / 100;
+  const width = front.rect.width * 0.5;
+  const height = width / (trace.aspect > 0 ? trace.aspect : 1);
+  return {
+    id: newElementId(),
+    kind: 'shape',
+    color,
+    outline: trace.outline,
+    zone: 'front',
+    x: round((front.rect.width - width) / 2),
+    y: round((front.rect.height - height) / 2),
+    width: round(width),
+    height: round(height),
+    ...(opacity !== undefined && opacity < 1 ? { opacity } : {}),
+  };
 }
 
 /** `id` moved one step up (toward the front) or down the stack. */

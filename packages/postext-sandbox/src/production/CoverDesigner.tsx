@@ -13,16 +13,17 @@
  * book's preview (./coverDesignerStore.ts).
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { ArrowDown, ArrowUp, ChevronRight, Eye, EyeOff, Image as ImageIcon, Sparkles, Square, Stamp, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, Eye, EyeOff, Image as ImageIcon, PenTool, Plus, Sparkles, Square, Stamp, Trash2, X } from 'lucide-react';
 import { COVER_FINISH_INKS, resolveBodyTextConfig, resolveColorValue, type CoverFinishKind, type CoverZoneName, type Resource } from 'postext';
 import { useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
-import { Button, IconButton, NumberField, SegmentedControl, Select, cn, usePortalContainer } from '../ui/index.js';
+import { Button, IconButton, NumberField, SegmentedControl, Select, Switch, cn, usePortalContainer } from '../ui/index.js';
 import { POPUP_Z_INDEX } from '../ui/layout/surface.js';
 import { fill } from '../print/fillTokens.js';
 import { bookTrimMm, coverDocumentInput, pickSheet, type CoverDesignSettings } from './bookProduction.js';
 import {
+  newShape,
   COVER_LAYERS,
   FINISH_KINDS,
   coverElementIssues,
@@ -43,9 +44,11 @@ import {
 } from './coverLayers.js';
 import { CoverCanvas } from './CoverCanvas.js';
 import { DesignSection } from './CoverDesignSections.js';
+import { galleryPictureOf, galleryPicturesFrom, galleryResource, type CoverGallery, type GalleryTrace } from './coverGallery.js';
+import { pictureSize } from './coverImages.js';
 import { closeCoverDesigner, useCoverDesignerOpen } from './coverDesignerStore.js';
 import { DEFAULT_LOGO_CLEARANCE, logoResourceId, type LogoRecord } from './logoLibrary.js';
-import { useCoverWorkspace, useLogos, useMirror } from './useProduction.js';
+import { useCoverGallery, useCoverWorkspace, useLogos, useMirror } from './useProduction.js';
 import type { Labels } from './productionUi.js';
 
 const LAYER_LABEL: Record<CoverLayer, keyof Labels> = {
@@ -98,6 +101,7 @@ function CoverDesigner() {
   const container = usePortalContainer();
   const { record, update, version, sheets } = useCoverWorkspace();
   const library = useLogos();
+  const [gallery, updateGallery] = useCoverGallery();
   const [mode, setMode] = useState<'preview' | 'edit'>('preview');
   const [hidden, setHidden] = useState<ReadonlySet<CoverLayer>>(new Set());
   const [active, setActive] = useState<ItemLayer>('elements');
@@ -114,15 +118,22 @@ function CoverDesigner() {
   const logos = useMemo(() => design.logos ?? [], [design]);
   const finishes = useMemo(() => design.finishes ?? [], [design]);
   const sheet = useMemo(() => (sheets ? pickSheet(sheets, 'cover', bookTrimMm(config)) : null), [sheets, config]);
-  const mirror = useMirror(design, bookResources, sheets?.measures.designMargin);
+  const mirror = useMirror(design, bookResources, sheets?.measures.designMargin, gallery);
   const input = useMemo(
     () => (sheet && version && record
-      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { hidden, logos: library, ...(mirror ? { mirror } : {}) })
+      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { hidden, logos: library, gallery, ...(mirror ? { mirror } : {}) })
       : null),
-    [sheet, version, record, config, design, bookResources, hidden, library, mirror],
+    [sheet, version, record, config, design, bookResources, hidden, library, gallery, mirror],
   );
-  const pictures = useMemo(() => bookResources.filter(isPicture), [bookResources]);
-  const issues = useMemo(() => (sheet ? coverElementIssues(sheet, [...elements, ...effects], bookResources) : []), [sheet, elements, effects, bookResources]);
+  // The cover's own pictures (its gallery), apart from the book's figures;
+  // a design made before the gallery may still place the book's.
+  const pictures = useMemo(() => gallery.pictures.map(galleryResource), [gallery]);
+  const allResources = useMemo(() => [...bookResources, ...pictures], [bookResources, pictures]);
+  const backgroundChoices = useMemo(
+    () => [...pictures, ...bookResources.filter((r) => isPicture(r) && r.id === design.image?.resourceId)],
+    [pictures, bookResources, design.image?.resourceId],
+  );
+  const issues = useMemo(() => (sheet ? coverElementIssues(sheet, [...elements, ...effects], allResources) : []), [sheet, elements, effects, allResources]);
 
   const setDesign = (key: 'elements' | 'effects' | 'logos' | 'finishes', next: unknown[]) => {
     if (!record) return;
@@ -179,15 +190,16 @@ function CoverDesigner() {
   };
   const zoneName = (z: CoverZoneName) => (ZONE_LABEL[z] ? String(labels[ZONE_LABEL[z]!]) : z);
   const logoName = (l: CoverLogoSetting) => library.find((x) => l.logoId === x.id)?.name ?? l.resourceId ?? labels.coverItemLogo;
+  const pictureName = (id: string | undefined) => galleryPictureOf(gallery, id)?.name ?? id ?? labels.coverElementPicture;
   const itemName = (layer: ItemLayer, item: CoverElementSetting | CoverFinishSetting): string => {
     if (layer === 'finishes') return finishLabel((item as CoverFinishSetting).kind);
     if (layer === 'logos') return logoName(item as CoverLogoSetting);
     const el = item as CoverElementSetting;
-    return el.kind === 'image' ? (el.resourceId ?? labels.coverElementPicture) : labels.coverElementBox;
+    return el.kind === 'image' ? pictureName(el.resourceId) : el.kind === 'shape' ? labels.coverElementShape : labels.coverElementBox;
   };
   const shapeTargets = [...elements, ...effects, ...logos].map((e) => ({
     value: e.id,
-    label: e.kind === 'image' ? (logos.some((l) => l.id === e.id) ? logoName(e as CoverLogoSetting) : (e.resourceId ?? labels.coverElementPicture)) : labels.coverElementBox,
+    label: e.kind === 'image' ? (logos.some((l) => l.id === e.id) ? logoName(e as CoverLogoSetting) : pictureName(e.resourceId)) : e.kind === 'shape' ? labels.coverElementShape : labels.coverElementBox,
   }));
 
   const selectedEl = canvasItems.find((e) => e.id === selected);
@@ -252,18 +264,20 @@ function CoverDesigner() {
                       </div>
                       {expanded && hint && <p className="m-0 text-(--slate)">{String(labels[hint])}</p>}
                       {expanded && layer === 'background' && record && (
-                        <DesignSection design={design} resources={bookResources} bookTextHex={bookTextHex} labels={labels} onChange={(d) => update({ ...record, design: d })} />
+                        <DesignSection design={design} resources={backgroundChoices} bookTextHex={bookTextHex} labels={labels} onChange={(d) => update({ ...record, design: d })} />
                       )}
 
                       {expanded && layer === 'elements' && (
                         <>
-                          <PictureAdder pictures={pictures} labels={labels} onPick={(p) => add('elements', newElement(sheet, 'image', p))} />
+                          <PictureAdder pictures={pictures} gallery={gallery} labels={labels} onPick={(p) => add('elements', newElement(sheet, 'image', p))} />
+                          <GalleryUpload gallery={gallery} labels={labels} onAdded={(next, first) => { updateGallery(next); add('elements', newElement(sheet, 'image', galleryResource(first))); }} />
                           <Button variant="outline" size="sm" onClick={() => add('elements', newElement(sheet, 'box'))}>{labels.coverAddBox}</Button>
                         </>
                       )}
                       {expanded && layer === 'effects' && (
                         <>
-                          <PictureAdder pictures={pictures} labels={labels} onPick={(p) => add('effects', newElement(sheet, 'image', p))} />
+                          <PictureAdder pictures={pictures} gallery={gallery} labels={labels} onPick={(p) => add('effects', newElement(sheet, 'image', p))} />
+                          <TraceAdder traces={gallery.traces} label={labels.coverAddTracedVeil} onPick={(t) => add('effects', newShape(sheet, t, '#000000', 0.4))} />
                           <Button variant="outline" size="sm" onClick={() => { const box = newElement(sheet, 'box', undefined, '#000000'); add('effects', box ? ({ ...box, opacity: 0.4 } as CoverElementSetting) : undefined); }}>
                             {labels.coverAddVeil}
                           </Button>
@@ -287,6 +301,9 @@ function CoverDesigner() {
                           ariaLabel={labels.coverAddFinish}
                         />
                       )}
+                      {expanded && layer === 'finishes' && (
+                        <TraceAdder traces={gallery.traces} label={labels.coverAddTracedFinish} onPick={(t) => add('finishes', newFinish(sheet, 'varnish', finishLabel('varnish'), t))} />
+                      )}
 
                       {expanded && isItemLayer(layer) && list.length > 0 && (
                         <ul className="m-0 flex list-none flex-col gap-1 p-0">
@@ -304,6 +321,8 @@ function CoverDesigner() {
                                     ? <Stamp size={12} aria-hidden="true" />
                                     : (item as CoverElementSetting).kind === 'image'
                                       ? <ImageIcon size={12} aria-hidden="true" />
+                                      : (item as CoverElementSetting).kind === 'shape'
+                                        ? <PenTool size={12} aria-hidden="true" />
                                       : <Square size={12} aria-hidden="true" fill={(item as CoverElementSetting).color} />}
                                 <span className="truncate">{itemName(layer, item)}</span>
                               </button>
@@ -354,6 +373,8 @@ function CoverDesigner() {
                   <FinishProperties
                     finish={selectedFinish}
                     targets={shapeTargets}
+                    traces={gallery.traces}
+                    onTrace={(t) => { const shaped = newFinish(sheet, selectedFinish.kind, selectedFinish.ink, t); if (shaped) setDesign('finishes', finishes.map((x) => (x.id === selectedFinish.id ? { ...x, shape: 'box' in x.shape ? { outline: t.outline, box: x.shape.box } : shaped.shape } : x))); }}
                     labels={labels}
                     finishLabel={finishLabel}
                     onChange={(f) => setDesign('finishes', finishes.map((x) => (x.id === f.id ? f : x)))}
@@ -369,7 +390,7 @@ function CoverDesigner() {
                     el={selectedEl}
                     layer={active}
                     zone={zoneName(selectedEl.zone)}
-                    aspect={selectedEl.kind === 'image' ? aspectOf(selectedEl, bookResources, library) : undefined}
+                    aspect={selectedEl.kind === 'image' ? aspectOf(selectedEl, allResources, library) : undefined}
                     clearance={active === 'logos' ? logos.find((l) => l.id === selectedEl.id)?.clearance : undefined}
                     canForward={activeList[activeList.length - 1]?.id !== selectedEl.id}
                     canBackward={activeList[0]?.id !== selectedEl.id}
@@ -403,15 +424,57 @@ function aspectOf(el: CoverElementSetting, resources: readonly Resource[], libra
   return pictureAspect(resources.find((r) => r.id === el.resourceId));
 }
 
-function PictureAdder({ pictures, labels, onPick }: { pictures: readonly Resource[]; labels: Labels; onPick: (p: Resource) => void }) {
+/** A picture of the cover's gallery to add. */
+function PictureAdder({ pictures, gallery, labels, onPick }: { pictures: readonly Resource[]; gallery: CoverGallery; labels: Labels; onPick: (p: Resource) => void }) {
   if (pictures.length === 0) return <p className="m-0 text-(--slate)">{labels.coverNoPictures}</p>;
   return (
     <Select
       size="sm"
       value=""
       onValueChange={(id) => { const picture = pictures.find((p) => p.id === id); if (picture) onPick(picture); }}
-      options={[{ value: '', label: labels.coverAddPicture }, ...pictures.map((p) => ({ value: p.id, label: p.id }))]}
+      options={[{ value: '', label: labels.coverAddPicture }, ...pictures.map((p) => ({ value: p.id, label: galleryPictureOf(gallery, p.id)?.name ?? p.id }))]}
       ariaLabel={labels.coverAddPicture}
+    />
+  );
+}
+
+/** Pictures uploaded into the cover's gallery from the designer; the
+ *  first goes on the cover. */
+function GalleryUpload({ gallery, labels, onAdded }: { gallery: CoverGallery; labels: Labels; onAdded: (next: CoverGallery, first: CoverGallery['pictures'][number]) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <Button variant="outline" size="sm" icon={<Plus size={13} />} onClick={() => ref.current?.click()}>{labels.coverUploadPicture}</Button>
+      <input
+        ref={ref}
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/svg+xml,.svg"
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])];
+          e.target.value = '';
+          void galleryPicturesFrom(files, pictureSize).then(({ pictures }) => {
+            if (pictures[0]) onAdded({ ...gallery, pictures: [...gallery.pictures, ...pictures] }, pictures[0]);
+          });
+        }}
+      />
+    </>
+  );
+}
+
+/** A traced outline of the gallery to lay (as a veil, a finish). */
+function TraceAdder({ traces, label, onPick }: { traces: readonly GalleryTrace[]; label: string; onPick: (t: GalleryTrace) => void }) {
+  if (traces.length === 0) return null;
+  return (
+    <Select
+      size="sm"
+      value=""
+      onValueChange={(id) => { const t = traces.find((x) => x.id === id); if (t) onPick(t); }}
+      options={[{ value: '', label }, ...traces.map((t) => ({ value: t.id, label: t.name }))]}
+      ariaLabel={label}
     />
   );
 }
@@ -475,7 +538,7 @@ function ElementProperties({ el, layer, zone, aspect, clearance, canForward, can
       <NumberField value={round1(value)} onValueChange={set} step={step} widthCh={6} ariaLabel={label} {...(min !== undefined ? { min } : {})} {...(max !== undefined ? { max } : {})} />
     </label>
   );
-  const title = layer === 'logos' ? labels.coverItemLogo : layer === 'effects' ? labels.coverItemEffect : el.kind === 'image' ? labels.coverElementPicture : labels.coverElementBox;
+  const title = layer === 'logos' ? labels.coverItemLogo : layer === 'effects' ? labels.coverItemEffect : el.kind === 'image' ? labels.coverElementPicture : el.kind === 'shape' ? labels.coverElementShape : labels.coverElementBox;
   return (
     <>
       <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-(--slate)">{title}</h3>
@@ -484,7 +547,7 @@ function ElementProperties({ el, layer, zone, aspect, clearance, canForward, can
       {row(labels.coverElementY, el.y, (y) => onChange({ ...el, y }))}
       {row(labels.coverElementWidth, el.width, (w) => onSize(w, aspect ? w / aspect : el.height), 2)}
       {row(labels.coverElementHeight, el.height, (h) => onSize(aspect ? h * aspect : el.width, h), 2)}
-      {el.kind === 'box' && (
+      {el.kind !== 'image' && (
         <label className="flex items-center justify-between gap-2">
           <span>{labels.coverElementColor}</span>
           <input
@@ -496,13 +559,29 @@ function ElementProperties({ el, layer, zone, aspect, clearance, canForward, can
           />
         </label>
       )}
-      {layer === 'effects' && el.kind === 'box' && row(labels.coverElementOpacity, (el.opacity ?? 1) * 100, (v) => {
+      {layer === 'effects' && el.kind !== 'image' && row(labels.coverElementOpacity, (el.opacity ?? 1) * 100, (v) => {
         const o = Math.max(0, Math.min(100, v)) / 100;
         const next = { ...el };
         if (o >= 1) delete next.opacity;
         else next.opacity = o;
         onChange(next);
       }, 0, 100, 5)}
+      {layer === 'elements' && (
+        <label className="flex items-center justify-between gap-2">
+          <span>{labels.coverElementMirror}</span>
+          <Switch
+            checked={el.bleed !== 'own'}
+            onCheckedChange={(on) => {
+              const next = { ...el };
+              if (on) delete next.bleed;
+              else next.bleed = 'own';
+              onChange(next);
+            }}
+            ariaLabel={labels.coverElementMirror}
+          />
+        </label>
+      )}
+      {layer === 'elements' && <p className="m-0 text-(--slate)">{el.bleed === 'own' ? labels.coverElementMirrorOff : labels.coverElementMirrorOn}</p>}
       {layer === 'logos' && clearance !== undefined && row(labels.coverLogoClearance, clearance, (v) => onClearance(Math.max(0, v)), 0)}
       <div className="flex items-center gap-1">
         <IconButton label={labels.coverElementForward} icon={<ArrowUp size={14} aria-hidden="true" />} disabled={!canForward} onClick={() => onRestack(1)} />
@@ -515,9 +594,11 @@ function ElementProperties({ el, layer, zone, aspect, clearance, canForward, can
 
 /** A finish's kind, the ink its plate is named after, and its shape: a box
  *  of its own (moved on the canvas) or an element's. */
-function FinishProperties({ finish, targets, zone, labels, finishLabel, onChange, onBox, canForward, canBackward, onRestack, onDelete }: {
+function FinishProperties({ finish, targets, traces, zone, labels, finishLabel, onChange, onBox, onTrace, canForward, canBackward, onRestack, onDelete }: {
   finish: CoverFinishSetting;
   targets: { value: string; label: string }[];
+  traces: readonly GalleryTrace[];
+  onTrace: (t: GalleryTrace) => void;
   zone?: string;
   labels: Labels;
   finishLabel: (k: CoverFinishKind) => string;
@@ -529,6 +610,10 @@ function FinishProperties({ finish, targets, zone, labels, finishLabel, onChange
   onDelete: () => void;
 }) {
   const ofElement = 'element' in finish.shape;
+  const ofOutline = 'outline' in finish.shape;
+  // The saved outline the finish lies on (by its points: the design keeps
+  // a copy of them, not the trace).
+  const laidOn = ofOutline ? traces.find((t) => JSON.stringify(t.outline) === JSON.stringify((finish.shape as { outline: unknown }).outline)) : undefined;
   return (
     <>
       <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-(--slate)">{labels.coverItemFinish}</h3>
@@ -553,16 +638,18 @@ function FinishProperties({ finish, targets, zone, labels, finishLabel, onChange
       </label>
       <div className="flex flex-col gap-1">
         {labels.coverFinishShape}
-        <SegmentedControl
+        <Select
           size="sm"
-          value={ofElement ? 'element' : 'box'}
+          value={ofElement ? 'element' : ofOutline ? 'outline' : 'box'}
           onValueChange={(v) => {
             if (v === 'box') onBox();
+            else if (v === 'outline') { if (traces[0]) onTrace(traces[0]); }
             else if (targets[0]) onChange({ ...finish, shape: { element: targets[0].value } });
           }}
           options={[
             { value: 'box', label: labels.coverFinishShapeBox },
-            { value: 'element', label: labels.coverFinishShapeElement, disabled: targets.length === 0 },
+            ...(targets.length > 0 ? [{ value: 'element', label: labels.coverFinishShapeElement }] : []),
+            ...(traces.length > 0 ? [{ value: 'outline', label: labels.coverFinishShapeOutline }] : []),
           ]}
           ariaLabel={labels.coverFinishShape}
         />
@@ -578,6 +665,15 @@ function FinishProperties({ finish, targets, zone, labels, finishLabel, onChange
       ) : zone ? (
         <p className="m-0 text-(--slate)">{fill(labels.coverElementZone, { zone })}</p>
       ) : null}
+      {ofOutline && (
+        <Select
+          size="sm"
+          value={laidOn?.id ?? ''}
+          onValueChange={(id) => { const t = traces.find((x) => x.id === id); if (t) onTrace(t); }}
+          options={[...(laidOn ? [] : [{ value: '', label: labels.coverFinishShapeOutline }]), ...traces.map((t) => ({ value: t.id, label: t.name }))]}
+          ariaLabel={labels.coverFinishShapeOutline}
+        />
+      )}
       <p className="m-0 text-(--slate)">{labels.coverFinishPlateHint}</p>
       <div className="flex items-center gap-1">
         <IconButton label={labels.coverElementForward} icon={<ArrowUp size={14} aria-hidden="true" />} disabled={!canForward} onClick={() => onRestack(1)} />

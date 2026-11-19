@@ -1,7 +1,10 @@
 // Whether the cover designer is open: it is opened from the Cover panel and
-// from the book's preview, and drawn once, over the whole Sandbox.
+// from the book's preview, and drawn once, over the whole Sandbox. And the
+// sheet on show while the Cover panel is open, the same in the panel and
+// in the stage beside it.
 
 import { useSyncExternalStore } from 'react';
+import type { SheetChoice } from './bookProduction.js';
 
 let open = false;
 const listeners = new Set<() => void>();
@@ -20,5 +23,22 @@ export function useCoverDesignerOpen(): boolean {
     (l) => { listeners.add(l); return () => listeners.delete(l); },
     () => open,
     () => false,
+  );
+}
+
+let sheet: SheetChoice = 'cover';
+const sheetListeners = new Set<() => void>();
+
+export function chooseCoverSheet(next: SheetChoice): void {
+  if (sheet === next) return;
+  sheet = next;
+  for (const l of sheetListeners) l();
+}
+
+export function useCoverSheet(): SheetChoice {
+  return useSyncExternalStore(
+    (l) => { sheetListeners.add(l); return () => sheetListeners.delete(l); },
+    () => sheet,
+    () => 'cover' as const,
   );
 }

@@ -2,17 +2,20 @@
 // production (versions and cover texts) keyed by project id, the user's
 // library of paper and binding profiles, which travel between users as
 // `.postext-production.json` files (see `exportProductionProfiles`), and
-// the user's logo library (./logoLibrary.ts).
+// the user's logo library (./logoLibrary.ts), and each book's cover
+// gallery (./coverGallery.ts).
 
 import type { BindingProfile, PaperProfile } from 'postext';
 import { readBookProduction, type BookProduction } from './bookProduction.js';
 import type { LogoRecord } from './logoLibrary.js';
+import type { CoverGallery } from './coverGallery.js';
 
 const DB_NAME = 'postext-production';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const BOOKS = 'books';
 const PROFILES = 'profiles';
 const LOGOS = 'logos';
+const GALLERY = 'gallery';
 
 /** A profile of the library as stored. */
 export type StoredProfile =
@@ -31,6 +34,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(BOOKS)) db.createObjectStore(BOOKS, { keyPath: 'projectId' });
       if (!db.objectStoreNames.contains(PROFILES)) db.createObjectStore(PROFILES, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(LOGOS)) db.createObjectStore(LOGOS, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(GALLERY)) db.createObjectStore(GALLERY, { keyPath: 'projectId' });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -124,5 +128,16 @@ export async function putLogos(logos: readonly LogoRecord[]): Promise<void> {
 
 export async function deleteLogo(id: string): Promise<void> {
   await run(LOGOS, 'readwrite', (st) => st.delete(id));
+  changed();
+}
+
+/** A book's cover gallery, or null when it has none yet. */
+export async function getCoverGallery(projectId: string): Promise<CoverGallery | null> {
+  const g = await run<CoverGallery | undefined>(GALLERY, 'readonly', (st) => st.get(projectId) as IDBRequest<CoverGallery | undefined>);
+  return g ? { projectId, pictures: Array.isArray(g.pictures) ? g.pictures : [], traces: Array.isArray(g.traces) ? g.traces : [] } : null;
+}
+
+export async function putCoverGallery(gallery: CoverGallery): Promise<void> {
+  await run(GALLERY, 'readwrite', (st) => st.put(gallery));
   changed();
 }

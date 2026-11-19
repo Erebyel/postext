@@ -43,6 +43,7 @@ import {
   type CoverLogoSetting,
 } from './coverLayers.js';
 import { logoFileId, logoResource, logoResourceId, type LogoRecord } from './logoLibrary.js';
+import { galleryFileId, galleryResource, galleryResourceId, type CoverGallery } from './coverGallery.js';
 
 /** The zones whose text the panel edits. */
 export const COVER_TEXT_ZONES = ['front', 'spine', 'back', 'flapFront', 'flapBack'] as const;
@@ -335,6 +336,9 @@ export function coverDocumentInput(
     /** Mirror bleed past this design margin, mm (the version's
      *  `designMargin`), with the pictures it draws (`loadMirrorPictures`). */
     mirror?: { margin: number; pictures: Readonly<Record<string, MirrorPicture>> };
+    /** The book's cover gallery: the pictures the design places from it
+     *  come along, their bytes in the cover's files. */
+    gallery?: CoverGallery;
   } = {},
 ): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
@@ -357,13 +361,17 @@ export function coverDocumentInput(
     ...(options.barcodePdf ? { barcodePdf: true } : {}),
     ...(options.press ? { finishes: 'press' as const } : {}),
     ...(options.mirror ? { mirrorMargin: options.mirror.margin, mirrorPictures: options.mirror.pictures } : {}),
-    resources: [...bookResources, ...(options.logos ?? []).map(logoResource)],
+    resources: [...bookResources, ...(options.logos ?? []).map(logoResource), ...(options.gallery?.pictures ?? []).map(galleryResource)],
   });
   // The library's logos the design places, as pictures of the cover's own.
   const placed = new Set((design?.logos ?? []).map((l) => l.resourceId));
   const libraryLogos = (options.logos ?? []).filter((l) => placed.has(logoResourceId(l.id)));
   const files = { ...cover.files };
   for (const l of libraryLogos) files[logoFileId(l)] = l.bytes;
+  // And the gallery's pictures it places.
+  const used = new Set([design?.image?.resourceId, ...[...(design?.elements ?? []), ...(design?.effects ?? []), ...(design?.logos ?? [])].map((e) => e.resourceId)]);
+  const galleryPictures = (options.gallery?.pictures ?? []).filter((p) => used.has(galleryResourceId(p.id)));
+  for (const p of galleryPictures) files[galleryFileId(p)] = p.bytes;
   const pictures = [
     design?.image?.resourceId,
     ...(design?.elements ?? []).map((e) => e.resourceId),
@@ -384,7 +392,7 @@ export function coverDocumentInput(
   delete rest.headingStyles;
   return {
     cover: { ...cover, files },
-    resources: [...cover.resources, ...libraryLogos.map(logoResource), ...new Set(pictures)],
+    resources: [...cover.resources, ...libraryLogos.map(logoResource), ...galleryPictures.map(galleryResource), ...new Set(pictures)],
     config: {
       ...rest,
       paragraphStyles: [...(config.paragraphStyles ?? []), ...coverParagraphStyles(config, isCover ? settings : undefined)],

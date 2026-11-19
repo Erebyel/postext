@@ -6,7 +6,7 @@ import type { EpubCover } from 'postext-epub';
 import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
 import { ensureResourceImages } from '../controls/media/resourceImages.js';
 import { bookTrimMm, coverDocumentInput, pickSheet, sheetsOf } from './bookProduction.js';
-import { getBookProduction, listLogos, listProfiles } from './productionStore.js';
+import { getBookProduction, getCoverGallery, listLogos, listProfiles } from './productionStore.js';
 import { registerCoverImages } from './coverImages.js';
 
 export /** A screen picture of a laid-out promo sheet: its page painted at the
@@ -51,8 +51,9 @@ export async function productionEpubCover(
   if (!('cover' in sheets)) return null;
   const sheet = pickSheet(sheets, 'epub', bookTrimMm(config));
   const logos = await listLogos().catch(() => []);
+  const gallery = (await getCoverGallery(projectId).catch(() => null)) ?? undefined;
   // A screen picture carries no finishes: they are plates for the press.
-  const input = coverDocumentInput(sheet, version, record.texts, config, record.design, resources, { logos, hidden: new Set(['finishes'] as const) });
+  const input = coverDocumentInput(sheet, version, record.texts, config, record.design, resources, { logos, ...(gallery ? { gallery } : {}), hidden: new Set(['finishes'] as const) });
   await ensureConfigFontsLoaded(input.config, input.markdown);
   await registerCoverImages(input.cover.files);
   const own = new Set(Object.keys(input.cover.files));

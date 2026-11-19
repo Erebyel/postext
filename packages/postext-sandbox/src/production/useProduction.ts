@@ -10,7 +10,8 @@ import type { MirrorPicture, ProductionVersion, Resource, VersionSheets } from '
 import { useBookPlan, useSandboxSelector } from '../context/SandboxContext.js';
 import { bookMetadata } from '../book/compose.js';
 import { WORKING_BOOK, emptyProduction, planPageCount, sheetsOf, type BookProduction } from './bookProduction.js';
-import { getBookProduction, listLogos, listProfiles, onProductionChange, putBookProduction, type StoredProfile } from './productionStore.js';
+import { getBookProduction, getCoverGallery, listLogos, listProfiles, onProductionChange, putBookProduction, putCoverGallery, type StoredProfile } from './productionStore.js';
+import { emptyGallery, type CoverGallery } from './coverGallery.js';
 import type { LogoRecord } from './logoLibrary.js';
 import { loadMirrorPictures } from './coverImages.js';
 import type { CoverDesignSettings } from './bookProduction.js';
@@ -73,6 +74,25 @@ export function useLogos(): LogoRecord[] {
   return list;
 }
 
+/** The active book's cover gallery, kept current, and how to change it. */
+export function useCoverGallery(): [CoverGallery, (next: CoverGallery) => void] {
+  const activeProjectId = useSandboxSelector((s) => s.activeProjectId);
+  const projectId = activeProjectId ?? WORKING_BOOK;
+  const [gallery, setGallery] = useState<CoverGallery>(() => emptyGallery(projectId));
+  useEffect(() => {
+    let alive = true;
+    const load = () => { getCoverGallery(projectId).then((g) => { if (alive) setGallery(g ?? emptyGallery(projectId)); }, () => undefined); };
+    load();
+    const off = onProductionChange(load);
+    return () => { alive = false; off(); };
+  }, [projectId]);
+  const update = useCallback((next: CoverGallery) => {
+    setGallery(next);
+    void putCoverGallery(next);
+  }, []);
+  return [gallery, update];
+}
+
 /** The mirror bleed of a cover: its design margin (the version's, from
  *  its sheets' measures) and the pictures it draws, loaded once per set
  *  of pictures. Undefined without a margin. */
@@ -80,6 +100,7 @@ export function useMirror(
   design: CoverDesignSettings | undefined,
   resources: readonly Resource[],
   margin: number | undefined,
+  gallery?: CoverGallery,
 ): { margin: number; pictures: Readonly<Record<string, MirrorPicture>> } | undefined {
   const [pictures, setPictures] = useState<Record<string, MirrorPicture>>({});
   const key = [design?.image?.resourceId, ...(design?.elements ?? []).map((e) => e.resourceId)].join('|');
@@ -87,9 +108,9 @@ export function useMirror(
   latest.current = design;
   useEffect(() => {
     let alive = true;
-    loadMirrorPictures(latest.current, resources).then((p) => { if (alive) setPictures(p); }, () => undefined);
+    loadMirrorPictures(latest.current, resources, gallery).then((p) => { if (alive) setPictures(p); }, () => undefined);
     return () => { alive = false; };
-  }, [key, resources]);
+  }, [key, resources, gallery]);
   return useMemo(() => (margin !== undefined ? { margin, pictures } : undefined), [margin, pictures]);
 }
 

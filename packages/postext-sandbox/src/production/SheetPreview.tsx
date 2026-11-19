@@ -35,10 +35,10 @@ import {
 } from './bookProduction.js';
 import { HEADING, mm1, type Labels } from './productionUi.js';
 import { registerCoverImages } from './coverImages.js';
-import { useLogos, useMirror } from './useProduction.js';
+import { useCoverGallery, useLogos, useMirror } from './useProduction.js';
 
 
-const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
+export const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
   cover: 'productionSheetCover',
   jacket: 'productionSheetJacket',
   endpaperFront: 'productionSheetEndpaperFront',
@@ -74,16 +74,18 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const library = useLogos();
-  const mirror = useMirror(design, bookResources, sheets.measures.designMargin);
+  const [gallery] = useCoverGallery();
+  const mirror = useMirror(design, bookResources, sheets.measures.designMargin, gallery);
   const sheet = pickSheet(sheets, shown, bookTrimMm(config));
   // A screen picture carries no finishes: they are plates for the press.
   const input = useMemo(
     () => coverDocumentInput(sheet, version, texts, config, design, bookResources, {
       logos: library,
+      gallery,
       ...(mirror ? { mirror } : {}),
       ...(isPromo(shown) ? { hidden: new Set(['finishes'] as const) } : {}),
     }),
-    [sheet, version, texts, config, design, bookResources, library, shown, mirror],
+    [sheet, version, texts, config, design, bookResources, library, gallery, shown, mirror],
   );
   const isCaseCover = sheet.kind === 'case';
 
@@ -146,7 +148,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
       // Finishes go to the press as solid plates that overprint: the sheet
       // is laid out again with them so, when it has any.
       const press = design?.finishes?.length
-        ? coverDocumentInput(sheet, version, texts, config, design, bookResources, { logos: library, press: true, ...(mirror ? { mirror } : {}) })
+        ? coverDocumentInput(sheet, version, texts, config, design, bookResources, { logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) })
         : built.input;
       const pressDoc = press === built.input ? built.doc : await build({ markdown: press.markdown, resources: press.resources }, press.config);
       const own = new Set(Object.keys(press.cover.files));
@@ -180,7 +182,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
     try {
       const file = await buildCoverIdml({
         sheet,
-        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true, logos: library, press: true, ...(mirror ? { mirror } : {}) }),
+        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { barcodePdf: true, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) }),
         title: sheetFileName(fileTitle, version.name, built.sheet, 'idml').replace(/\.idml$/, ''),
         layers: {
           background: labels.coverLayerBackground,
@@ -238,4 +240,4 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
   );
 }
 
-const isCaseCoverOf = (sheets: VersionSheets) => sheets.cover.kind === 'case';
+export const isCaseCoverOf = (sheets: VersionSheets) => sheets.cover.kind === 'case';

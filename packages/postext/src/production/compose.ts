@@ -72,7 +72,26 @@ export interface CoverFinish {
   id: string;
   kind: CoverFinishKind;
   ink: string;
-  shape: { box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height'> } | { element: string };
+  /** A box of its own, an element's shape, or a saved outline laid in a
+   *  box of its own. */
+  shape:
+    | { box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height'> }
+    | { element: string }
+    | { outline: CoverOutline; box: Pick<CoverElement, 'zone' | 'x' | 'y' | 'width' | 'height'> };
+}
+
+/** An outline: closed polygons, their points in fractions of the box they
+ *  are laid in (0, 0 its top-left corner; 1, 1 its bottom-right). Traced
+ *  from a picture, it keeps its shape for a veil or a finish. */
+export type CoverOutline = { x: number; y: number }[][];
+
+/** An outline as SVG path data in a 1 × 1 view box. */
+export function outlinePathData(outline: CoverOutline): string {
+  const r = (n: number) => Math.round(n * 10000) / 10000;
+  return outline
+    .filter((poly) => poly.length >= 3)
+    .map((poly) => poly.map((p, i) => `${i === 0 ? 'M' : 'L'} ${r(p.x)} ${r(p.y)}`).join(' ') + ' Z')
+    .join(' ');
 }
 
 /** Each finish's default plate name, the CMYK a composite viewer shows its
@@ -86,12 +105,15 @@ export const COVER_FINISH_INKS: Readonly<Record<CoverFinishKind, { ink: string; 
   deboss: { ink: 'Deboss', cmyk: { c: 0, m: 0, y: 0, k: 25 }, screen: '#8d6cab' },
 };
 
-/** A movable element of a cover's design: one of the book's pictures, or
- *  a box of colour. Placed by the zone it stands in, so it moves with that
- *  zone when the spine grows or the binding changes. */
+/** A movable element of a cover's design: a picture, a box of colour, or
+ *  a shape of colour (a box with an outline). Placed by the zone it stands
+ *  in, so it moves with that zone when the spine grows or the binding
+ *  changes. */
 export interface CoverElement {
   id: string;
-  kind: 'image' | 'box';
+  kind: 'image' | 'box' | 'shape';
+  /** A shape's outline, in its box. */
+  outline?: CoverOutline;
   /** An image's picture: a bitmap or SVG resource of the book. */
   resourceId?: string;
   /** A box's colour. */
@@ -106,6 +128,11 @@ export interface CoverElement {
   /** A box's opacity, 0 … 1 (default 1). A picture keeps its own
    *  transparency. */
   opacity?: number;
+  /** Past the design margin (a case's turn-in, a board's edge): `mirror`
+   *  (the default) folds it out with the background; `own` paints the
+   *  element as it is, over the fold, for an element whose picture goes on
+   *  past the frame or that the fold would make look odd. */
+  bleed?: 'mirror' | 'own';
 }
 
 /** The zone an element is placed by on a sheet that lacks its own: a flap
@@ -228,9 +255,13 @@ function underContentSvg(sheet: ProductionSheet, design: CoverDesign, pictures: 
     if (color) parts.push(rect(toBleed(zone.rect, sheet), svgFill(color)));
   }
   for (const el of design.elements ?? []) {
+    if (el.bleed === 'own') continue;
     const r = coverElementRect(sheet, el);
     if (!r || r.width <= 0 || r.height <= 0) continue;
     if (el.kind === 'box' && el.color) parts.push(rect(r, svgFill(el.color, el.opacity)));
+    if (el.kind === 'shape' && el.color && el.outline) {
+      parts.push(`<path transform="matrix(${mmN(r.width)} 0 0 ${mmN(r.height)} ${mmN(r.x)} ${mmN(r.y)})" d="${outlinePathData(el.outline)}" ${svgFill(el.color, el.opacity)}/>`);
+    }
     const p = el.kind === 'image' && el.resourceId ? pictures[el.resourceId] : undefined;
     if (p) parts.push(image(p, containedRect(r, p.width / p.height)));
     else if (el.kind === 'image' && el.resourceId) missing.push(el.resourceId);
@@ -258,7 +289,7 @@ const onSheet = (r: SheetRect) => ({
 
 /** The decoration a design draws under the frames: the sheet's ground, its
  *  picture, each zone's ground, then the movable elements. */
-function designElements(sheet: ProductionSheet, design: CoverDesign | undefined): DesignElement[] {
+function designElements(sheet: ProductionSheet, design: CoverDesign | undefined, mirrored = false): DesignElement[] {
   if (!design) return [];
   const out: DesignElement[] = [];
   const whole = { x: 0, y: 0, width: sheet.width, height: sheet.height };
@@ -283,7 +314,8 @@ function designElements(sheet: ProductionSheet, design: CoverDesign | undefined)
     if (!color) continue;
     out.push({ kind: 'box', id: `cover-zone-${zone.name}`, placement: onSheet(toBleed(zone.rect, sheet)), style: { backgroundColor: color } } as DesignBoxElement);
   }
-  for (const el of design.elements ?? []) out.push(...elementDrawing(sheet, el, 'cover-el', false));
+  // Under a mirror, the elements that keep their own bleed go over it.
+  for (const el of design.elements ?? []) if (!mirrored || el.bleed !== 'own') out.push(...elementDrawing(sheet, el, 'cover-el', false));
   return out;
 }
 
@@ -307,6 +339,8 @@ function elementDrawing(sheet: ProductionSheet, el: CoverElement, prefix: string
   if (el.kind === 'box' && el.color) {
     return [{ kind: 'box', id, placement: onSheet(rect), style: { backgroundColor: withOpacity(el.color, el.opacity) }, ...above } as DesignBoxElement];
   }
+  const d = el.kind === 'shape' && el.color && el.outline ? outlinePathData(el.outline) : '';
+  if (d) return [{ kind: 'path', id, d, viewBox: [1, 1], preserveAspectRatio: 'none', fill: withOpacity(el.color!, el.opacity), placement: onSheet(rect), ...above }];
   return [];
 }
 
@@ -377,6 +411,12 @@ function finishElements(sheet: ProductionSheet, design: CoverDesign | undefined,
   for (const finish of design?.finishes ?? []) {
     const fill = finishColor(finish, mode);
     const id = `cover-finish-${finish.id}`;
+    if ('outline' in finish.shape) {
+      const rect = coverElementRect(sheet, { id: finish.id, kind: 'box', ...finish.shape.box });
+      const d = outlinePathData(finish.shape.outline);
+      if (rect && rect.width > 0 && rect.height > 0 && d) out.push({ kind: 'path', id, over: true, d, viewBox: [1, 1], preserveAspectRatio: 'none', fill, placement: onSheet(rect) });
+      continue;
+    }
     if ('box' in finish.shape) {
       const rect = coverElementRect(sheet, { id: finish.id, kind: 'box', ...finish.shape.box });
       if (rect && rect.width > 0 && rect.height > 0) out.push({ kind: 'box', id, over: true, placement: onSheet(rect), style: { backgroundColor: fill } } as DesignBoxElement);
@@ -385,6 +425,11 @@ function finishElements(sheet: ProductionSheet, design: CoverDesign | undefined,
     const target = all.find((e) => e.id === (finish.shape as { element: string }).element);
     const rect = target ? coverElementRect(sheet, target) : undefined;
     if (!target || !rect || rect.width <= 0 || rect.height <= 0) continue;
+    const shaped = target.kind === 'shape' && target.outline ? outlinePathData(target.outline) : '';
+    if (shaped) {
+      out.push({ kind: 'path', id, over: true, d: shaped, viewBox: [1, 1], preserveAspectRatio: 'none', fill, placement: onSheet(rect) });
+      continue;
+    }
     const resource = target.kind === 'image' ? resources.find((r) => r.id === target.resourceId) : undefined;
     const outline = pictureOutline(resource);
     if (!outline) {
@@ -491,7 +536,6 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     header: false,
     footer: false,
   };
-  const elements: DesignElement[] = designElements(sheet, options.design);
   const resources: Resource[] = [];
   const files: Record<string, Uint8Array> = {};
   // Past the design margin, the background and the movable elements
@@ -503,6 +547,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
   // its ground fills: then the design goes to the edge as it is.
   const mirror = under?.content && under.missing.length === 0 ? mirrorBleedSvg(sheet, options.mirrorMargin!, under.content, under.defs) : undefined;
   const mirrorSkipped = under && under.missing.length > 0 && mirrorBleedSvg(sheet, options.mirrorMargin!, 'x') ? [...new Set(under.missing)] : undefined;
+  const elements: DesignElement[] = designElements(sheet, options.design, !!mirror);
   if (mirror) {
     const fileId = `${MIRROR_RESOURCE_ID}.svg`;
     const px = (v: number) => (v / 25.4) * 96;
@@ -517,6 +562,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     files[fileId] = new TextEncoder().encode(mirror.svg);
     elements.push({ kind: 'image', id: MIRROR_RESOURCE_ID, resourceId: MIRROR_RESOURCE_ID, decorative: true, fit: 'contain', placement: onSheet({ x: 0, y: 0, width: sheet.width, height: sheet.height }) });
   }
+  if (mirror) for (const el of options.design?.elements ?? []) if (el.bleed === 'own') elements.push(...elementDrawing(sheet, el, 'cover-el', false));
   elements.push(...overElements(sheet, options.design));
   const back = sheet.zones.find((z) => z.name === 'back');
   const barcode = options.isbn && back

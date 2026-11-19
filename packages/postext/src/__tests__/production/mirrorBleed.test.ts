@@ -80,6 +80,37 @@ describe('coverPage with a mirror bleed', () => {
     expect(cover.resources.map((r) => r.id)).toContain('cover-mirror');
   });
 
+  it('paints an element that keeps its own bleed over the mirror, and folds the rest', () => {
+    const m = resolveBindingMeasures({ id: 'c', name: 'C', style: 'caseFlat' }, trim);
+    const sheet = caseSheet(trim, 26, m);
+    const cover = coverPage(sheet, {
+      mirrorMargin: m.designMargin,
+      design: {
+        background: ink('#123456'),
+        elements: [
+          { id: 'photo', kind: 'box', color: ink('#00ff00'), zone: 'front', x: -12, y: -12, width: 60, height: 60, bleed: 'own' },
+          { id: 'dot', kind: 'box', color: ink('#ff0000'), zone: 'front', x: 40, y: 40, width: 10, height: 10 },
+        ],
+      },
+    });
+    const ids = cover.template.decoration!.elements.map((e) => ('id' in e ? e.id : ''));
+    expect(ids.indexOf('cover-el-photo')).toBe(ids.indexOf('cover-mirror') + 1);
+    expect(ids.indexOf('cover-el-dot')).toBeLessThan(ids.indexOf('cover-mirror'));
+    const svg = new TextDecoder().decode(cover.files['cover-mirror.svg']);
+    expect(svg).not.toContain('#00ff00');
+    expect(svg).toContain('#ff0000');
+  });
+
+  it('folds a shape of colour out with its outline', () => {
+    const m = resolveBindingMeasures({ id: 'c', name: 'C', style: 'caseFlat' }, trim);
+    const cover = coverPage(caseSheet(trim, 26, m), {
+      mirrorMargin: m.designMargin,
+      design: { elements: [{ id: 'leaf', kind: 'shape', color: ink('#ff0000'), outline: [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0.5, y: 1 }]], zone: 'front', x: -5, y: 0, width: 20, height: 20 }] },
+    });
+    const svg = new TextDecoder().decode(cover.files['cover-mirror.svg']);
+    expect(svg).toContain('d="M 0 0 L 1 0 L 0.5 1 Z"');
+  });
+
   it('adds no mirror where the bleed is within the design margin', () => {
     const m = resolveBindingMeasures({ id: 'p', name: 'P', style: 'perfect' }, trim);
     const cover = coverPage(softcoverSheet(trim, 20, m, false), { mirrorMargin: m.designMargin, design: { background: ink('#123456') } });

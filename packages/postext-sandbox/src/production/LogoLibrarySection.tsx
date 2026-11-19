@@ -6,7 +6,7 @@
  * Each keeps its clear space; the library goes between users as a file.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import { Download, Plus, Trash2, Upload } from 'lucide-react';
 import { Button, ConfirmPopover, IconButton, NumberField, Select, announce } from '../ui/index.js';
 import { downloadBytes } from '../storage/persistence.js';
@@ -18,12 +18,12 @@ import {
   importLogos,
   newLogoId,
   sniffLogoMime,
-  svgSize,
   type LogoGroup,
   type LogoRecord,
 } from './logoLibrary.js';
 import { deleteLogo, putLogos } from './productionStore.js';
 import { useLogos } from './useProduction.js';
+import { pictureSize, useObjectUrl } from './coverImages.js';
 import { INPUT, type Labels } from './productionUi.js';
 import { Fold } from './Fold.js';
 
@@ -33,19 +33,9 @@ const GROUP_LABEL: Record<LogoGroup, keyof Labels> = {
   seal: 'productionLogoGroupSeal',
 };
 
-/** A picture's size in px: an SVG's own, a bitmap's decoded. */
-async function pictureSize(bytes: Uint8Array, mime: LogoRecord['mime']): Promise<{ width: number; height: number }> {
-  if (mime === 'image/svg+xml') return svgSize(new TextDecoder().decode(bytes)) ?? { width: 100, height: 100 };
-  const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }));
-  const size = { width: bitmap.width, height: bitmap.height };
-  bitmap.close();
-  return size;
-}
-
 function Thumb({ logo }: { logo: LogoRecord }) {
-  const url = useMemo(() => URL.createObjectURL(new Blob([logo.bytes as BlobPart], { type: logo.mime })), [logo.bytes, logo.mime]);
-  useEffect(() => () => URL.revokeObjectURL(url), [url]);
-  return <img src={url} alt="" className="h-8 w-12 shrink-0 rounded border border-(--rule) bg-white object-contain p-0.5" />;
+  const url = useObjectUrl(logo.bytes, logo.mime);
+  return url ? <img src={url} alt="" className="h-8 w-12 shrink-0 rounded border border-(--rule) bg-white object-contain p-0.5" /> : null;
 }
 
 export function LogoLibrary({ labels }: { labels: Labels }) {

@@ -44,8 +44,10 @@ import { LogoLibrary } from './LogoLibrarySection.js';
 import { DesignSection, ZoneStylesSection } from './CoverDesignSections.js';
 import { SheetPreview } from './SheetPreview.js';
 import { Fold } from './Fold.js';
-import { useBookProduction, useProfiles } from './useProduction.js';
-import { openCoverDesigner } from './coverDesignerStore.js';
+import { CoverGallerySection } from './CoverGallerySection.js';
+import { galleryResource } from './coverGallery.js';
+import { useBookProduction, useCoverGallery, useProfiles } from './useProduction.js';
+import { chooseCoverSheet, openCoverDesigner, useCoverSheet } from './coverDesignerStore.js';
 
 const BUILT_IN_LABEL: Record<string, keyof Labels> = {
   perfect: 'productionProfilePerfect',
@@ -107,6 +109,13 @@ export function ProductionPanel() {
   const projectId = activeProjectId ?? WORKING_BOOK;
   const [record, update] = useBookProduction(projectId);
   const stored = useProfiles();
+  const [gallery] = useCoverGallery();
+  // The background picture is one of the cover's gallery (or the book's
+  // picture a design made before the gallery already uses).
+  const coverPictures = useMemo(
+    () => [...gallery.pictures.map(galleryResource), ...bookResources.filter((r) => r.id === record?.design?.image?.resourceId)],
+    [gallery, bookResources, record?.design?.image?.resourceId],
+  );
   const importRef = useRef<HTMLInputElement>(null);
 
   const bindings = useMemo(() => stored.flatMap((p) => (p.kind === 'binding' ? [p.profile] : [])), [stored]);
@@ -121,7 +130,7 @@ export function ProductionPanel() {
     [version, config, pages, bindings],
   );
   const ready = sheets && isSheets(sheets) ? sheets : null;
-  const [choice, setChoice] = useState<SheetChoice>('cover');
+  const choice = useCoverSheet();
   const choices = ready ? sheetChoices(ready) : [];
   const shown: SheetChoice = choices.includes(choice) ? choice : 'cover';
 
@@ -256,7 +265,7 @@ export function ProductionPanel() {
               sheets={ready}
               choices={choices}
               shown={shown}
-              onChoose={setChoice}
+              onChoose={chooseCoverSheet}
               labels={labels}
               fileTitle={title}
             />
@@ -292,10 +301,11 @@ export function ProductionPanel() {
 
           {version && record && (
             <div className="flex flex-col gap-2">
+              <CoverGallerySection labels={labels} />
               <Fold title={labels.productionDesign}>
                 <DesignSection
                   design={record.design ?? {}}
-                  resources={bookResources}
+                  resources={coverPictures}
                   bookTextHex={bookTextHex}
                   labels={labels}
                   onChange={(design) => update({ ...record, design })}

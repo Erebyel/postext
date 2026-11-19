@@ -26,6 +26,7 @@ import { useChapterHashSync } from './viewport/useChapterHashSync.js';
 import { useContourTraces } from './panels/resources/marks/contourTraces.js';
 import { ProductionPanel } from './production/ProductionPanel.js';
 import { CoverDesignerHost } from './production/CoverDesigner.js';
+import { CoverStage } from './production/CoverStage.js';
 import { DirectionProvider } from '@base-ui/react/direction-provider';
 import { SandboxGlobalStyles, TooltipProvider, PortalProvider, PortalHost, uiDirectionOf, useUiRtl } from './ui/index.js';
 import { BundleReplaceDialog } from './BundleReplaceDialog.js';
@@ -344,12 +345,20 @@ function SandboxLayout({
       <main id="main-content" tabIndex={-1} className="flex min-w-0 flex-1 flex-col outline-none">
         <SandboxHeading />
         <ChapterPaginator />
-        <ViewportTabs />
-        <div className="relative min-h-0 flex-1 overflow-hidden">
-          {renderViewport()}
-          <SelectionBreadcrumb />
-          {loadingCover}
-        </div>
+        {/* With the Cover panel open, its sheet as it is now in place of the
+            book's pages, which are not what the panel works on. */}
+        {activePanel === 'production' ? (
+          <div className="relative min-h-0 flex-1 overflow-hidden"><CoverStage /></div>
+        ) : (
+          <>
+            <ViewportTabs />
+            <div className="relative min-h-0 flex-1 overflow-hidden">
+              {renderViewport()}
+              <SelectionBreadcrumb />
+              {loadingCover}
+            </div>
+          </>
+        )}
         <SandboxAnnouncer />
         <PortalHost />
         <BundleReplaceDialog />
