@@ -23,6 +23,7 @@ const TEXT: Record<CoverCheckKind, keyof Labels> = {
   finishOffSheet: 'coverCheckFinishOffSheet',
   finishNoInk: 'coverCheckFinishNoInk',
   textOverflow: 'coverCheckTextOverflow',
+  endpaperHinge: 'coverCheckEndpaperHinge',
 };
 
 export function CoverChecksList({ checks, labels, nameOf, onPick }: {
@@ -48,7 +49,7 @@ export function CoverChecksList({ checks, labels, nameOf, onPick }: {
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {checks.map((c, i) => {
           const Icon = c.severity === 'error' ? AlertCircle : AlertTriangle;
-          const text = fill(String(labels[TEXT[c.kind]]), { item: nameOf(c) });
+          const text = fill(String(labels[TEXT[c.kind]]), { item: nameOf(c), mm: (c.mm ?? 0).toLocaleString() });
           const body = (
             <>
               <Icon size={13} aria-hidden="true" className={c.severity === 'error' ? 'mt-0.5 shrink-0 text-(--destructive)' : 'mt-0.5 shrink-0 text-(--brand)'} />

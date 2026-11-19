@@ -47,6 +47,7 @@ import {
 } from './coverLayers.js';
 import { logoFileId, logoResource, logoResourceId, type LogoRecord } from './logoLibrary.js';
 import { galleryFileId, galleryResource, galleryResourceId, type CoverGallery } from './coverGallery.js';
+import { adFileId, adResource, adResourceId, readEndpapers, type BookEndpapers, type CatalogueAd, type EndpaperSide } from './collections.js';
 
 /** The zones whose text the panel edits. */
 export const COVER_TEXT_ZONES = ['front', 'spine', 'back', 'flapFront', 'flapBack'] as const;
@@ -89,6 +90,8 @@ export interface BookProduction {
   texts: Partial<Record<CoverTextZone, string>>;
   design?: CoverDesignSettings;
   paper?: BookPaper;
+  /** What goes on the endpapers (a case's): ./collections.ts. */
+  endpapers?: BookEndpapers;
   updatedAt: number;
 }
 
@@ -364,6 +367,28 @@ export function coverParagraphStyles(config: PostextConfig, settings: CoverDesig
   return out;
 }
 
+/** An endpaper's look: its paper colour, and the advertisement of each
+ *  page that has one, run to the bleed at the page's outer edges (the
+ *  glue strip and the hinge take its inner one). */
+export function endpaperDesignOf(sheet: ProductionSheet, side: EndpaperSide | undefined, catalogue: readonly CatalogueAd[]): { design: CoverDesign; ads: CatalogueAd[] } {
+  const elements: NonNullable<CoverDesign['elements']> = [];
+  const ads: CatalogueAd[] = [];
+  for (const zone of sheet.zones) {
+    if (zone.name !== 'pastedown' && zone.name !== 'flyleaf') continue;
+    const page = side?.[zone.name];
+    const ad = page?.ad ? catalogue.find((x) => x.id === page.ad) : undefined;
+    if (!ad) continue;
+    const r = zone.rect;
+    const t = sheet.trim;
+    const x0 = r.x <= t.x + 0.01 ? 0 : r.x;
+    const x1 = r.x + r.width >= t.x + t.width - 0.01 ? sheet.width : r.x + r.width;
+    ads.push(ad);
+    // Covering its page to every edge, cropped if its proportions differ.
+    elements.push({ id: `ad-${zone.name}`, kind: 'image', resourceId: adResourceId(ad.id), fit: 'cover', zone: zone.name, x: x0 - r.x, y: -r.y, width: x1 - x0, height: sheet.height });
+  }
+  return { design: { ...(side?.colour ? { background: ink(side.colour) } : {}), ...(elements.length ? { elements } : {}) }, ads };
+}
+
 export function coverDocumentInput(
   sheet: ProductionSheet,
   version: ProductionVersion,
@@ -389,13 +414,17 @@ export function coverDocumentInput(
     /** How the whole work's ISBN is introduced over the barcode
      *  (`ISBN obra completa`). Default `ISBN`. */
     workIsbnLabel?: string;
+    /** An endpaper sheet's paper colour, advertisements and texts: the
+     *  side the sheet is, and its collection's catalogue. */
+    endpaper?: { side: EndpaperSide | undefined; ads: readonly CatalogueAd[] };
   } = {},
 ): { cover: CoverPage; config: PostextConfig; markdown: string; resources: Resource[] } {
   const isCover = sheet.kind !== 'endpaper';
   const work = version.workIsbn?.trim() ? parseIsbn(version.workIsbn) : undefined;
   const workIsbn = work?.ok ? work.isbn13 : undefined;
   const hidden = options.hidden ?? new Set<CoverLayer>();
-  const design = isCover ? coverDesignOf(designShowing(settings, hidden)) : undefined;
+  const endpaper = !isCover && options.endpaper ? endpaperDesignOf(sheet, options.endpaper.side, options.endpaper.ads) : undefined;
+  const design = isCover ? coverDesignOf(designShowing(settings, hidden)) : endpaper?.design;
   const styles = settings?.zoneStyles ?? {};
   const vertical = (zone: DesignZone) => styles[zone]?.vertical;
   const verticalAlign = Object.fromEntries(
@@ -420,6 +449,7 @@ export function coverDocumentInput(
   const placed = new Set((design?.logos ?? []).map((l) => l.resourceId));
   const libraryLogos = (options.logos ?? []).filter((l) => placed.has(logoResourceId(l.id)));
   const files = { ...cover.files };
+  for (const ad of endpaper?.ads ?? []) files[adFileId(ad)] = ad.bytes;
   for (const l of libraryLogos) files[logoFileId(l)] = l.bytes;
   // And the gallery's pictures it places.
   const used = new Set([design?.image?.resourceId, ...[...(design?.elements ?? []), ...(design?.effects ?? []), ...(design?.logos ?? [])].map((e) => e.resourceId)]);
@@ -439,13 +469,20 @@ export function coverDocumentInput(
       if (t) content[zone] = styledZoneText(t, zone);
     }
   }
+  // An endpaper's pages take the back cover's type.
+  if (!isCover && options.endpaper?.side) {
+    for (const zone of ['pastedown', 'flyleaf'] as const) {
+      const t = options.endpaper.side[zone]?.text?.trim();
+      if (t) content[zone] = styledZoneText(t, 'back');
+    }
+  }
   // The cover sets its own type: the book's heading styles (chapter
   // openers) have nothing to do on it.
   const rest: PostextConfig = { ...config };
   delete rest.headingStyles;
   return {
     cover: { ...cover, files },
-    resources: [...cover.resources, ...libraryLogos.map(logoResource), ...galleryPictures.map(galleryResource), ...new Set(pictures)],
+    resources: [...cover.resources, ...libraryLogos.map(logoResource), ...galleryPictures.map(galleryResource), ...(endpaper?.ads ?? []).map(adResource), ...new Set(pictures)],
     config: {
       ...rest,
       paragraphStyles: [...(config.paragraphStyles ?? []), ...coverParagraphStyles(config, isCover ? settings : undefined)],
@@ -484,6 +521,7 @@ export function readBookProduction(raw: unknown): BookProduction | null {
   }
   const design = readDesign(raw.design);
   const paper = readPaper(raw.paper);
+  const endpapers = readEndpapers(raw.endpapers);
   const active = typeof raw.activeVersionId === 'string' && versions.some((v) => v.id === raw.activeVersionId)
     ? raw.activeVersionId
     : undefined;
@@ -494,6 +532,7 @@ export function readBookProduction(raw: unknown): BookProduction | null {
     texts,
     ...(design ? { design } : {}),
     ...(paper ? { paper } : {}),
+    ...(endpapers ? { endpapers } : {}),
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
   };
 }

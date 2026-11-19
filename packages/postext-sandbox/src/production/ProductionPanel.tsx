@@ -50,7 +50,9 @@ import { PaperSection } from './PaperSection.js';
 import { CoverGallerySection } from './CoverGallerySection.js';
 import { CoverIdmlImportButton } from './CoverIdmlImportButton.js';
 import { galleryResource } from './coverGallery.js';
-import { useBookProduction, useCoverGallery, useProfiles } from './useProduction.js';
+import { useBookProduction, useCollections, useCoverGallery, useProfiles } from './useProduction.js';
+import { CollectionsSection } from './CollectionsSection.js';
+import { EndpapersSection } from './EndpapersSection.js';
 import { chooseCoverSheet, openCoverDesigner, useCoverSheet } from './coverDesignerStore.js';
 
 const BUILT_IN_LABEL: Record<string, keyof Labels> = {
@@ -114,6 +116,7 @@ export function ProductionPanel() {
   const [record, update] = useBookProduction(projectId);
   const stored = useProfiles();
   const [gallery, updateGallery] = useCoverGallery();
+  const collections = useCollections();
   // The background picture is one of the cover's gallery (or the book's
   // picture a design made before the gallery already uses).
   const coverPictures = useMemo(
@@ -283,6 +286,7 @@ export function ProductionPanel() {
               version={version}
               texts={record.texts}
               design={record.design}
+              {...(record.endpapers ? { endpapers: record.endpapers } : {})}
               bookResources={bookResources}
               sheets={ready}
               choices={choices}
@@ -335,6 +339,19 @@ export function ProductionPanel() {
           {version && record && (
             <div className="flex flex-col gap-2">
               <CoverGallerySection labels={labels} />
+              {ready?.endpapers && (
+                <EndpapersSection
+                  endpapers={record.endpapers}
+                  collections={collections}
+                  labels={labels}
+                  onChange={(endpapers) => {
+                    const next = { ...record };
+                    if (endpapers) next.endpapers = endpapers;
+                    else delete next.endpapers;
+                    update(next);
+                  }}
+                />
+              )}
               <Fold title={labels.productionDesign}>
                 <DesignSection
                   design={record.design ?? {}}
@@ -382,6 +399,7 @@ export function ProductionPanel() {
               <input ref={importRef} type="file" accept=".json,application/json" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void importFile(e)} />
             </Fold>
             <LogoLibrary labels={labels} />
+            <CollectionsSection labels={labels} />
           </div>
         </div>
       </PanelBody>

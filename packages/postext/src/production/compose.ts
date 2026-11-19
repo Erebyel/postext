@@ -138,6 +138,10 @@ export interface CoverElement extends CoverEffects {
   /** A box's opacity, 0 … 1 (default 1). A picture keeps its own
    *  transparency. */
   opacity?: number;
+  /** How a picture fills its box: whole inside it (`contain`, the
+   *  default), or covering it, cropped (`cover`: a page's advertisement,
+   *  which must reach every edge). */
+  fit?: 'contain' | 'cover';
   /** An effect's picture cut to an outline (in fractions of its box): a
    *  shine, a texture, a gradient that shows only within a shape. The
    *  picture then fills the box (cropped to it) rather than fitting in it. */
@@ -396,7 +400,7 @@ function elementDrawing(sheet: ProductionSheet, el: CoverElement, prefix: string
   const id = `${prefix}-${el.id}`;
   const above = over ? { over: true } : {};
   if (el.kind === 'image' && el.resourceId) {
-    return [{ kind: 'image', id, resourceId: el.resourceId, decorative: true, fit: 'contain', placement: onSheet(rect), ...above }];
+    return [{ kind: 'image', id, resourceId: el.resourceId, decorative: true, fit: el.fit ?? 'contain', placement: onSheet(rect), ...above }];
   }
   // With a gradient or a shadow: the picture of itself `art` holds.
   const drawn = art.get(el.id);

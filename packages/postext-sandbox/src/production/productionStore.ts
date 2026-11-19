@@ -3,19 +3,22 @@
 // library of paper and binding profiles, which travel between users as
 // `.postext-production.json` files (see `exportProductionProfiles`), and
 // the user's logo library (./logoLibrary.ts), and each book's cover
-// gallery (./coverGallery.ts).
+// gallery (./coverGallery.ts), and the user's collections with their
+// catalogues of advertisements for the endpapers (./collections.ts).
 
 import type { BindingProfile, PaperProfile } from 'postext';
 import { readBookProduction, type BookProduction } from './bookProduction.js';
 import type { LogoRecord } from './logoLibrary.js';
 import type { CoverGallery } from './coverGallery.js';
+import type { CollectionRecord } from './collections.js';
 
 const DB_NAME = 'postext-production';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const BOOKS = 'books';
 const PROFILES = 'profiles';
 const LOGOS = 'logos';
 const GALLERY = 'gallery';
+const COLLECTIONS = 'collections';
 
 /** A profile of the library as stored. */
 export type StoredProfile =
@@ -35,6 +38,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(PROFILES)) db.createObjectStore(PROFILES, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(LOGOS)) db.createObjectStore(LOGOS, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(GALLERY)) db.createObjectStore(GALLERY, { keyPath: 'projectId' });
+      if (!db.objectStoreNames.contains(COLLECTIONS)) db.createObjectStore(COLLECTIONS, { keyPath: 'id' });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -139,5 +143,21 @@ export async function getCoverGallery(projectId: string): Promise<CoverGallery |
 
 export async function putCoverGallery(gallery: CoverGallery): Promise<void> {
   await run(GALLERY, 'readwrite', (st) => st.put(gallery));
+  changed();
+}
+
+/** The collections, by name. */
+export async function listCollections(): Promise<CollectionRecord[]> {
+  const all = await run<CollectionRecord[]>(COLLECTIONS, 'readonly', (st) => st.getAll() as IDBRequest<CollectionRecord[]>);
+  return all.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function putCollection(collection: CollectionRecord): Promise<void> {
+  await run(COLLECTIONS, 'readwrite', (st) => st.put({ ...collection, updatedAt: Date.now() }));
+  changed();
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  await run(COLLECTIONS, 'readwrite', (st) => st.delete(id));
   changed();
 }

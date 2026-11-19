@@ -40,7 +40,8 @@ import {
 } from './bookProduction.js';
 import { HEADING, mm1, type Labels } from './productionUi.js';
 import { registerCoverImages } from './coverImages.js';
-import { useCoverGallery, useLogos, useMirror } from './useProduction.js';
+import { useCollections, useCoverGallery, useLogos, useMirror } from './useProduction.js';
+import { endpaperInput, type BookEndpapers } from './collections.js';
 
 
 const ZONE_LABEL: Record<CoverTextZone, keyof Labels> = {
@@ -63,8 +64,9 @@ export const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
 };
 
 
-export function SheetPreview({ config, version, texts, design, bookResources, sheets, choices, shown, onChoose, labels, fileTitle }: {
+export function SheetPreview({ config, version, texts, design, endpapers, bookResources, sheets, choices, shown, onChoose, labels, fileTitle }: {
   config: PostextConfig;
+  endpapers?: BookEndpapers;
   version: ProductionVersion;
   texts: BookProduction['texts'];
   design: CoverDesignSettings | undefined;
@@ -88,30 +90,36 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
   const [busy, setBusy] = useState(false);
   const library = useLogos();
   const [gallery] = useCoverGallery();
+  const collections = useCollections();
+  const endpaper = useMemo(() => endpaperInput(shown, endpapers, collections), [shown, endpapers, collections]);
   const mirror = useMirror(design, bookResources, sheets.measures.designMargin, gallery);
   const sheet = pickSheet(sheets, shown, bookTrimMm(config));
   // A screen picture carries no finishes: they are plates for the press.
   const input = useMemo(
-    () => coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption,
+    () => coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, ...(endpaper ? { endpaper } : {}),
       logos: library,
       gallery,
       ...(mirror ? { mirror } : {}),
       ...(isPromo(shown) ? { hidden: new Set(['finishes'] as const) } : {}),
     }),
-    [sheet, version, texts, config, design, bookResources, library, gallery, shown, mirror, labels.productionWorkIsbnCaption],
+    [sheet, version, texts, config, design, bookResources, library, gallery, shown, mirror, labels.productionWorkIsbnCaption, endpaper],
   );
   const isCaseCover = sheet.kind === 'case';
   // What to put right before printing (./coverChecks.ts), on the sheet as
   // laid out last.
-  const checks = useMemo(() => coverChecks(sheet, design, {
+  const checks = useMemo(() => coverChecks(sheet, sheet.kind === 'endpaper' ? undefined : design, {
+    ...(endpaper ? { endpaperAds: (['pastedown', 'flyleaf'] as const).filter((z) => endpaper.side?.[z]?.ad && endpaper.ads.some((a) => a.id === endpaper.side![z]!.ad)) } : {}),
     pictures: new Set([...bookResources.map((r) => r.id), ...gallery.pictures.map((p) => galleryResourceId(p.id)), ...library.map((l) => logoResourceId(l.id))]),
     ...(version.isbn ? { isbn: version.isbn } : {}),
     ...(version.isbnAddOn ? { isbnAddOn: version.isbnAddOn } : {}),
     ...(config.print?.standard ? { standard: config.print.standard } : {}),
     mirror: !!input.cover.designed,
     overflow: built?.input === input ? overflowZones(built.doc) : [],
-  }), [sheet, design, bookResources, gallery, library, version, config.print?.standard, input, built]);
+  }), [sheet, design, bookResources, gallery, library, version, config.print?.standard, input, built, endpaper]);
   const checkName = (c: CoverCheck): string => {
+    // Inside a sentence («On the pastedown…»).
+    if (c.zone === 'pastedown') return labels.productionEndpaperPastedown.toLocaleLowerCase();
+    if (c.zone === 'flyleaf') return labels.productionEndpaperFlyleaf.toLocaleLowerCase();
     if (c.zone) return String(labels[ZONE_LABEL[c.zone as CoverTextZone] ?? 'productionZoneFront']);
     const items = [...(design?.elements ?? []), ...(design?.effects ?? []), ...(design?.logos ?? []), ...(design?.finishes ?? [])];
     const item = items.find((x) => x.id === c.id);
@@ -181,7 +189,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
       // Finishes go to the press as solid plates that overprint: the sheet
       // is laid out again with them so, when it has any.
       const press = design?.finishes?.length
-        ? coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) })
+        ? coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, ...(endpaper ? { endpaper } : {}), logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) })
         : built.input;
       const pressDoc = press === built.input ? built.doc : await build({ markdown: press.markdown, resources: press.resources }, press.config);
       const own = new Set(Object.keys(press.cover.files));
@@ -215,7 +223,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
     try {
       const file = await buildCoverIdml({
         sheet,
-        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, barcodePdf: true, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) }),
+        input: coverDocumentInput(sheet, version, texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, ...(endpaper ? { endpaper } : {}), barcodePdf: true, logos: library, gallery, press: true, ...(mirror ? { mirror } : {}) }),
         title: sheetFileName(fileTitle, version.name, built.sheet, 'idml').replace(/\.idml$/, ''),
         layers: coverLayerNamesOf(labels),
       });
@@ -251,7 +259,7 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
       <div ref={wrapRef} className="w-full overflow-hidden rounded border border-(--rule) bg-white">
         {failed ? <p className="m-0 p-2 text-xs text-(--slate)">{labels.productionPreviewFailed}</p> : <canvas ref={canvasRef} className="block" />}
       </div>
-      {!isPromo(shown) && sheet.kind !== 'endpaper' && (
+      {!isPromo(shown) && (
         <CoverChecksList checks={checks} labels={labels} nameOf={checkName} />
       )}
       <div className="flex justify-end gap-2">

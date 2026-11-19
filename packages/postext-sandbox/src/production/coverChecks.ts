@@ -13,7 +13,9 @@
  * - transparencies (an opacity, a gradient, a shadow) when the PDF is
  *   PDF/X-1a, which flattens them;
  * - a finish with no shape left, off the sheet, or whose plate has no name;
- * - a zone whose text does not fit in it.
+ * - a zone whose text does not fit in it;
+ * - an endpaper page with an advertisement, whose inner edge the glue
+ *   strip and the hinge hide.
  */
 
 import { isbnBarcodeSvg, type PdfXStandard, type ProductionSheet, type SheetRect, type VDTDocument } from 'postext';
@@ -31,7 +33,8 @@ export type CoverCheckKind =
   | 'finishNoShape'
   | 'finishOffSheet'
   | 'finishNoInk'
-  | 'textOverflow';
+  | 'textOverflow'
+  | 'endpaperHinge';
 
 export interface CoverCheck {
   kind: CoverCheckKind;
@@ -41,6 +44,8 @@ export interface CoverCheck {
   id?: string;
   layer?: ItemLayer;
   zone?: string;
+  /** How much, mm (the strip an endpaper's hinge hides). */
+  mm?: number;
 }
 
 const ERRORS: ReadonlySet<CoverCheckKind> = new Set(['offSheet', 'missingPicture', 'overBarcode', 'finishNoShape', 'finishOffSheet', 'textOverflow']);
@@ -80,6 +85,9 @@ export function coverChecks(sheet: ProductionSheet, design: CoverDesignSettings 
   /** The zones whose text overflows its frame (the laid-out sheet's
    *  `frameOverflow` warnings). */
   overflow?: readonly string[];
+  /** An endpaper's pages that carry an advertisement: the glue strip and
+   *  the hinge hide its inner edge. */
+  endpaperAds?: readonly string[];
 }): CoverCheck[] {
   const out: CoverCheck[] = [];
   const add = (kind: CoverCheckKind, at: Omit<CoverCheck, 'kind' | 'severity'> = {}) =>
@@ -177,5 +185,7 @@ export function coverChecks(sheet: ProductionSheet, design: CoverDesignSettings 
   }
 
   for (const zone of new Set(options.overflow ?? [])) add('textOverflow', { zone });
+  const hinge = sheet.zones.find((z) => z.name === 'hinge');
+  if (hinge) for (const zone of options.endpaperAds ?? []) add('endpaperHinge', { zone, mm: Math.round((hinge.rect.width / 2) * 10) / 10 });
   return out.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1));
 }

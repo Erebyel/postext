@@ -4,7 +4,8 @@
  * the bundle's readers leave alone.
  *
  * - `production/production.json`: the versions, the cover's texts, its
- *   design and the paper; the cover gallery's pictures (by file) and
+ *   design, the paper and the endpapers (with the collection whose
+ *   advertisements they take); the cover gallery's pictures (by file) and
  *   traces; the logos of the user's library the design places; and the
  *   binding and paper profiles of the library the book names, so it opens
  *   the same on another computer.
@@ -18,12 +19,15 @@ import type { BindingProfile, PaperProfile } from 'postext';
 import { readBookProduction, type BookProduction } from './bookProduction.js';
 import { emptyGallery, type CoverGallery, type GalleryPicture, type GalleryTrace } from './coverGallery.js';
 import { sniffLogoMime, type LogoRecord } from './logoLibrary.js';
+import type { CatalogueAd, CollectionRecord } from './collections.js';
 import {
   getBookProduction,
   getCoverGallery,
+  listCollections,
   listLogos,
   listProfiles,
   putBookProduction,
+  putCollection,
   putCoverGallery,
   putLogos,
   putProfiles,
@@ -45,6 +49,8 @@ interface ProductionBundleJson {
   logos: (Omit<LogoRecord, 'bytes' | 'updatedAt'> & { file: string })[];
   bindings: BindingProfile[];
   papers: PaperProfile[];
+  /** The collection whose advertisements the endpapers take. */
+  collection?: Omit<CollectionRecord, 'ads' | 'updatedAt'> & { ads: (Omit<CatalogueAd, 'bytes'> & { file: string })[] };
 }
 
 /** The files of a book's production for its bundle (none when the book
@@ -52,7 +58,7 @@ interface ProductionBundleJson {
 export function productionBundleFiles(
   record: BookProduction | null,
   gallery: CoverGallery | null,
-  library: { logos: readonly LogoRecord[]; profiles: readonly StoredProfile[] },
+  library: { logos: readonly LogoRecord[]; profiles: readonly StoredProfile[]; collections?: readonly CollectionRecord[] },
 ): Record<string, Uint8Array> {
   if (!record?.versions.length && !gallery?.pictures.length) return {};
   const files: Record<string, Uint8Array> = {};
@@ -85,6 +91,18 @@ export function productionBundleFiles(
     bindings,
     papers,
   };
+  const collection = library.collections?.find((c) => c.id === record?.endpapers?.collectionId);
+  if (collection) {
+    json.collection = {
+      id: collection.id,
+      name: collection.name,
+      ads: collection.ads.map(({ bytes, ...a }) => {
+        const file = `${PRODUCTION_BUNDLE_DIR}files/ad-${a.id}.${EXT[a.mime] ?? 'bin'}`;
+        files[file] = bytes;
+        return { ...a, file };
+      }),
+    };
+  }
   files[PRODUCTION_BUNDLE_FILE] = new TextEncoder().encode(JSON.stringify(json));
   return files;
 }
@@ -100,6 +118,7 @@ export function readProductionBundle(projectId: string, files: ReadonlyMap<strin
   logos: LogoRecord[];
   bindings: BindingProfile[];
   papers: PaperProfile[];
+  collection?: CollectionRecord;
 } | null {
   const raw = files.get(PRODUCTION_BUNDLE_FILE);
   if (!raw) return null;
@@ -131,7 +150,17 @@ export function readProductionBundle(projectId: string, files: ReadonlyMap<strin
     .filter((l) => typeof l.id === 'string')
     .map(({ file: _f, ...l }) => ({ ...l, updatedAt: now }));
   const profiles = <T>(v: unknown): T[] => (Array.isArray(v) ? v.filter((p): p is T => isRecord(p) && typeof p.id === 'string' && typeof p.name === 'string') : []);
+  const c = isRecord(json.collection) ? json.collection : undefined;
+  const collection: CollectionRecord | undefined = c && typeof c.id === 'string' && typeof c.name === 'string'
+    ? {
+      id: c.id,
+      name: c.name,
+      ads: withBytes<CatalogueAd & { file: string }>(c.ads).filter((a) => typeof a.id === 'string').map(({ file: _f, ...a }) => ({ ...a, title: typeof a.title === 'string' ? a.title : a.id })),
+      updatedAt: now,
+    }
+    : undefined;
   return {
+    ...(collection ? { collection } : {}),
     record,
     gallery: { ...emptyGallery(projectId), pictures, traces },
     logos,
@@ -142,13 +171,14 @@ export function readProductionBundle(projectId: string, files: ReadonlyMap<strin
 
 /** The production of the book stored as `projectKey`, as bundle files. */
 export async function storedProductionBundleFiles(projectKey: string): Promise<Record<string, Uint8Array>> {
-  const [record, gallery, logos, profiles] = await Promise.all([
+  const [record, gallery, logos, profiles, collections] = await Promise.all([
     getBookProduction(projectKey).catch(() => null),
     getCoverGallery(projectKey).catch(() => null),
     listLogos().catch(() => []),
     listProfiles().catch(() => []),
+    listCollections().catch(() => []),
   ]);
-  return productionBundleFiles(record, gallery, { logos, profiles });
+  return productionBundleFiles(record, gallery, { logos, profiles, collections });
 }
 
 /** A bundle's production stored for the book `projectId`: its record and
@@ -156,7 +186,8 @@ export async function storedProductionBundleFiles(projectKey: string): Promise<R
 export async function storeProductionBundle(projectId: string, files: ReadonlyMap<string, Uint8Array>): Promise<boolean> {
   const read = readProductionBundle(projectId, files);
   if (!read) return false;
-  const [logos, profiles] = await Promise.all([listLogos().catch(() => []), listProfiles().catch(() => [])]);
+  const [logos, profiles, collections] = await Promise.all([listLogos().catch(() => []), listProfiles().catch(() => []), listCollections().catch(() => [])]);
+  if (read.collection && !collections.some((c) => c.id === read.collection!.id)) await putCollection(read.collection);
   const haveLogo = new Set(logos.map((l) => l.id));
   const haveProfile = new Set(profiles.map((p) => p.profile.id));
   await putBookProduction(read.record);

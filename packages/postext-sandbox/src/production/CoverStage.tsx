@@ -15,7 +15,8 @@ import { bookTrimMm, coverDocumentInput, isPromo, pickSheet, sheetChoices } from
 import { CoverCanvas } from './CoverCanvas.js';
 import { chooseCoverSheet, openCoverDesigner, useCoverSheet } from './coverDesignerStore.js';
 import { SHEET_LABEL, isCaseCoverOf } from './SheetPreview.js';
-import { useCoverGallery, useCoverWorkspace, useLogos, useMirror } from './useProduction.js';
+import { useCollections, useCoverGallery, useCoverWorkspace, useLogos, useMirror } from './useProduction.js';
+import { endpaperInput } from './collections.js';
 
 const NO_ITEMS: never[] = [];
 const noop = () => {};
@@ -27,23 +28,25 @@ export function CoverStage() {
   const { record, version, sheets } = useCoverWorkspace();
   const library = useLogos();
   const [gallery] = useCoverGallery();
+  const collections = useCollections();
   const chosen = useCoverSheet();
   const design = useMemo(() => record?.design ?? {}, [record]);
   const mirror = useMirror(design, bookResources, sheets?.measures.designMargin, gallery);
   const choices = sheets ? sheetChoices(sheets) : [];
   const shown = choices.includes(chosen) ? chosen : 'cover';
+  const endpaper = useMemo(() => endpaperInput(shown, record?.endpapers, collections), [shown, record?.endpapers, collections]);
   const sheet = useMemo(() => (sheets ? pickSheet(sheets, shown, bookTrimMm(config)) : null), [sheets, shown, config]);
   // A screen picture carries no finishes: they are plates for the press.
   const input = useMemo(
     () => (sheet && version && record
-      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption,
+      ? coverDocumentInput(sheet, version, record.texts, config, design, bookResources, { workIsbnLabel: labels.productionWorkIsbnCaption, ...(endpaper ? { endpaper } : {}),
         logos: library,
         gallery,
         ...(mirror ? { mirror } : {}),
         ...(isPromo(shown) ? { hidden: new Set(['finishes'] as const) } : {}),
       })
       : null),
-    [sheet, version, record, config, design, bookResources, library, gallery, mirror, shown, labels.productionWorkIsbnCaption],
+    [sheet, version, record, config, design, bookResources, library, gallery, mirror, shown, labels.productionWorkIsbnCaption, endpaper],
   );
 
   return (

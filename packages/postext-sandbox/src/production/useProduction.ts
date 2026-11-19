@@ -10,8 +10,9 @@ import type { MirrorPicture, ProductionVersion, Resource, VersionSheets } from '
 import { useBookPlan, useSandboxSelector } from '../context/SandboxContext.js';
 import { bookMetadata } from '../book/compose.js';
 import { WORKING_BOOK, emptyProduction, planPageCount, sheetsOf, type BookProduction } from './bookProduction.js';
-import { getBookProduction, getCoverGallery, listLogos, listProfiles, onProductionChange, putBookProduction, putCoverGallery, type StoredProfile } from './productionStore.js';
+import { getBookProduction, getCoverGallery, listCollections, listLogos, listProfiles, onProductionChange, putBookProduction, putCoverGallery, type StoredProfile } from './productionStore.js';
 import { emptyGallery, type CoverGallery } from './coverGallery.js';
+import type { CollectionRecord } from './collections.js';
 import type { LogoRecord } from './logoLibrary.js';
 import { loadMirrorPictures } from './coverImages.js';
 import type { CoverDesignSettings } from './bookProduction.js';
@@ -54,6 +55,19 @@ export function useProfiles(): StoredProfile[] {
   useEffect(() => {
     let alive = true;
     const load = () => { listProfiles().then((l) => { if (alive) setList(l); }, () => undefined); };
+    load();
+    const off = onProductionChange(load);
+    return () => { alive = false; off(); };
+  }, []);
+  return list;
+}
+
+/** The user's collections, kept current. */
+export function useCollections(): CollectionRecord[] {
+  const [list, setList] = useState<CollectionRecord[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () => { listCollections().then((l) => { if (alive) setList(l); }, () => undefined); };
     load();
     const off = onProductionChange(load);
     return () => { alive = false; off(); };
