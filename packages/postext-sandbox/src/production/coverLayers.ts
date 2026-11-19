@@ -386,17 +386,3 @@ export function elementUnder(sheet: ProductionSheet, elements: readonly CoverEle
   return undefined;
 }
 
-/** What the designer flags on the sheet before it is passed: an element
- *  that the sheet has no room for (off the sheet altogether), or one whose
- *  picture the book no longer has. */
-export type CoverElementIssue = { id: string; kind: 'offSheet' | 'missingPicture' };
-
-export function coverElementIssues(sheet: ProductionSheet, elements: readonly CoverElementSetting[], resources: readonly Resource[]): CoverElementIssue[] {
-  const out: CoverElementIssue[] = [];
-  for (const el of elements) {
-    const r = elementRect(sheet, el);
-    if (!r || r.x + r.width <= 0 || r.y + r.height <= 0 || r.x >= sheet.width || r.y >= sheet.height) out.push({ id: el.id, kind: 'offSheet' });
-    if (el.kind === 'image' && !resources.some((res) => res.id === el.resourceId)) out.push({ id: el.id, kind: 'missingPicture' });
-  }
-  return out;
-}

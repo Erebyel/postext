@@ -38,7 +38,7 @@ type Drag = { id: string; handle: Handle; start: SheetRect; x0: number; y0: numb
 /** Dragging a node or one of its handles: the path as it was, and where. */
 type PointDrag = { at: NodeRef; which: 'node' | 'in' | 'out'; start: CoverPath; x0: number; y0: number; moved: boolean };
 
-export function CoverCanvas({ sheet, input, mode, elements, clearance, selected, points = false, onSelect, onChange, onDelete, label, failedLabel }: {
+export function CoverCanvas({ sheet, input, mode, elements, clearance, selected, points = false, onSelect, onChange, onDelete, onLaid, label, failedLabel }: {
   sheet: ProductionSheet;
   input: ReturnType<typeof coverDocumentInput>;
   mode: 'preview' | 'edit';
@@ -51,10 +51,16 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
   onSelect: (id: string | null) => void;
   onChange: (el: CoverElementSetting) => void;
   onDelete: (id: string) => void;
+  /** The sheet as laid out, each time it is (its warnings: a text that
+   *  does not fit). */
+  onLaid?: (doc: VDTDocument) => void;
   label: string;
   failedLabel: string;
 }) {
   const { build } = useLayoutWorker('preview');
+  // The latest callback, without laying the sheet out again when it changes.
+  const onLaidRef = useRef(onLaid);
+  onLaidRef.current = onLaid;
   const [doc, setDoc] = useState<VDTDocument | null>(null);
   const [failed, setFailed] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -78,6 +84,7 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
           const laid = await build({ markdown: input.markdown, resources: input.resources }, input.config);
           if (alive) {
             setDoc(laid);
+            onLaidRef.current?.(laid);
             setFailed(false);
           }
         } catch (err) {

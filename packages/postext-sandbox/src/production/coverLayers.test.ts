@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveBindingMeasures, softcoverSheet, type Resource } from 'postext';
 import {
-  coverElementIssues,
   designShowing,
   elementAt,
   elementRect,
@@ -42,11 +41,6 @@ describe('cover layers', () => {
     expect(elementUnder(sheet, [box('a'), box('b')], r.x + 1, r.y + 1)?.id).toBe('b');
     expect(restack([box('a'), box('b')], 'a', 1).map((e) => e.id)).toEqual(['b', 'a']);
     expect(restack([box('a'), box('b')], 'b', 1).map((e) => e.id)).toEqual(['a', 'b']);
-  });
-
-  it('flags an element off the sheet and a picture the book has lost', () => {
-    const issues = coverElementIssues(sheet, [box('a', { x: 5000 }), { ...box('b'), kind: 'image', resourceId: 'gone' }], []);
-    expect(issues).toEqual([{ id: 'a', kind: 'offSheet' }, { id: 'b', kind: 'missingPicture' }]);
   });
 
   it('leaves a hidden layer out of the sheet', () => {

@@ -23,6 +23,10 @@ import { createPdfFontProvider } from '../viewport/pdf/pdfFontProvider.js';
 import { useLayoutWorker } from '../worker/useLayoutWorker.js';
 import { promoImage } from './promoImage.js';
 import { buildCoverIdml, coverLayerNamesOf } from './coverIdml.js';
+import { CoverChecksList } from './CoverChecksList.js';
+import { coverChecks, overflowZones, type CoverCheck } from './coverChecks.js';
+import { galleryResourceId } from './coverGallery.js';
+import { logoResourceId } from './logoLibrary.js';
 import {
   bookTrimMm,
   isPromo,
@@ -31,12 +35,21 @@ import {
   sheetFileName,
   type BookProduction,
   type CoverDesignSettings,
+  type CoverTextZone,
   type SheetChoice,
 } from './bookProduction.js';
 import { HEADING, mm1, type Labels } from './productionUi.js';
 import { registerCoverImages } from './coverImages.js';
 import { useCoverGallery, useLogos, useMirror } from './useProduction.js';
 
+
+const ZONE_LABEL: Record<CoverTextZone, keyof Labels> = {
+  front: 'productionZoneFront',
+  spine: 'productionZoneSpine',
+  back: 'productionZoneBack',
+  flapFront: 'productionZoneFlapFront',
+  flapBack: 'productionZoneFlapBack',
+};
 
 export const SHEET_LABEL: Record<SheetChoice, keyof Labels> = {
   cover: 'productionSheetCover',
@@ -88,6 +101,26 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
     [sheet, version, texts, config, design, bookResources, library, gallery, shown, mirror],
   );
   const isCaseCover = sheet.kind === 'case';
+  // What to put right before printing (./coverChecks.ts), on the sheet as
+  // laid out last.
+  const checks = useMemo(() => coverChecks(sheet, design, {
+    pictures: new Set([...bookResources.map((r) => r.id), ...gallery.pictures.map((p) => galleryResourceId(p.id)), ...library.map((l) => logoResourceId(l.id))]),
+    ...(version.isbn ? { isbn: version.isbn } : {}),
+    ...(version.isbnAddOn ? { isbnAddOn: version.isbnAddOn } : {}),
+    ...(config.print?.standard ? { standard: config.print.standard } : {}),
+    mirror: !!input.cover.designed,
+    overflow: built?.input === input ? overflowZones(built.doc) : [],
+  }), [sheet, design, bookResources, gallery, library, version, config.print?.standard, input, built]);
+  const checkName = (c: CoverCheck): string => {
+    if (c.zone) return String(labels[ZONE_LABEL[c.zone as CoverTextZone] ?? 'productionZoneFront']);
+    const items = [...(design?.elements ?? []), ...(design?.effects ?? []), ...(design?.logos ?? []), ...(design?.finishes ?? [])];
+    const item = items.find((x) => x.id === c.id);
+    if (item?.name) return item.name;
+    if (c.layer === 'finishes') return labels.coverItemFinish;
+    if (c.layer === 'logos') return labels.coverItemLogo;
+    if (c.layer === 'effects') return labels.coverItemEffect;
+    return labels.coverElementPicture;
+  };
 
   useEffect(() => {
     let alive = true;
@@ -218,6 +251,9 @@ export function SheetPreview({ config, version, texts, design, bookResources, sh
       <div ref={wrapRef} className="w-full overflow-hidden rounded border border-(--rule) bg-white">
         {failed ? <p className="m-0 p-2 text-xs text-(--slate)">{labels.productionPreviewFailed}</p> : <canvas ref={canvasRef} className="block" />}
       </div>
+      {!isPromo(shown) && sheet.kind !== 'endpaper' && (
+        <CoverChecksList checks={checks} labels={labels} nameOf={checkName} />
+      )}
       <div className="flex justify-end gap-2">
         {!isPromo(shown) && (
           <Button variant="outline" size="sm" disabled={!built || built.input !== input || busy} onClick={() => void exportIdml()}>

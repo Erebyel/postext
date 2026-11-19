@@ -5722,8 +5722,6 @@ export interface SandboxLabels {
   coverGuidesLegend: string;
   coverChecks: string;
   coverChecksOk: string;
-  coverIssueOffSheet: string;
-  coverIssueMissingPicture: string;
   coverZoneJoint: string;
   coverLayerEffectsHint: string;
   coverLayerLogosHint: string;
@@ -5750,6 +5748,18 @@ export interface SandboxLabels {
   coverFinishShapeBox: string;
   coverFinishShapeElement: string;
   coverFinishPlateHint: string;
+  coverChecksCount: string;
+  coverCheckOffSheet: string;
+  coverCheckMissingPicture: string;
+  coverCheckCrossesFold: string;
+  coverCheckShortOfBleed: string;
+  coverCheckClearance: string;
+  coverCheckOverBarcode: string;
+  coverCheckTransparency: string;
+  coverCheckFinishNoShape: string;
+  coverCheckFinishOffSheet: string;
+  coverCheckFinishNoInk: string;
+  coverCheckTextOverflow: string;
   coverIdmlImport: string;
   coverIdmlHint: string;
   coverIdmlNoFile: string;

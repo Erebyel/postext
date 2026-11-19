@@ -27,7 +27,6 @@ import {
   newShape,
   COVER_LAYERS,
   FINISH_KINDS,
-  coverElementIssues,
   elementAt,
   elementRect,
   finishAsElement,
@@ -45,6 +44,8 @@ import {
 } from './coverLayers.js';
 import { CoverCanvas } from './CoverCanvas.js';
 import { DesignSection } from './CoverDesignSections.js';
+import { CoverChecksList } from './CoverChecksList.js';
+import { coverChecks, overflowZones, type CoverCheck } from './coverChecks.js';
 import { CoverEffectsFields } from './CoverEffectsFields.js';
 import { outlineAsPath } from './pathEditing.js';
 import { galleryPictureOf, galleryPicturesFrom, galleryResource, type CoverGallery, type GalleryTrace } from './coverGallery.js';
@@ -144,7 +145,15 @@ function CoverDesigner() {
     () => [...pictures, ...bookResources.filter((r) => isPicture(r) && r.id === design.image?.resourceId)],
     [pictures, bookResources, design.image?.resourceId],
   );
-  const issues = useMemo(() => (sheet ? coverElementIssues(sheet, [...elements, ...effects], allResources) : []), [sheet, elements, effects, allResources]);
+  const [overflow, setOverflow] = useState<string[]>([]);
+  const checks = useMemo(() => (sheet ? coverChecks(sheet, design, {
+    pictures: new Set([...allResources.map((r) => r.id), ...library.map((l) => logoResourceId(l.id))]),
+    ...(version?.isbn ? { isbn: version.isbn } : {}),
+    ...(version?.isbnAddOn ? { isbnAddOn: version.isbnAddOn } : {}),
+    ...(config.print?.standard ? { standard: config.print.standard } : {}),
+    mirror: !!input?.cover.designed,
+    overflow,
+  }) : []), [sheet, design, allResources, library, version, config.print?.standard, input, overflow]);
 
   const setDesign = (key: 'elements' | 'effects' | 'logos' | 'finishes', next: unknown[]) => {
     if (!record) return;
@@ -212,6 +221,12 @@ function CoverDesigner() {
     if (layer === 'logos') return logoName(item as CoverLogoSetting);
     const el = item as CoverElementSetting;
     return el.kind === 'image' ? pictureName(el.resourceId) : el.kind === 'shape' ? labels.coverElementShape : labels.coverElementBox;
+  };
+  const checkName = (c: CoverCheck): string => {
+    if (c.zone) return zoneName(c.zone as CoverZoneName);
+    const layer = c.layer;
+    const item = layer === 'finishes' ? finishes.find((f) => f.id === c.id) : [...elements, ...effects, ...logos].find((e) => e.id === c.id);
+    return layer && item ? itemName(layer, item) : (c.id ?? '');
   };
   const shapeTargets = [...elements, ...effects, ...logos].map((e) => ({
     value: e.id,
@@ -365,6 +380,7 @@ function CoverDesigner() {
                   onSelect={setSelected}
                   onChange={changeItem}
                   onDelete={deleteItem}
+                  onLaid={(doc) => setOverflow(overflowZones(doc))}
                   label={labels.coverDesignerTitle}
                   failedLabel={labels.productionPreviewFailed}
                 />
@@ -374,15 +390,18 @@ function CoverDesigner() {
                 {mode === 'preview' ? (
                   <>
                     <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-(--slate)">{labels.coverChecks}</h3>
-                    {issues.length === 0 ? (
-                      <p className="m-0">{labels.coverChecksOk}</p>
-                    ) : (
-                      <ul className="m-0 flex flex-col gap-1 ps-4">
-                        {issues.map((i) => (
-                          <li key={`${i.id}-${i.kind}`}>{i.kind === 'offSheet' ? labels.coverIssueOffSheet : labels.coverIssueMissingPicture}</li>
-                        ))}
-                      </ul>
-                    )}
+                    <CoverChecksList
+                      checks={checks}
+                      labels={labels}
+                      nameOf={checkName}
+                      onPick={(c) => {
+                        if (!c.layer || !c.id) return;
+                        setActive(c.layer);
+                        setOpen(c.layer);
+                        setSelected(c.id);
+                        setMode('edit');
+                      }}
+                    />
                     <p className="m-0 text-(--slate)">{labels.coverGuidesLegend}</p>
                     {input.cover.designed && <p className="m-0 text-(--slate)">{labels.coverGuideMirror}</p>}
                     {input.cover.mirrorSkipped && <p className="m-0">{fill(labels.coverMirrorSkipped, { pictures: input.cover.mirrorSkipped.map(pictureName).join(', ') })}</p>}
