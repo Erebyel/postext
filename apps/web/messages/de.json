@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "Eigener Rahmen",
     "coverFinishShapeElement": "Die eines Elements",
     "coverFinishPlateHint": "Im Druck-PDF ist sie eine eigene Platte im Überdruck; die eines Bildes folgt seiner Kontur, wenn es eine hat.",
+    "productionPictureUnreadable": "Diese Datei ist kein hier lesbares Bild: PNG, JPEG, SVG, TIFF, Illustrator (AI) oder PDF.",
+    "productionPicturePostscript": "__name__ ist PostScript (eine EPS oder eine ohne PDF gespeicherte AI), die der Browser nicht lesen kann. Speichern Sie sie in Illustrator als PDF oder als AI mit „PDF-kompatible Datei erstellen“ und laden Sie diese hoch.",
     "coverUndo": "Rückgängig",
     "coverRedo": "Wiederholen",
     "coverElementDuplicate": "Duplizieren",

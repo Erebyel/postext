@@ -5785,6 +5785,8 @@ export interface SandboxLabels {
   coverFinishShapeBox: string;
   coverFinishShapeElement: string;
   coverFinishPlateHint: string;
+  productionPictureUnreadable: string;
+  productionPicturePostscript: string;
   coverUndo: string;
   coverRedo: string;
   coverElementDuplicate: string;

@@ -11,13 +11,13 @@ import { Download, Plus, Trash2, Upload } from 'lucide-react';
 import { Button, ConfirmPopover, IconButton, NumberField, Select, announce } from '../ui/index.js';
 import { downloadBytes } from '../storage/persistence.js';
 import { fill } from '../print/fillTokens.js';
+import { PICTURE_ACCEPT, readPictureFile } from './printFiles.js';
 import {
   DEFAULT_LOGO_CLEARANCE,
   LOGO_GROUPS,
   exportLogos,
   importLogos,
   newLogoId,
-  sniffLogoMime,
   type LogoGroup,
   type LogoRecord,
 } from './logoLibrary.js';
@@ -48,12 +48,12 @@ export function LogoLibrary({ labels }: { labels: Labels }) {
     e.target.value = '';
     const added: LogoRecord[] = [];
     for (const file of files) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const mime = sniffLogoMime(bytes);
-      if (!mime) {
-        announce(labels.productionLogoUnreadable);
+      const got = await readPictureFile(file);
+      if (!got || got === 'postscript') {
+        announce(got ? fill(labels.productionPicturePostscript, { name: file.name }) : labels.productionPictureUnreadable);
         continue;
       }
+      const { bytes, mime } = got;
       const size = await pictureSize(bytes, mime).catch(() => ({ width: 100, height: 100 }));
       added.push({
         id: newLogoId(),
@@ -135,7 +135,7 @@ export function LogoLibrary({ labels }: { labels: Labels }) {
           </Button>
         )}
       </div>
-      <input ref={uploadRef} type="file" multiple accept="image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
+      <input ref={uploadRef} type="file" multiple accept={PICTURE_ACCEPT} className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
       <input ref={importRef} type="file" accept=".json,application/json" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void importFile(e)} />
     </Fold>
   );

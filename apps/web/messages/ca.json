@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "Requadre propi",
     "coverFinishShapeElement": "La d’un element",
     "coverFinishPlateHint": "Al PDF per a impremta és una planxa pròpia en sobreimpressió; el d’una imatge en segueix el contorn quan la imatge en té.",
+    "productionPictureUnreadable": "Aquest fitxer no és una imatge que es pugui llegir aquí: PNG, JPEG, SVG, TIFF, Illustrator (AI) o PDF.",
+    "productionPicturePostscript": "__name__ és PostScript (un EPS, o un AI desat sense PDF) i el navegador no el pot llegir. Desa’l des d’Illustrator com a PDF, o com a AI amb «Crea un fitxer compatible amb PDF» activat, i puja aquest.",
     "coverUndo": "Desfés",
     "coverRedo": "Refés",
     "coverElementDuplicate": "Duplica",

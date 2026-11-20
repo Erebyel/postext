@@ -18,6 +18,7 @@ import {
   type ZoneStyle,
 } from './bookProduction.js';
 import { INPUT, type Labels } from './productionUi.js';
+import { PICTURE_ACCEPT } from './printFiles.js';
 
 const DESIGN_ZONE_LABEL: Record<DesignZone, keyof Labels> = {
   front: 'productionZoneFront',
@@ -109,7 +110,7 @@ export function DesignSection({ design, resources, bookTextHex, labels, onChange
       {onUpload && (
         <div>
           <Button variant="outline" size="sm" icon={<Plus size={13} />} onClick={() => uploadRef.current?.click()}>{labels.coverUploadPicture}</Button>
-          <input ref={uploadRef} type="file" accept="image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
+          <input ref={uploadRef} type="file" accept={PICTURE_ACCEPT} className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
         </div>
       )}
       {design.image && (

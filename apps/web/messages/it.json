@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "Riquadro proprio",
     "coverFinishShapeElement": "Quella di un elemento",
     "coverFinishPlateHint": "Nel PDF per la tipografia è una lastra propria in sovrastampa; quella di un’immagine ne segue il contorno quando l’immagine ne ha uno.",
+    "productionPictureUnreadable": "Questo file non è un’immagine leggibile qui: PNG, JPEG, SVG, TIFF, Illustrator (AI) o PDF.",
+    "productionPicturePostscript": "__name__ è PostScript (un EPS, o un AI salvato senza PDF) e il browser non può leggerlo. Salvalo da Illustrator come PDF, o come AI con «Crea file compatibile PDF» attivo, e carica quello.",
     "coverUndo": "Annulla",
     "coverRedo": "Ripeti",
     "coverElementDuplicate": "Duplica",

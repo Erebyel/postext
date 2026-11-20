@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "独立方框",
     "coverFinishShapeElement": "某个元素的",
     "coverFinishPlateHint": "在印刷 PDF 中它是独立的叠印版；图片的工艺在图片有轮廓时沿其轮廓。",
+    "productionPictureUnreadable": "该文件不是此处可读取的图像：PNG、JPEG、SVG、TIFF、Illustrator（AI）或 PDF。",
+    "productionPicturePostscript": "__name__ 是 PostScript 文件（EPS，或未含 PDF 的 AI），浏览器无法读取。请在 Illustrator 中另存为 PDF，或勾选“创建 PDF 兼容文件”另存为 AI，再上传。",
     "coverUndo": "撤销",
     "coverRedo": "重做",
     "coverElementDuplicate": "复制",

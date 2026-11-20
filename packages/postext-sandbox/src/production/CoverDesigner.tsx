@@ -56,6 +56,8 @@ import { outlineAsPath } from './pathEditing.js';
 import { galleryPictureOf, galleryPicturesFrom, galleryResource, galleryResourceId, type CoverGallery, type GalleryPicture, type GalleryTrace } from './coverGallery.js';
 import { maskedPicture } from './coverMasks.js';
 import { pictureSize } from './coverImages.js';
+import { PICTURE_ACCEPT, readPictureFile } from './printFiles.js';
+import { announce } from '../ui/announcer.js';
 import { closeCoverDesigner, useCoverDesignerOpen } from './coverDesignerStore.js';
 import { DEFAULT_LOGO_CLEARANCE, logoResourceId, type LogoRecord } from './logoLibrary.js';
 import { useCoverGallery, useCoverWorkspace, useLogos, useMirror } from './useProduction.js';
@@ -444,8 +446,11 @@ function CoverDesigner() {
                           labels={labels}
                           onChange={(d) => update({ ...record, design: d })}
                           onUpload={async (file) => {
-                            const { pictures: added } = await galleryPicturesFrom([file], pictureSize);
-                            if (!added[0]) return undefined;
+                            const { pictures: added, postscript } = await galleryPicturesFrom([file], pictureSize, readPictureFile);
+                            if (!added[0]) {
+                              announce(postscript.length ? fill(labels.productionPicturePostscript, { name: file.name }) : labels.productionPictureUnreadable);
+                              return undefined;
+                            }
                             updateGallery({ ...gallery, pictures: [...gallery.pictures, ...added] });
                             return galleryResourceId(added[0].id);
                           }}
@@ -661,14 +666,16 @@ function GalleryUpload({ gallery, labels, onAdded }: { gallery: CoverGallery; la
         ref={ref}
         type="file"
         multiple
-        accept="image/png,image/jpeg,image/svg+xml,.svg"
+        accept={PICTURE_ACCEPT}
         className="hidden"
         aria-hidden="true"
         tabIndex={-1}
         onChange={(e) => {
           const files = [...(e.target.files ?? [])];
           e.target.value = '';
-          void galleryPicturesFrom(files, pictureSize).then(({ pictures }) => {
+          void galleryPicturesFrom(files, pictureSize, readPictureFile).then(({ pictures, unreadable, postscript }) => {
+            if (postscript.length > 0) announce(fill(labels.productionPicturePostscript, { name: postscript.join(', ') }));
+            if (unreadable > 0) announce(labels.productionPictureUnreadable);
             if (pictures[0]) onAdded({ ...gallery, pictures: [...gallery.pictures, ...pictures] }, pictures[0]);
           });
         }}

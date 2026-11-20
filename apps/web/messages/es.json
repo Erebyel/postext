@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "Recuadro propio",
     "coverFinishShapeElement": "La de un elemento",
     "coverFinishPlateHint": "En el PDF para imprenta es una plancha propia en sobreimpresión; el de una imagen sigue su contorno cuando la imagen lo tiene.",
+    "productionPictureUnreadable": "Ese archivo no es una imagen que se pueda leer aquí: PNG, JPEG, SVG, TIFF, Illustrator (AI) o PDF.",
+    "productionPicturePostscript": "__name__ es PostScript (un EPS, o un AI guardado sin PDF) y el navegador no puede leerlo. Guárdalo desde Illustrator como PDF, o como AI con «Crear archivo compatible con PDF» activado, y sube ese.",
     "coverUndo": "Deshacer",
     "coverRedo": "Rehacer",
     "coverElementDuplicate": "Duplicar",

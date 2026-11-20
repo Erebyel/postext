@@ -13,6 +13,7 @@ import { Button, ConfirmPopover, IconButton, announce } from '../ui/index.js';
 import { fill } from '../print/fillTokens.js';
 import { galleryPicturesFrom, type GalleryPicture, type GalleryTrace } from './coverGallery.js';
 import { pictureSize, useObjectUrl } from './coverImages.js';
+import { PICTURE_ACCEPT, readPictureFile } from './printFiles.js';
 import { Fold } from './Fold.js';
 import { INPUT, type Labels } from './productionUi.js';
 import { TraceDialog } from './TraceDialog.js';
@@ -53,8 +54,9 @@ export function CoverGallerySection({ labels }: { labels: Labels }) {
   const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = [...(e.target.files ?? [])];
     e.target.value = '';
-    const { pictures, unreadable } = await galleryPicturesFrom(files, pictureSize);
-    if (unreadable > 0) announce(labels.productionLogoUnreadable);
+    const { pictures, unreadable, postscript } = await galleryPicturesFrom(files, pictureSize, readPictureFile);
+    if (postscript.length > 0) announce(fill(labels.productionPicturePostscript, { name: postscript.join(', ') }));
+    if (unreadable > 0) announce(labels.productionPictureUnreadable);
     if (pictures.length > 0) update({ ...gallery, pictures: [...gallery.pictures, ...pictures] });
   };
   const rename = <T extends { id: string; name: string }>(list: T[], id: string, name: string): T[] => list.map((x) => (x.id === id ? { ...x, name } : x));
@@ -103,7 +105,7 @@ export function CoverGallerySection({ labels }: { labels: Labels }) {
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" icon={<Plus size={13} />} onClick={() => uploadRef.current?.click()}>{labels.productionGalleryUpload}</Button>
       </div>
-      <input ref={uploadRef} type="file" multiple accept="image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
+      <input ref={uploadRef} type="file" multiple accept={PICTURE_ACCEPT} className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
 
       {gallery.traces.length > 0 && (
         <>

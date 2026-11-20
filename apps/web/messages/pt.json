@@ -6202,6 +6202,8 @@
     "coverFinishShapeBox": "Retângulo próprio",
     "coverFinishShapeElement": "A de um elemento",
     "coverFinishPlateHint": "No PDF para a gráfica é uma chapa própria em sobreimpressão; a de uma imagem segue o seu contorno quando a imagem o tem.",
+    "productionPictureUnreadable": "Esse ficheiro não é uma imagem que se possa ler aqui: PNG, JPEG, SVG, TIFF, Illustrator (AI) ou PDF.",
+    "productionPicturePostscript": "__name__ é PostScript (um EPS, ou um AI guardado sem PDF) e o navegador não o consegue ler. Guarde-o no Illustrator como PDF, ou como AI com «Criar ficheiro compatível com PDF» ativado, e carregue esse.",
     "coverUndo": "Desfazer",
     "coverRedo": "Refazer",
     "coverElementDuplicate": "Duplicar",

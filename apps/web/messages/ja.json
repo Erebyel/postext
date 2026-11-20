@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "独自の枠",
     "coverFinishShapeElement": "要素の形",
     "coverFinishPlateHint": "入稿用PDFではオーバープリントの独立した版になります。画像の加工は、画像に輪郭があればそれに沿います。",
+    "productionPictureUnreadable": "このファイルはここで読める画像ではありません（PNG、JPEG、SVG、TIFF、Illustrator（AI）、PDF）。",
+    "productionPicturePostscript": "__name__ は PostScript（EPS、または PDF なしで保存した AI）のため、ブラウザーでは読めません。Illustrator で PDF として、または「PDF 互換ファイルを作成」をオンにした AI として保存し、そちらをアップロードしてください。",
     "coverUndo": "元に戻す",
     "coverRedo": "やり直す",
     "coverElementDuplicate": "複製",

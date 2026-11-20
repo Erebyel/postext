@@ -5628,6 +5628,8 @@ export const DEFAULT_LABELS: SandboxLabels = {
   coverFinishShapeBox: "Its own box",
   coverFinishShapeElement: "An element’s",
   coverFinishPlateHint: "In the PDF for the printer it is a plate of its own, overprinting; a picture’s finish follows its outline when the picture has one.",
+  productionPictureUnreadable: "That file is not a picture these libraries read: PNG, JPEG, SVG, TIFF, Illustrator (AI) or PDF.",
+  productionPicturePostscript: "__name__ is PostScript (an EPS, or an AI saved without PDF), which a browser cannot read. Save it from Illustrator as a PDF, or as an AI with “Create PDF Compatible File” on, and upload that.",
   coverUndo: "Undo",
   coverRedo: "Redo",
   coverElementDuplicate: "Duplicate",

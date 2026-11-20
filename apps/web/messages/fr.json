@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "Cadre propre",
     "coverFinishShapeElement": "Celle d’un élément",
     "coverFinishPlateHint": "Dans le PDF pour l’imprimeur, c’est une plaque propre en surimpression ; celle d’une image suit son contour quand l’image en a un.",
+    "productionPictureUnreadable": "Ce fichier n’est pas une image lisible ici : PNG, JPEG, SVG, TIFF, Illustrator (AI) ou PDF.",
+    "productionPicturePostscript": "__name__ est en PostScript (un EPS, ou un AI enregistré sans PDF) et le navigateur ne peut pas le lire. Enregistrez-le depuis Illustrator en PDF, ou en AI avec « Créer un fichier compatible PDF » activé, puis importez celui-ci.",
     "coverUndo": "Annuler",
     "coverRedo": "Rétablir",
     "coverElementDuplicate": "Dupliquer",

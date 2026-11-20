@@ -51,6 +51,7 @@ import { CoverGallerySection } from './CoverGallerySection.js';
 import { CoverIdmlImportButton } from './CoverIdmlImportButton.js';
 import { galleryPicturesFrom, galleryResource, galleryResourceId } from './coverGallery.js';
 import { pictureSize } from './coverImages.js';
+import { readPictureFile } from './printFiles.js';
 import { useBookProduction, useCollections, useCoverGallery, useLogos, useProfiles } from './useProduction.js';
 import { CoverTemplatesSection } from './CoverTemplatesSection.js';
 import { CollectionsSection } from './CollectionsSection.js';
@@ -199,9 +200,9 @@ export function ProductionPanel() {
   // A picture uploaded where the design asks for one goes into the cover's
   // gallery.
   const uploadToGallery = async (file: File) => {
-    const { pictures } = await galleryPicturesFrom([file], pictureSize);
+    const { pictures, postscript } = await galleryPicturesFrom([file], pictureSize, readPictureFile);
     if (!pictures[0]) {
-      announce(labels.productionLogoUnreadable);
+      announce(postscript.length ? labels.productionPicturePostscript.replace('__name__', file.name) : labels.productionPictureUnreadable);
       return undefined;
     }
     updateGallery({ ...gallery, pictures: [...gallery.pictures, ...pictures] });

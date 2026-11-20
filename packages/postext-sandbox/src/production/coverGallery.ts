@@ -95,24 +95,41 @@ export function newGalleryId(kind: 'pic' | 'trace'): string {
   return `${kind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** Pictures read from files, for the gallery: the ones whose bytes are a
- *  PNG, a JPEG or an SVG, named after their file. `size` reads a
- *  picture's size in px (`pictureSize`). */
+/** A file read as a picture: its bytes, 'postscript' for an EPS, or
+ *  undefined (`readPictureFile`, which makes print files PNG). */
+export type PictureReader = (file: File) => Promise<{ bytes: Uint8Array; mime: LogoMime } | 'postscript' | undefined>;
+
+/** A file's bytes when they are a PNG, a JPEG or an SVG. */
+const readAsIs: PictureReader = async (file) => {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const mime = sniffLogoMime(bytes);
+  return mime ? { bytes, mime } : undefined;
+};
+
+/** Pictures read from files, for the gallery, named after their file;
+ *  the files that are no picture counted, and the PostScript ones (EPS)
+ *  named, to say how to save them. `size` reads a picture's size in px
+ *  (`pictureSize`), `read` its bytes. */
 export async function galleryPicturesFrom(
   files: readonly File[],
   size: (bytes: Uint8Array, mime: LogoMime) => Promise<{ width: number; height: number }>,
-): Promise<{ pictures: GalleryPicture[]; unreadable: number }> {
+  read: PictureReader = readAsIs,
+): Promise<{ pictures: GalleryPicture[]; unreadable: number; postscript: string[] }> {
   const pictures: GalleryPicture[] = [];
+  const postscript: string[] = [];
   let unreadable = 0;
   for (const file of files) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const mime = sniffLogoMime(bytes);
-    if (!mime) {
+    const got = await read(file);
+    if (got === 'postscript') {
+      postscript.push(file.name);
+      continue;
+    }
+    if (!got) {
       unreadable++;
       continue;
     }
-    const wh = await size(bytes, mime).catch(() => ({ width: 100, height: 100 }));
-    pictures.push({ id: newGalleryId('pic'), name: file.name.replace(/\.[^.]+$/, ''), mime, bytes, ...wh, updatedAt: Date.now() });
+    const wh = await size(got.bytes, got.mime).catch(() => ({ width: 100, height: 100 }));
+    pictures.push({ id: newGalleryId('pic'), name: file.name.replace(/\.[^.]+$/, ''), mime: got.mime, bytes: got.bytes, ...wh, updatedAt: Date.now() });
   }
-  return { pictures, unreadable };
+  return { pictures, unreadable, postscript };
 }

@@ -11,9 +11,9 @@ import { useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button, ConfirmPopover, IconButton, announce } from '../ui/index.js';
 import { fill } from '../print/fillTokens.js';
+import { PICTURE_ACCEPT, readPictureFile } from './printFiles.js';
 import { newCollectionId, type CatalogueAd, type CollectionRecord } from './collections.js';
 import { pictureSize, useObjectUrl } from './coverImages.js';
-import { sniffLogoMime } from './logoLibrary.js';
 import { Fold } from './Fold.js';
 import { deleteCollection, putCollection } from './productionStore.js';
 import { INPUT, type Labels } from './productionUi.js';
@@ -36,12 +36,12 @@ function CollectionCard({ collection, labels }: { collection: CollectionRecord; 
     e.target.value = '';
     const added: CatalogueAd[] = [];
     for (const file of files) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const mime = sniffLogoMime(bytes);
-      if (!mime) {
-        announce(labels.productionLogoUnreadable);
+      const got = await readPictureFile(file);
+      if (!got || got === 'postscript') {
+        announce(got ? fill(labels.productionPicturePostscript, { name: file.name }) : labels.productionPictureUnreadable);
         continue;
       }
+      const { bytes, mime } = got;
       const size = await pictureSize(bytes, mime).catch(() => ({ width: 100, height: 140 }));
       added.push({ id: newCollectionId('ad'), title: file.name.replace(/\.[^.]+$/, ''), mime, bytes, ...size });
     }
@@ -80,7 +80,7 @@ function CollectionCard({ collection, labels }: { collection: CollectionRecord; 
       <div>
         <Button variant="outline" size="sm" icon={<Plus size={13} />} onClick={() => ref.current?.click()}>{labels.productionAdUpload}</Button>
       </div>
-      <input ref={ref} type="file" multiple accept="image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
+      <input ref={ref} type="file" multiple accept={PICTURE_ACCEPT} className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
     </li>
   );
 }

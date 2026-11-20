@@ -6212,6 +6212,8 @@
     "coverFinishShapeBox": "إطار خاص",
     "coverFinishShapeElement": "شكل عنصر",
     "coverFinishPlateHint": "في ملف PDF للمطبعة هو لوح مستقل بطباعة فوقية؛ ولمسة الصورة تتبع حدودها إن كان لها حدود.",
+    "productionPictureUnreadable": "هذا الملف ليس صورة يمكن قراءتها هنا: PNG أو JPEG أو SVG أو TIFF أو Illustrator (AI) أو PDF.",
+    "productionPicturePostscript": "__name__ بصيغة PostScript (ملف EPS أو AI محفوظ دون PDF) ولا يستطيع المتصفح قراءته. احفظه من Illustrator بصيغة PDF أو AI مع تفعيل «إنشاء ملف متوافق مع PDF» ثم ارفعه.",
     "coverUndo": "تراجع",
     "coverRedo": "إعادة",
     "coverElementDuplicate": "تكرار",
