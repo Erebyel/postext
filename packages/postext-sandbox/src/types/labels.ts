@@ -5785,6 +5785,10 @@ export interface SandboxLabels {
   coverFinishShapeBox: string;
   coverFinishShapeElement: string;
   coverFinishPlateHint: string;
+  coverTemplateFromIdml: string;
+  coverTemplateFromIdmlHint: string;
+  coverTemplateApplyNow: string;
+  coverTemplateLater: string;
   coverTemplatePaint: string;
   coverTemplates: string;
   coverTemplatesIntro: string;
@@ -5805,7 +5809,6 @@ export interface SandboxLabels {
   coverTemplatesImported: string;
   coverTemplatesImportFailed: string;
   coverIdmlSaveTemplate: string;
-  coverIdmlTemplateHint: string;
   coverIdmlBarcode: string;
   coverIdmlGeneric: string;
   coverIdmlFitted: string;

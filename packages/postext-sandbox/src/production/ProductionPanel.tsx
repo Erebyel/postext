@@ -354,7 +354,7 @@ export function ProductionPanel() {
           {version && record && (
             <div className="flex flex-col gap-2">
               <CoverGallerySection labels={labels} />
-              <CoverTemplatesSection record={record} gallery={gallery} library={logoLibrary} labels={labels} onRecord={update} onGallery={updateGallery} />
+              <CoverTemplatesSection record={record} sheet={ready && complete ? pickSheet(ready, 'cover', bookTrimMm(config)) : null} gallery={gallery} library={logoLibrary} labels={labels} onRecord={update} onGallery={updateGallery} />
               {ready?.endpapers && (
                 <EndpapersSection
                   endpapers={record.endpapers}

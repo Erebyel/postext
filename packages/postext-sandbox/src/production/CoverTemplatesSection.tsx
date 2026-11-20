@@ -8,7 +8,8 @@
  */
 
 import { useRef, useState } from 'react';
-import { Download, ImageOff, Trash2, Upload } from 'lucide-react';
+import { Download, FileUp, ImageOff, Trash2, Upload } from 'lucide-react';
+import type { ProductionSheet } from 'postext';
 import { Button, ConfirmPopover, IconButton, announce, cn } from '../ui/index.js';
 import { fill } from '../print/fillTokens.js';
 import { downloadBytes } from '../storage/persistence.js';
@@ -31,6 +32,9 @@ import { INPUT, type Labels } from './productionUi.js';
 import { useCoverTemplates } from './useProduction.js';
 import { useObjectUrl } from './coverImages.js';
 import { useCoverThumbnail } from './sheetPainter.js';
+import { idmlSkipReason, pickedIdml } from './CoverIdmlImportButton.js';
+import { importCoverIdml, type CoverIdmlReport } from './coverIdmlImport.js';
+import { coverLayerNamesOf } from './coverIdml.js';
 
 export const PART_LABEL: Record<TemplatePart, keyof Labels> = {
   background: 'coverLayerBackground',
@@ -124,8 +128,11 @@ function TemplateRow({ template, labels, paint, onApply }: {
   );
 }
 
-export function CoverTemplatesSection({ record, gallery, library, labels, onRecord, onGallery }: {
+export function CoverTemplatesSection({ record, sheet, gallery, library, labels, onRecord, onGallery }: {
   record: BookProduction;
+  /** The book's cover sheet, an IDML is read onto (null until the book is
+   *  laid out whole). */
+  sheet: ProductionSheet | null;
   gallery: CoverGallery;
   library: readonly LogoRecord[];
   labels: Labels;
@@ -135,6 +142,9 @@ export function CoverTemplatesSection({ record, gallery, library, labels, onReco
   const templates = useCoverTemplates();
   const thumbnail = useCoverThumbnail();
   const importRef = useRef<HTMLInputElement>(null);
+  const idmlRef = useRef<HTMLInputElement>(null);
+  // The template the last IDML made, and what it brought in and left out.
+  const [fromIdml, setFromIdml] = useState<{ template: CoverTemplate; report: CoverIdmlReport } | null>(null);
   const offered = designParts(record.design);
   const [name, setName] = useState('');
   const [parts, setParts] = useState<TemplatePart[] | null>(null);
@@ -165,6 +175,35 @@ export function CoverTemplatesSection({ record, gallery, library, labels, onReco
     await putLogos(out.logos.filter((l) => !have.has(l.id)));
     announce(fill(labels.coverTemplateApplied, { name: t.name }));
   };
+  const fromInDesign = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = '';
+    if (!sheet) return;
+    const got = await pickedIdml(files);
+    if (!got) {
+      announce(labels.coverIdmlNoFile);
+      return;
+    }
+    try {
+      // Read onto an empty design on this book's sheet: the template is
+      // what the IDML has, each item in its layer; the book is not touched.
+      const back = importCoverIdml(new Uint8Array(await got.idml.arrayBuffer()), { sheet, design: undefined, texts: {}, layerNames: coverLayerNamesOf(labels), links: got.links, library });
+      const name = got.idml.name.replace(/\.idml$/i, '');
+      const template = templateFromDesign(back.design, designParts(back.design), { gallery: { projectId: '', pictures: back.pictures, traces: [] }, logos: library }, name);
+      if (template.parts.length === 0) {
+        announce(labels.coverIdmlFailed);
+        return;
+      }
+      // The cover as InDesign has it, texts and all, on this book's sheet.
+      const thumb = await thumbnail?.(template.design, back.texts, template.pictures);
+      const saved = thumb ? { ...template, thumbnail: thumb } : template;
+      await putTemplates([saved]);
+      setFromIdml({ template: saved, report: back.report });
+      announce(fill(labels.coverTemplateSaved, { name }));
+    } catch {
+      announce(labels.coverIdmlFailed);
+    }
+  };
   const importFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -188,6 +227,27 @@ export function CoverTemplatesSection({ record, gallery, library, labels, onReco
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {templates.map((t) => <TemplateRow key={t.id} template={t} labels={labels} paint={paint} onApply={(x, p) => void apply(x, p)} />)}
       </ul>
+
+      <div className="flex flex-col gap-1.5 border-t border-(--rule) pt-2 text-xs">
+        <h4 className="m-0 font-semibold">{labels.coverIdmlSaveTemplate}</h4>
+        <p className="m-0 text-(--slate)">{sheet ? labels.coverTemplateFromIdmlHint : labels.productionSpinePending}</p>
+        <div>
+          <Button variant="outline" size="sm" icon={<FileUp size={13} />} disabled={!sheet} onClick={() => idmlRef.current?.click()}>{labels.coverTemplateFromIdml}</Button>
+          <input ref={idmlRef} type="file" multiple accept=".idml,image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void fromInDesign(e)} />
+        </div>
+        {fromIdml && (
+          <div role="status" className="flex flex-col gap-1 border-s-2 border-(--brand) bg-(--surface) px-2 py-1.5">
+            <p className="m-0 font-semibold">{fill(labels.coverTemplateSaved, { name: fromIdml.template.name })}</p>
+            <p className="m-0">{fromIdml.template.parts.map((p) => String(labels[PART_LABEL[p]])).join(' · ')}</p>
+            {fromIdml.report.links.length > 0 && <p className="m-0">{fill(labels.coverIdmlLinks, { files: fromIdml.report.links.join(', ') })}</p>}
+            {fromIdml.report.skipped.length > 0 && <p className="m-0">{fill(labels.coverIdmlSkipped, { items: fromIdml.report.skipped.map((x) => `${x.name} (${idmlSkipReason(labels, x.why)})`).join(', ') })}</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" size="sm" onClick={() => { void apply(fromIdml.template, fromIdml.template.parts); setFromIdml(null); }}>{labels.coverTemplateApplyNow}</Button>
+              <Button variant="ghost" size="sm" onClick={() => setFromIdml(null)}>{labels.coverTemplateLater}</Button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-1.5 border-t border-(--rule) pt-2 text-xs">
         <h4 className="m-0 font-semibold">{labels.coverTemplateSave}</h4>
