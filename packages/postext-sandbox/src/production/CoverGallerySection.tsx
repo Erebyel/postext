@@ -7,7 +7,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { PenTool, Plus, Trash2 } from 'lucide-react';
+import { Contrast, PenTool, Plus, Trash2 } from 'lucide-react';
 import { outlinePathData } from 'postext';
 import { Button, ConfirmPopover, IconButton, announce } from '../ui/index.js';
 import { fill } from '../print/fillTokens.js';
@@ -22,7 +22,7 @@ function Thumb({ picture }: { picture: GalleryPicture }) {
   const url = useObjectUrl(picture.bytes, picture.mime);
   const d = picture.outline ? outlinePathData(picture.outline) : '';
   return (
-    <span className="relative h-8 w-12 shrink-0 overflow-hidden rounded border border-(--rule) bg-white">
+    <span className="relative block h-8 w-12 shrink-0 overflow-hidden rounded border border-(--rule) bg-white">
       {url && <img src={url} alt="" className="h-full w-full object-contain p-0.5" />}
       {d && (
         <svg viewBox="0 0 1 1" preserveAspectRatio="none" className="absolute inset-0.5 h-[calc(100%-4px)] w-[calc(100%-4px)]" aria-hidden="true">
@@ -65,7 +65,14 @@ export function CoverGallerySection({ labels }: { labels: Labels }) {
       <ul className="m-0 flex list-none flex-col gap-2 p-0 text-xs">
         {gallery.pictures.map((p) => (
           <li key={p.id} className="flex items-center gap-2">
-            <Thumb picture={p} />
+            <span className="relative shrink-0">
+              <Thumb picture={p} />
+              {(p.role === 'mask' || p.masked) && (
+                <span className="absolute -bottom-1 left-0 rounded bg-(--brand) px-1 text-[9px] leading-3 text-(--background)">
+                  {p.role === 'mask' ? labels.coverMaskTag : labels.coverMaskedTag}
+                </span>
+              )}
+            </span>
             <input
               type="text"
               aria-label={labels.productionGalleryName}
@@ -74,6 +81,19 @@ export function CoverGallerySection({ labels }: { labels: Labels }) {
               className={`${INPUT} min-w-0 flex-1`}
             />
             <IconButton label={fill(labels.productionGalleryTrace, { name: p.name })} icon={<PenTool size={14} aria-hidden="true" />} onClick={() => setTracing(p.id)} />
+            {!p.masked && (
+              <IconButton
+                label={fill(p.role === 'mask' ? labels.coverMaskUnset : labels.coverMaskSet, { name: p.name })}
+                icon={<Contrast size={14} aria-hidden="true" className={p.role === 'mask' ? 'text-(--brand)' : undefined} />}
+                onClick={() => update({ ...gallery, pictures: gallery.pictures.map((x) => {
+                  if (x.id !== p.id) return x;
+                  const next = { ...x };
+                  if (x.role === 'mask') delete next.role;
+                  else next.role = 'mask';
+                  return next;
+                }) })}
+              />
+            )}
             <ConfirmPopover message={fill(labels.productionGalleryDelete, { name: p.name })} confirmLabel={labels.productionLogoDelete} onConfirm={() => update({ ...gallery, pictures: gallery.pictures.filter((x) => x.id !== p.id) })}>
               {({ open }) => <IconButton label={fill(labels.productionGalleryDelete, { name: p.name })} icon={<Trash2 size={14} aria-hidden="true" />} onClick={open} />}
             </ConfirmPopover>

@@ -142,9 +142,10 @@ export interface CoverElement extends CoverEffects {
    *  default), or covering it, cropped (`cover`: a page's advertisement,
    *  which must reach every edge). */
   fit?: 'contain' | 'cover';
-  /** An effect's picture cut to an outline (in fractions of its box): a
-   *  shine, a texture, a gradient that shows only within a shape. The
-   *  picture then fills the box (cropped to it) rather than fitting in it. */
+  /** A picture cut to an outline (in fractions of its box): an
+   *  illustration's own shape, a shine or a texture that shows only within
+   *  it. The picture then fills the box (cropped to it) rather than
+   *  fitting in it. */
   clip?: CoverOutline;
   /** Past the design margin (a case's turn-in, a board's edge): `mirror`
    *  (the default) folds it out with the background; `own` paints the
@@ -329,7 +330,12 @@ function underContentSvg(sheet: ProductionSheet, design: CoverDesign, pictures: 
       }
     }
     const p = el.kind === 'image' && el.resourceId ? pictures[el.resourceId] : undefined;
-    if (p) parts.push(image(p, containedRect(r, p.width / p.height)));
+    if (p && el.clip) {
+      // Cut to its outline, filling its box.
+      const id = `mclip${defs.length}`;
+      defs.push(`<clipPath id="${id}" clipPathUnits="userSpaceOnUse"><path transform="matrix(${mmN(r.width)} 0 0 ${mmN(r.height)} ${mmN(r.x)} ${mmN(r.y)})" d="${outlinePathData(el.clip)}"/></clipPath>`);
+      parts.push(`<g clip-path="url(#${id})">${image(p, coverPictureRect(r, p.width, p.height))}</g>`);
+    } else if (p) parts.push(image(p, containedRect(r, p.width / p.height)));
     else if (el.kind === 'image' && el.resourceId) missing.push(el.resourceId);
   }
   return { content: parts.join(''), defs: defs.join(''), missing };
@@ -355,7 +361,14 @@ const onSheet = (r: SheetRect) => ({
 
 /** The decoration a design draws under the frames: the sheet's ground, its
  *  picture, each zone's ground, then the movable elements. */
-function designElements(sheet: ProductionSheet, design: CoverDesign | undefined, mirrored = false, art: ReadonlyMap<string, SheetRect> = new Map()): DesignElement[] {
+/** An element whose picture is cut to its outline draws the picture of
+ *  that cut (`clipped`) instead of its own. */
+const withClip = (el: CoverElement, clipped: ReadonlyMap<string, string>): CoverElement => {
+  const own = clipped.get(el.id);
+  return own ? { ...el, resourceId: own } : el;
+};
+
+function designElements(sheet: ProductionSheet, design: CoverDesign | undefined, mirrored = false, art: ReadonlyMap<string, SheetRect> = new Map(), clipped: ReadonlyMap<string, string> = new Map()): DesignElement[] {
   if (!design) return [];
   const out: DesignElement[] = [];
   const whole = { x: 0, y: 0, width: sheet.width, height: sheet.height };
@@ -381,7 +394,7 @@ function designElements(sheet: ProductionSheet, design: CoverDesign | undefined,
     out.push({ kind: 'box', id: `cover-zone-${zone.name}`, placement: onSheet(toBleed(zone.rect, sheet)), style: { backgroundColor: color } } as DesignBoxElement);
   }
   // Under a mirror, the elements that keep their own bleed go over it.
-  for (const el of design.elements ?? []) if (!mirrored || el.bleed !== 'own') out.push(...elementDrawing(sheet, el, 'cover-el', false, art));
+  for (const el of design.elements ?? []) if (!mirrored || el.bleed !== 'own') out.push(...elementDrawing(sheet, withClip(el, clipped), 'cover-el', false, art));
   return out;
 }
 
@@ -671,26 +684,11 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     files[fileId] = new TextEncoder().encode(shapeArtSvg(drawn));
     art.set(el.id, drawn.bounds);
   }
-  const elements: DesignElement[] = designElements(sheet, options.design, !!mirror, art);
-  if (mirror) {
-    const fileId = `${MIRROR_RESOURCE_ID}.svg`;
-    const px = (v: number) => (v / 25.4) * 96;
-    resources.push({
-      id: MIRROR_RESOURCE_ID,
-      typeId: 'figure',
-      kind: 'svg',
-      createdAt: 0,
-      updatedAt: 0,
-      svg: { fileId, width: px(sheet.width), height: px(sheet.height) },
-    } as Resource);
-    files[fileId] = new TextEncoder().encode(mirror.svg);
-    elements.push({ kind: 'image', id: MIRROR_RESOURCE_ID, resourceId: MIRROR_RESOURCE_ID, decorative: true, fit: 'contain', placement: onSheet({ x: 0, y: 0, width: sheet.width, height: sheet.height }) });
-  }
-  if (mirror) for (const el of options.design?.elements ?? []) if (el.bleed === 'own') elements.push(...elementDrawing(sheet, el, 'cover-el', false, art));
-  // The effects cut to an outline, each as a picture of its own.
+  // The pictures cut to an outline (an element's, an effect's), each as a
+  // picture of its own.
   const clipped = new Map<string, string>();
   const clipSkipped: string[] = [];
-  for (const el of options.design?.effects ?? []) {
+  for (const el of [...(options.design?.elements ?? []), ...(options.design?.effects ?? [])]) {
     if (el.kind !== 'image' || !el.clip || !el.resourceId) continue;
     const rect = coverElementRect(sheet, el);
     const picture = options.mirrorPictures?.[el.resourceId];
@@ -706,6 +704,22 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     files[fileId] = new TextEncoder().encode(clippedPictureSvg(rect, el.clip, picture));
     clipped.set(el.id, id);
   }
+  const elements: DesignElement[] = designElements(sheet, options.design, !!mirror, art, clipped);
+  if (mirror) {
+    const fileId = `${MIRROR_RESOURCE_ID}.svg`;
+    const px = (v: number) => (v / 25.4) * 96;
+    resources.push({
+      id: MIRROR_RESOURCE_ID,
+      typeId: 'figure',
+      kind: 'svg',
+      createdAt: 0,
+      updatedAt: 0,
+      svg: { fileId, width: px(sheet.width), height: px(sheet.height) },
+    } as Resource);
+    files[fileId] = new TextEncoder().encode(mirror.svg);
+    elements.push({ kind: 'image', id: MIRROR_RESOURCE_ID, resourceId: MIRROR_RESOURCE_ID, decorative: true, fit: 'contain', placement: onSheet({ x: 0, y: 0, width: sheet.width, height: sheet.height }) });
+  }
+  if (mirror) for (const el of options.design?.elements ?? []) if (el.bleed === 'own') elements.push(...elementDrawing(sheet, withClip(el, clipped), 'cover-el', false, art));
   elements.push(...overElements(sheet, options.design, clipped, art));
   const back = sheet.zones.find((z) => z.name === 'back');
   const barcode = options.isbn && back

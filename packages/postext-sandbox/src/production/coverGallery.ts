@@ -22,6 +22,11 @@ export interface GalleryPicture {
   height: number;
   /** Its traced outline, in fractions of the picture. */
   outline?: CoverOutline;
+  /** A mask, to cut other pictures with (./coverMasks.ts). */
+  role?: 'mask';
+  /** A picture made by masking one of the gallery's with a mask of it:
+   *  their ids, to make it again or undo it. */
+  masked?: { source: string; mask: string; invert?: boolean };
   updatedAt: number;
 }
 

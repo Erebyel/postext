@@ -49,7 +49,8 @@ import { CoverChecksList } from './CoverChecksList.js';
 import { coverChecks, overflowZones, type CoverCheck } from './coverChecks.js';
 import { CoverEffectsFields } from './CoverEffectsFields.js';
 import { outlineAsPath } from './pathEditing.js';
-import { galleryPictureOf, galleryPicturesFrom, galleryResource, galleryResourceId, type CoverGallery, type GalleryTrace } from './coverGallery.js';
+import { galleryPictureOf, galleryPicturesFrom, galleryResource, galleryResourceId, type CoverGallery, type GalleryPicture, type GalleryTrace } from './coverGallery.js';
+import { maskedPicture } from './coverMasks.js';
 import { pictureSize } from './coverImages.js';
 import { closeCoverDesigner, useCoverDesignerOpen } from './coverDesignerStore.js';
 import { DEFAULT_LOGO_CLEARANCE, logoResourceId, type LogoRecord } from './logoLibrary.js';
@@ -163,6 +164,36 @@ function CoverDesigner() {
     update({ ...record, design: d });
   };
   const finishLabel = (kind: CoverFinishKind) => String(labels[FINISH_LABEL[kind]]);
+  /** The mask a picture element is masked with, from its gallery picture. */
+  const maskOf = (el: CoverElementSetting) => {
+    const m = galleryPictureOf(gallery, el.resourceId)?.masked;
+    return m ? { mask: m.mask, invert: !!m.invert } : undefined;
+  };
+  /** A picture element masked (or unmasked): the masked picture made from
+   *  its own, into the gallery; the one it had before dropped when nothing
+   *  else places it. */
+  const setMask = async (el: CoverElementSetting, maskId: string | undefined, invert: boolean) => {
+    const current = galleryPictureOf(gallery, el.resourceId);
+    const source = gallery.pictures.find((p) => p.id === (current?.masked?.source ?? current?.id));
+    if (!current || !source) return;
+    let pictures = gallery.pictures;
+    let resourceId = galleryResourceId(source.id);
+    if (maskId) {
+      const mask = gallery.pictures.find((p) => p.id === maskId);
+      if (!mask) return;
+      try {
+        const made = await maskedPicture(source, mask, invert);
+        pictures = [...pictures, made];
+        resourceId = galleryResourceId(made.id);
+      } catch {
+        return;
+      }
+    }
+    const usedElsewhere = [design.image?.resourceId, ...[...elements, ...effects, ...logos].filter((e) => e.id !== el.id).map((e) => e.resourceId)].includes(el.resourceId);
+    if (current.masked && !usedElsewhere) pictures = pictures.filter((p) => p.id !== current.id);
+    updateGallery({ ...gallery, pictures });
+    changeItem({ ...el, resourceId });
+  };
   const settled = (el: CoverElementSetting): CoverElementSetting => {
     const r = sheet ? elementRect(sheet, el) : undefined;
     return sheet && r ? elementAt(sheet, el, r) : el;
@@ -469,6 +500,9 @@ function CoverDesigner() {
                     aspect={selectedEl.kind === 'image' ? aspectOf(selectedEl, allResources, library) : undefined}
                     clearance={active === 'logos' ? logos.find((l) => l.id === selectedEl.id)?.clearance : undefined}
                     traces={gallery.traces}
+                    masks={gallery.pictures.filter((p) => p.role === 'mask')}
+                    mask={maskOf(selectedEl)}
+                    onMask={galleryPictureOf(gallery, selectedEl.resourceId) ? (m, invert) => void setMask(settled(selectedEl), m, invert) : undefined}
                     canForward={activeList[activeList.length - 1]?.id !== selectedEl.id}
                     canBackward={activeList[0]?.id !== selectedEl.id}
                     labels={labels}
@@ -644,7 +678,12 @@ const KEPT = '__kept__';
 /** The selected item's place, size and colour (an effect's opacity, a
  *  logo's clear space), and its order. A picture's height follows its
  *  width (its proportions). */
-function ElementProperties({ el, layer, zone, aspect, clearance, traces, points, onPoints, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete }: {
+function ElementProperties({ el, layer, zone, aspect, clearance, traces, masks, mask, onMask, points, onPoints, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete }: {
+  /** The gallery's masks, the one the picture is masked with, and how to
+   *  mask it (none for a picture that is not the gallery's). */
+  masks: readonly GalleryPicture[];
+  mask: { mask: string; invert: boolean } | undefined;
+  onMask: ((mask: string | undefined, invert: boolean) => void) | undefined;
   points: boolean;
   onPoints: (on: boolean) => void;
   el: CoverElementSetting;
@@ -713,7 +752,27 @@ function ElementProperties({ el, layer, zone, aspect, clearance, traces, points,
         </label>
       )}
       {layer === 'elements' && <p className="m-0 text-(--slate)">{el.bleed === 'own' ? labels.coverElementMirrorOff : labels.coverElementMirrorOn}</p>}
-      {layer === 'effects' && el.kind === 'image' && (traces.length > 0 || el.clip) && (
+      {(layer === 'elements' || layer === 'effects') && el.kind === 'image' && onMask && (masks.length > 0 || mask) && (
+        <div className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1">
+            {labels.coverElementMask}
+            <Select
+              size="sm"
+              value={mask?.mask ?? ''}
+              onValueChange={(id) => onMask(id || undefined, mask?.invert ?? false)}
+              options={[{ value: '', label: labels.coverElementMaskNone }, ...masks.map((m) => ({ value: m.id, label: m.name }))]}
+              ariaLabel={labels.coverElementMask}
+            />
+          </label>
+          {mask && (
+            <label className="flex items-center justify-between gap-2">
+              <span>{labels.coverElementMaskInvert}</span>
+              <Switch checked={mask.invert} onCheckedChange={(on) => onMask(mask.mask, on)} ariaLabel={labels.coverElementMaskInvert} />
+            </label>
+          )}
+        </div>
+      )}
+      {(layer === 'elements' || layer === 'effects') && el.kind === 'image' && (traces.length > 0 || el.clip) && (
         <label className="flex flex-col gap-1">
           {labels.coverElementClip}
           <Select

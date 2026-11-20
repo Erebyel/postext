@@ -12,7 +12,7 @@ class StubCtx {
 };
 import { buildDocument } from '../../pipeline/build/drivers.js';
 import { composedPaintOrder, decorationOver } from '../../composed/paint.js';
-import { coverMarkdown, coverPage, resolveBindingMeasures, softcoverSheet, type CoverDesign } from '../../production/index.js';
+import { caseSheet, coverMarkdown, coverPage, resolveBindingMeasures, softcoverSheet, type CoverDesign } from '../../production/index.js';
 import type { Resource } from '../../types.js';
 
 const trim = { width: 150, height: 230 };
@@ -152,5 +152,20 @@ describe('finish inks', () => {
     expect(text.placement.offset.y.value).toBeLessThan(code.placement.offset.y.value);
     // Without the volume's barcode, nothing to print it by.
     expect((coverPage(sheet, { workIsbnCaption: 'x' }).template.decoration?.elements ?? []).some((e) => 'id' in e && e.id === 'isbn-work')).toBe(false);
+  });
+
+  it('cuts an element’s picture to its outline too, and folds it out cut', () => {
+    const tri = [[{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0.5, y: 1 }]];
+    const m = resolveBindingMeasures({ id: 'c', name: 'C', style: 'caseFlat' }, { width: 150, height: 230 });
+    const cs = caseSheet({ width: 150, height: 230 }, 20, m);
+    const cover = coverPage(cs, {
+      mirrorMargin: m.designMargin,
+      mirrorPictures: { art: { href: 'data:image/png;base64,AAAA', width: 100, height: 100 } },
+      design: { elements: [{ id: 'figure', kind: 'image', resourceId: 'art', clip: tri, zone: 'front', x: -5, y: 10, width: 40, height: 40 }] },
+    });
+    const els = cover.template.decoration!.elements as { id: string; resourceId?: string }[];
+    expect(els.find((e) => e.id === 'cover-el-figure')!.resourceId).toBe('cover-clip-figure');
+    const mirror = new TextDecoder().decode(cover.files['cover-mirror.svg']);
+    expect(mirror).toContain('<clipPath id="mclip');
   });
 });
