@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "独自の枠",
     "coverFinishShapeElement": "要素の形",
     "coverFinishPlateHint": "入稿用PDFではオーバープリントの独立した版になります。画像の加工は、画像に輪郭があればそれに沿います。",
+    "coverTemplatePaint": "サムネイルを作成",
     "coverTemplates": "カバーのテンプレート",
     "coverTemplatesIntro": "テンプレートをパートごとにこの本へ適用します。選んだパートだけが変わります。",
     "coverTemplatesEmpty": "テンプレートはまだありません。このカバーのデザインかInDesignのカバーをテンプレートとして保存してください。",

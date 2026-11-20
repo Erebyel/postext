@@ -8,16 +8,12 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BUILT_IN_BINDING_PROFILES, renderPageToCanvas, type BindingProfile, type FolioBindingConfig, type FolioConfig, type ProductionSheet, type ProductionVersion, type VDTDocument } from 'postext';
+import { BUILT_IN_BINDING_PROFILES, type BindingProfile, type FolioBindingConfig, type FolioConfig, type ProductionVersion } from 'postext';
 import { useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
-import { ensureConfigFontsLoaded } from '../controls/fonts/fontLoader.js';
-import { ensureResourceImages } from '../controls/media/resourceImages.js';
 import { useLayoutWorker } from '../worker/useLayoutWorker.js';
 import { bookTrimMm, coverDocumentInput, pickSheet } from './bookProduction.js';
-import { registerCoverImages } from './coverImages.js';
+import { cropCanvas, paintSheet, sheetRectPx } from './sheetPainter.js';
 import { useCoverGallery, useCoverWorkspace, useLogos, useProfiles } from './useProduction.js';
-
-const MM_PER_IN = 25.4;
 
 /** Folio's binding for a version: its style and, on a case, its
  *  material. */
@@ -49,18 +45,6 @@ export function folioWithCover(folio: FolioConfig | undefined, cover: { binding?
     ...(cover.color ? { coverColor: { hex: cover.color, model: 'hex' as const } } : {}),
   };
   return { ...folio, binding };
-}
-
-/** A sheet's zone as a rectangle of a painted page, px. */
-function zonePx(sheet: ProductionSheet, doc: VDTDocument, name: string, scale: number): { x: number; y: number; w: number; h: number } | undefined {
-  const zone = sheet.zones.find((z) => z.name === name);
-  if (!zone) return undefined;
-  const dpi = doc.config.page.dpi ?? 96;
-  // The sheet's corner (the bleed's) on the page, which has room for the
-  // cut marks round it.
-  const offset = (doc.trimOffset * MM_PER_IN) / dpi - sheet.trim.x;
-  const k = (dpi / MM_PER_IN) * scale;
-  return { x: (zone.rect.x + offset) * k, y: (zone.rect.y + offset) * k, w: zone.rect.width * k, h: zone.rect.height * k };
 }
 
 /** The colour most of a painted region is, `#rrggbb`: its pixels' colours
@@ -127,26 +111,18 @@ export function useFolioCover(): FolioCover | null {
     const t = setTimeout(() => {
       void (async () => {
         try {
-          await ensureConfigFontsLoaded(input.config, input.markdown);
-          await registerCoverImages(input.cover.files);
-          await ensureResourceImages(input.resources.filter((r) => r.id !== 'isbn-barcode'));
-          const doc = await build({ markdown: input.markdown, resources: input.resources }, input.config);
-          const page = doc.pages[0];
-          if (!page || n !== seq.current) return;
           // Painted at about 150 dpi: enough for a spine seen on the desk.
-          const scale = Math.min(1, 150 / (doc.config.page.dpi ?? 96));
-          const full = document.createElement('canvas');
-          renderPageToCanvas(page, doc, full, { scale });
-          const ctx = full.getContext('2d', { willReadFrequently: true });
-          const spineAt = zonePx(sheet, doc, 'spine', scale);
-          const frontAt = zonePx(sheet, doc, 'front', scale);
-          let spine: HTMLCanvasElement | undefined;
-          if (spineAt && spineAt.w >= 1 && spineAt.h >= 1) {
-            spine = document.createElement('canvas');
-            spine.width = Math.round(spineAt.w);
-            spine.height = Math.round(spineAt.h);
-            spine.getContext('2d')!.drawImage(full, spineAt.x, spineAt.y, spineAt.w, spineAt.h, 0, 0, spine.width, spine.height);
-          }
+          const scale = Math.min(1, 150 / ((input.config.page?.dpi as number | undefined) ?? 96));
+          const painted = await paintSheet(input, build, scale);
+          if (!painted || n !== seq.current) return;
+          const zone = (name: string) => {
+            const z = sheet.zones.find((x) => x.name === name);
+            return z ? sheetRectPx(sheet, painted.doc, z.rect, scale) : undefined;
+          };
+          const spineAt = zone('spine');
+          const frontAt = zone('front');
+          const spine = spineAt && spineAt.w >= 1 && spineAt.h >= 1 ? cropCanvas(painted.canvas, spineAt) : undefined;
+          const ctx = painted.canvas.getContext('2d', { willReadFrequently: true });
           const color = ctx && frontAt ? dominantColour(ctx.getImageData(Math.round(frontAt.x), Math.round(frontAt.y), Math.max(1, Math.round(frontAt.w)), Math.max(1, Math.round(frontAt.h))).data) : undefined;
           if (n === seq.current) setPainted({ ...(color ? { color } : {}), ...(spine ? { spine } : {}) });
         } catch {

@@ -5617,6 +5617,7 @@ export function buildSandboxLabels(t: SandboxTranslator): SandboxLabels {
     coverFinishShapeBox: t("coverFinishShapeBox"),
     coverFinishShapeElement: t("coverFinishShapeElement"),
     coverFinishPlateHint: t("coverFinishPlateHint"),
+    coverTemplatePaint: t("coverTemplatePaint"),
     coverTemplates: t("coverTemplates"),
     coverTemplatesIntro: t("coverTemplatesIntro"),
     coverTemplatesEmpty: t("coverTemplatesEmpty"),

@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "Recuadro propio",
     "coverFinishShapeElement": "La de un elemento",
     "coverFinishPlateHint": "En el PDF para imprenta es una plancha propia en sobreimpresión; el de una imagen sigue su contorno cuando la imagen lo tiene.",
+    "coverTemplatePaint": "Pintar la miniatura",
     "coverTemplates": "Plantillas de cubierta",
     "coverTemplatesIntro": "Aplica una plantilla a este libro por partes: solo cambian las partes que elijas.",
     "coverTemplatesEmpty": "Aún no hay plantillas. Guarda como plantilla el diseño de esta cubierta o una cubierta de InDesign.",

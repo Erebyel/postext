@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "Cadre propre",
     "coverFinishShapeElement": "Celle d’un élément",
     "coverFinishPlateHint": "Dans le PDF pour l’imprimeur, c’est une plaque propre en surimpression ; celle d’une image suit son contour quand l’image en a un.",
+    "coverTemplatePaint": "Peindre la vignette",
     "coverTemplates": "Modèles de couverture",
     "coverTemplatesIntro": "Appliquez un modèle à ce livre par parties : seules les parties choisies changent.",
     "coverTemplatesEmpty": "Pas encore de modèles. Enregistrez comme modèle la maquette de cette couverture ou une couverture InDesign.",

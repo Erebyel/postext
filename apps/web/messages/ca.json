@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "Requadre propi",
     "coverFinishShapeElement": "La d’un element",
     "coverFinishPlateHint": "Al PDF per a impremta és una planxa pròpia en sobreimpressió; el d’una imatge en segueix el contorn quan la imatge en té.",
+    "coverTemplatePaint": "Pintar la miniatura",
     "coverTemplates": "Plantilles de coberta",
     "coverTemplatesIntro": "Aplica una plantilla a aquest llibre per parts: només canvien les parts que triïs.",
     "coverTemplatesEmpty": "Encara no hi ha plantilles. Desa com a plantilla el disseny d’aquesta coberta o una coberta d’InDesign.",

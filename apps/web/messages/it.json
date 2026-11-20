@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "Riquadro proprio",
     "coverFinishShapeElement": "Quella di un elemento",
     "coverFinishPlateHint": "Nel PDF per la tipografia è una lastra propria in sovrastampa; quella di un’immagine ne segue il contorno quando l’immagine ne ha uno.",
+    "coverTemplatePaint": "Disegna la miniatura",
     "coverTemplates": "Modelli di copertina",
     "coverTemplatesIntro": "Applica un modello a questo libro per parti: cambiano solo le parti scelte.",
     "coverTemplatesEmpty": "Ancora nessun modello. Salva come modello il progetto di questa copertina o una copertina di InDesign.",

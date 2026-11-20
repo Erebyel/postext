@@ -34,6 +34,9 @@ export interface CoverTemplate {
   pictures: GalleryPicture[];
   /** The library logos its logos place. */
   logos: LogoRecord[];
+  /** The cover it was saved from, small (a JPEG of the sheet's trim), to
+   *  know it at a glance. */
+  thumbnail?: Uint8Array;
   updatedAt: number;
 }
 
@@ -161,8 +164,9 @@ export function exportTemplates(templates: readonly CoverTemplate[]): unknown {
   return {
     format: TEMPLATE_FILE_FORMAT,
     version: TEMPLATE_FILE_VERSION,
-    templates: templates.map((t) => ({
+    templates: templates.map(({ thumbnail, ...t }) => ({
       ...t,
+      ...(thumbnail ? { thumbnail: base64(thumbnail) } : {}),
       pictures: t.pictures.map(({ bytes, ...p }) => ({ ...p, data: base64(bytes) })),
       logos: t.logos.map(({ bytes, ...l }) => ({ ...l, data: base64(bytes) })),
     })),
@@ -170,6 +174,17 @@ export function exportTemplates(templates: readonly CoverTemplate[]): unknown {
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** A thumbnail written in a file: base64 bytes that are a picture. */
+function thumbnailOf(raw: unknown): Uint8Array | undefined {
+  if (typeof raw !== 'string') return undefined;
+  try {
+    const bytes = fromBase64(raw);
+    return sniffLogoMime(bytes) ? bytes : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** The templates of a file (parsed JSON) that read; `ok` false when it is
  *  no templates file. Their design is kept as written: it is read again,
@@ -201,6 +216,7 @@ export function importTemplates(data: unknown, now = Date.now()): { templates: C
       design: t.design as CoverDesignSettings,
       pictures: withBytes<GalleryPicture>(t.pictures).map((p) => ({ ...p, updatedAt: now })),
       logos: withBytes<LogoRecord>(t.logos).map((l) => ({ ...l, updatedAt: now })),
+      ...(thumbnailOf(t.thumbnail) ? { thumbnail: thumbnailOf(t.thumbnail)! } : {}),
       updatedAt: now,
     }];
   });

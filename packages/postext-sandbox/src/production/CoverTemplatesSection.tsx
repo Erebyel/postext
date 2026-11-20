@@ -8,7 +8,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { Download, Trash2, Upload } from 'lucide-react';
+import { Download, ImageOff, Trash2, Upload } from 'lucide-react';
 import { Button, ConfirmPopover, IconButton, announce, cn } from '../ui/index.js';
 import { fill } from '../print/fillTokens.js';
 import { downloadBytes } from '../storage/persistence.js';
@@ -29,6 +29,8 @@ import { Fold } from './Fold.js';
 import { deleteTemplate, listLogos, putLogos, putTemplates } from './productionStore.js';
 import { INPUT, type Labels } from './productionUi.js';
 import { useCoverTemplates } from './useProduction.js';
+import { useObjectUrl } from './coverImages.js';
+import { useCoverThumbnail } from './sheetPainter.js';
 
 export const PART_LABEL: Record<TemplatePart, keyof Labels> = {
   background: 'coverLayerBackground',
@@ -69,19 +71,44 @@ export function PartPicker({ offered, chosen, labels, onChange }: {
   );
 }
 
-function TemplateRow({ template, labels, onApply }: { template: CoverTemplate; labels: Labels; onApply: (t: CoverTemplate, parts: TemplatePart[]) => void }) {
+/** A template's thumbnail, or a frame of the sheet's proportions. */
+function Thumbnail({ bytes }: { bytes: Uint8Array | undefined }) {
+  const url = useObjectUrl(bytes ?? EMPTY, 'image/jpeg');
+  return (
+    <span className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded border border-(--rule) bg-(--surface)">
+      {bytes && url ? <img src={url} alt="" className="h-full w-full object-contain" /> : <ImageOff size={14} aria-hidden="true" className="text-(--slate)" />}
+    </span>
+  );
+}
+const EMPTY = new Uint8Array(0);
+
+function TemplateRow({ template, labels, paint, onApply }: {
+  template: CoverTemplate;
+  labels: Labels;
+  /** Paints a thumbnail on this book's sheet (null with no version). */
+  paint: ((t: CoverTemplate) => Promise<void>) | null;
+  onApply: (t: CoverTemplate, parts: TemplatePart[]) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [parts, setParts] = useState<TemplatePart[]>(template.parts);
   return (
     <li className="flex flex-col gap-1.5 border-t border-(--rule) pt-2 text-xs">
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate font-semibold">{template.name}</span>
+      <div className="flex items-start gap-2">
+        <Thumbnail bytes={template.thumbnail} />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="font-semibold" style={{ overflowWrap: 'anywhere' }}>{template.name}</span>
+          <span className="text-(--slate)">{template.parts.map((p) => String(labels[PART_LABEL[p]])).join(' · ')}</span>
+          {!template.thumbnail && paint && (
+            <button type="button" onClick={() => void paint(template)} className="w-fit cursor-pointer border-0 bg-transparent p-0 text-start text-(--brand) underline">{labels.coverTemplatePaint}</button>
+          )}
+        </span>
+      </div>
+      <div className="flex items-center gap-1">
         <Button variant={open ? 'primary' : 'outline'} size="sm" onClick={() => setOpen(!open)}>{labels.coverTemplateApply}</Button>
         <ConfirmPopover message={fill(labels.productionGalleryDelete, { name: template.name })} confirmLabel={labels.productionLogoDelete} onConfirm={() => void deleteTemplate(template.id)}>
           {({ open: ask }) => <IconButton label={fill(labels.productionGalleryDelete, { name: template.name })} icon={<Trash2 size={14} aria-hidden="true" />} onClick={ask} />}
         </ConfirmPopover>
       </div>
-      <p className="m-0 text-(--slate)">{template.parts.map((p) => String(labels[PART_LABEL[p]])).join(' · ')}</p>
       {open && (
         <div className="flex flex-col gap-1.5 border-s-2 border-(--brand) ps-2">
           <p className="m-0 text-(--slate)">{labels.coverTemplateApplyHint}</p>
@@ -106,20 +133,30 @@ export function CoverTemplatesSection({ record, gallery, library, labels, onReco
   onGallery: (next: CoverGallery) => void;
 }) {
   const templates = useCoverTemplates();
+  const thumbnail = useCoverThumbnail();
   const importRef = useRef<HTMLInputElement>(null);
   const offered = designParts(record.design);
   const [name, setName] = useState('');
   const [parts, setParts] = useState<TemplatePart[] | null>(null);
   const chosen = parts ?? offered;
 
-  const save = () => {
+  const save = async () => {
     const n = name.trim();
     if (!n || chosen.length === 0) return;
-    void putTemplates([templateFromDesign(record.design, chosen, { gallery, logos: library }, n)]);
+    const template = templateFromDesign(record.design, chosen, { gallery, logos: library }, n);
     setName('');
     setParts(null);
+    // The cover as the template keeps it: its parts on the book's texts.
+    const thumb = await thumbnail?.(template.design, record.texts, template.pictures);
+    await putTemplates([thumb ? { ...template, thumbnail: thumb } : template]);
     announce(fill(labels.coverTemplateSaved, { name: n }));
   };
+  const paint = thumbnail
+    ? async (t: CoverTemplate) => {
+      const thumb = await thumbnail(t.design, record.texts, t.pictures);
+      if (thumb) await putTemplates([{ ...t, thumbnail: thumb }]);
+    }
+    : null;
   const apply = async (t: CoverTemplate, laid: TemplatePart[]) => {
     const out = applyTemplate(t, laid, record.design, gallery);
     onRecord({ ...record, design: out.design });
@@ -149,7 +186,7 @@ export function CoverTemplatesSection({ record, gallery, library, labels, onReco
     <Fold title={labels.coverTemplates} {...(templates.length ? { note: String(templates.length) } : {})}>
       <p className="m-0 text-xs text-(--slate)">{templates.length === 0 ? labels.coverTemplatesEmpty : labels.coverTemplatesIntro}</p>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
-        {templates.map((t) => <TemplateRow key={t.id} template={t} labels={labels} onApply={(x, p) => void apply(x, p)} />)}
+        {templates.map((t) => <TemplateRow key={t.id} template={t} labels={labels} paint={paint} onApply={(x, p) => void apply(x, p)} />)}
       </ul>
 
       <div className="flex flex-col gap-1.5 border-t border-(--rule) pt-2 text-xs">
@@ -166,10 +203,10 @@ export function CoverTemplatesSection({ record, gallery, library, labels, onReco
                 placeholder={labels.coverTemplateName}
                 aria-label={labels.coverTemplateName}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') void save(); }}
                 className={`${INPUT} min-w-0 flex-1`}
               />
-              <Button variant="outline" size="sm" disabled={!name.trim() || chosen.length === 0} onClick={save}>{labels.coverTemplateSaveButton}</Button>
+              <Button variant="outline" size="sm" disabled={!name.trim() || chosen.length === 0} onClick={() => void save()}>{labels.coverTemplateSaveButton}</Button>
             </div>
           </>
         )}

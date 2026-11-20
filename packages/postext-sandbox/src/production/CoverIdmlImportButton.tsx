@@ -24,6 +24,7 @@ import { coverLayerNamesOf } from './coverIdml.js';
 import { designParts, templateFromDesign } from './coverTemplates.js';
 import type { LogoRecord } from './logoLibrary.js';
 import { putTemplates } from './productionStore.js';
+import { useCoverThumbnail } from './sheetPainter.js';
 import type { Labels } from './productionUi.js';
 
 const ZONE_LABEL: Record<CoverTextZone, keyof Labels> = {
@@ -46,6 +47,7 @@ export function CoverIdmlImportButton({ sheet, record, gallery, library, labels,
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const templateRef = useRef<HTMLInputElement>(null);
+  const thumbnail = useCoverThumbnail();
   // What the last IDML saved as a template brought in and left out.
   const [savedReport, setSavedReport] = useState<{ report: CoverIdmlReport; name: string } | null>(null);
   const [done, setDone] = useState<{ report: CoverIdmlReport; before: BookProduction; galleryBefore: CoverGallery } | null>(null);
@@ -98,7 +100,9 @@ export function CoverIdmlImportButton({ sheet, record, gallery, library, labels,
         announce(labels.coverIdmlFailed);
         return;
       }
-      await putTemplates([template]);
+      // The cover as InDesign has it, texts and all, on this book's sheet.
+      const thumb = await thumbnail?.(template.design, back.texts, template.pictures);
+      await putTemplates([thumb ? { ...template, thumbnail: thumb } : template]);
       setDone(null);
       setSavedReport({ report: back.report, name });
       announce(fill(labels.coverTemplateSaved, { name }));

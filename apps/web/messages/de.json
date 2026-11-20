@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "Eigener Rahmen",
     "coverFinishShapeElement": "Die eines Elements",
     "coverFinishPlateHint": "Im Druck-PDF ist sie eine eigene Platte im Überdruck; die eines Bildes folgt seiner Kontur, wenn es eine hat.",
+    "coverTemplatePaint": "Vorschaubild erzeugen",
     "coverTemplates": "Umschlagvorlagen",
     "coverTemplatesIntro": "Eine Vorlage teilweise auf dieses Buch anwenden: nur die gewählten Teile ändern sich.",
     "coverTemplatesEmpty": "Noch keine Vorlagen. Das Design dieses Umschlags oder einen InDesign-Umschlag als Vorlage speichern.",

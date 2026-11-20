@@ -6202,6 +6202,7 @@
     "coverFinishShapeBox": "Retângulo próprio",
     "coverFinishShapeElement": "A de um elemento",
     "coverFinishPlateHint": "No PDF para a gráfica é uma chapa própria em sobreimpressão; a de uma imagem segue o seu contorno quando a imagem o tem.",
+    "coverTemplatePaint": "Pintar a miniatura",
     "coverTemplates": "Modelos de capa",
     "coverTemplatesIntro": "Aplique um modelo a este livro por partes: só mudam as partes que escolher.",
     "coverTemplatesEmpty": "Ainda não há modelos. Guarde como modelo o design desta capa ou uma capa do InDesign.",

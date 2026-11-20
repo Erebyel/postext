@@ -5785,6 +5785,7 @@ export interface SandboxLabels {
   coverFinishShapeBox: string;
   coverFinishShapeElement: string;
   coverFinishPlateHint: string;
+  coverTemplatePaint: string;
   coverTemplates: string;
   coverTemplatesIntro: string;
   coverTemplatesEmpty: string;

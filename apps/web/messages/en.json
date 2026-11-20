@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "Its own box",
     "coverFinishShapeElement": "An element’s",
     "coverFinishPlateHint": "In the PDF for the printer it is a plate of its own, overprinting; a picture’s finish follows its outline when the picture has one.",
+    "coverTemplatePaint": "Paint the thumbnail",
     "coverTemplates": "Cover templates",
     "coverTemplatesIntro": "Lay a template on this book by parts: only the parts you choose change.",
     "coverTemplatesEmpty": "No templates yet. Save this cover’s design, or an InDesign cover, as one.",

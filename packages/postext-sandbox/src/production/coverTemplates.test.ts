@@ -59,8 +59,10 @@ describe('cover templates', () => {
   });
 
   it('travel as a file and come back', () => {
-    const t = templateFromDesign(design, ['background', 'elements', 'logos'], { gallery, logos }, 'Serie', 't1', 5);
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2]);
+    const t = { ...templateFromDesign(design, ['background', 'elements', 'logos'], { gallery, logos }, 'Serie', 't1', 5), thumbnail: jpeg };
     const back = importTemplates(JSON.parse(JSON.stringify(exportTemplates([t]))), 5);
+    expect(Array.from(back.templates[0]!.thumbnail!)).toEqual(Array.from(jpeg));
     expect(back.ok).toBe(true);
     expect(back.templates[0]).toMatchObject({ id: 't1', name: 'Serie', parts: ['background', 'elements', 'logos'], design: t.design });
     expect(Array.from(back.templates[0]!.pictures[0]!.bytes)).toEqual(Array.from(png));

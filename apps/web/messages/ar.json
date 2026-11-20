@@ -6212,6 +6212,7 @@
     "coverFinishShapeBox": "إطار خاص",
     "coverFinishShapeElement": "شكل عنصر",
     "coverFinishPlateHint": "في ملف PDF للمطبعة هو لوح مستقل بطباعة فوقية؛ ولمسة الصورة تتبع حدودها إن كان لها حدود.",
+    "coverTemplatePaint": "رسم الصورة المصغّرة",
     "coverTemplates": "قوالب الغلاف",
     "coverTemplatesIntro": "طبّق قالبًا على هذا الكتاب جزءًا جزءًا: لا يتغيّر إلا ما تختاره.",
     "coverTemplatesEmpty": "لا قوالب بعد. احفظ تصميم هذا الغلاف أو غلافًا من InDesign كقالب.",
