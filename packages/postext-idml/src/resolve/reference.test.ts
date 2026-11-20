@@ -378,3 +378,14 @@ describe('inspection', () => {
     });
   });
 });
+
+describe('a mixed ink with no process equivalent', () => {
+  it('is made from its inks: a process ink and a spot colour’s CMYK, at their percentages', () => {
+    const d = reference();
+    const swatches = new Map(d.swatches);
+    swatches.set('MixedInk/B', { kind: 'mixedInk', self: 'MixedInk/B', name: 'B', inks: ['Ink/$ID/Process%20Black', 'Ink/PANTONE%20185%20C'], values: [15, 100], space: 'MixedInk', value: [] });
+    const mixed = resolveColour({ ...d, swatches }, 'MixedInk/B');
+    // PANTONE 185 C is 0 93 79 0; with 15 % black over it.
+    expect(mixed?.hex).toBe(`#${cmykToRgb(0, 93, 79, 15).map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`);
+  });
+});
