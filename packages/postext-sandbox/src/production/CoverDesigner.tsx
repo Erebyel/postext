@@ -18,7 +18,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { ArrowDown, ArrowUp, ChevronRight, Copy, Eye, EyeOff, Image as ImageIcon, PenTool, Plus, Redo2, Sparkles, Square, Stamp, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, Copy, Eye, EyeOff, Image as ImageIcon, PenTool, Plus, Redo2, Sparkles, Square, Stamp, Trash2, Type, Undo2, X } from 'lucide-react';
 import { BASIC_SHAPES, COVER_FINISH_INKS, resolveBodyTextConfig, resolveColorValue, type BasicShape, type CoverFinishKind, type CoverZoneName, type Resource } from 'postext';
 import { useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
 import { Button, IconButton, NumberField, SegmentedControl, Select, Switch, cn, usePortalContainer } from '../ui/index.js';
@@ -48,7 +48,8 @@ import {
   type ItemLayer,
 } from './coverLayers.js';
 import { CoverCanvas } from './CoverCanvas.js';
-import { DesignSection } from './CoverDesignSections.js';
+import { DesignSection, RoleFields, bookFamilies } from './CoverDesignSections.js';
+import { COVER_FIELDS, TEXT_BOX_ROLES, coverFields, fieldsIn, newTextBox, textBoxAsElement, textBoxesOf, textBoxFromElement, type CoverField, type CoverTextBox, type CoverTexts, type TextBoxRole } from './coverTexts.js';
 import { CoverChecksList } from './CoverChecksList.js';
 import { coverChecks, overflowZones, type CoverCheck } from './coverChecks.js';
 import { CoverEffectsFields } from './CoverEffectsFields.js';
@@ -100,7 +101,7 @@ const ZONE_LABEL: Partial<Record<CoverZoneName, keyof Labels>> = {
 
 const SIDE = 'flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-(--rule) p-3 text-xs';
 const isPicture = (r: Resource) => r.kind === 'bitmap' || r.kind === 'svg';
-const isItemLayer = (l: CoverLayer): l is ItemLayer => l === 'elements' || l === 'effects' || l === 'logos' || l === 'finishes';
+const isItemLayer = (l: CoverLayer): l is ItemLayer => l === 'elements' || l === 'texts' || l === 'effects' || l === 'logos' || l === 'finishes';
 
 export function CoverDesignerHost() {
   return useCoverDesignerOpen() ? <CoverDesigner /> : null;
@@ -168,6 +169,11 @@ function CoverDesigner() {
   const logos = useMemo(() => design.logos ?? [], [design]);
   const finishes = useMemo(() => design.finishes ?? [], [design]);
   const sheet = useMemo(() => (sheets ? pickSheet(sheets, 'cover', bookTrimMm(config)) : null), [sheets, config]);
+  // The general texts, and the boxes that show them (the default ones
+  // until the design keeps its own).
+  const fields = useMemo(() => coverFields(record?.texts ?? {}), [record]);
+  const textBoxes = useMemo(() => (sheet ? textBoxesOf(sheet, design, fields, version?.spineText) : []), [sheet, design, fields, version?.spineText]);
+  const families = useMemo(() => bookFamilies(config), [config]);
   const mirror = useMirror(design, bookResources, sheets?.measures.designMargin, gallery);
   const input = useMemo(
     () => (sheet && version && record
@@ -193,10 +199,11 @@ function CoverDesigner() {
     overflow,
   }) : []), [sheet, design, allResources, library, version, config.print?.standard, input, overflow]);
 
-  const setDesign = (key: 'elements' | 'effects' | 'logos' | 'finishes', next: unknown[], step?: string) => {
+  const setDesign = (key: ItemLayer, next: unknown[], step?: string) => {
     if (!record) return;
     const d = { ...design, [key]: next } as CoverDesignSettings;
-    if (next.length === 0) delete d[key];
+    // No boxes of its own would bring the default ones back: kept empty.
+    if (next.length === 0 && key !== 'texts') delete d[key];
     update({ ...record, design: d }, step);
   };
   const finishLabel = (kind: CoverFinishKind) => String(labels[FINISH_LABEL[kind]]);
@@ -251,11 +258,15 @@ function CoverDesigner() {
       }
     };
     take('elements', elements);
+    take('texts', textBoxes.map(textBoxAsElement));
     take('effects', effects);
     take('logos', logos);
     take('finishes', finishes.flatMap((f) => finishAsElement(f, COVER_FINISH_INKS[f.kind].screen) ?? []));
     return { canvasItems: items, layerOfId: (id: string) => layerOf.get(id) };
-  }, [hidden, elements, effects, logos, finishes]);
+  }, [hidden, elements, textBoxes, effects, logos, finishes]);
+  /** A layer's items, back to front. */
+  const listOf = (layer: ItemLayer): CoverItem[] => (layer === 'elements' ? elements : layer === 'texts' ? textBoxes : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes);
+  const changeBox = (box: CoverTextBox, step = `item:${box.id}`) => setDesign('texts', textBoxes.map((b) => (b.id === box.id ? box : b)), step);
   const pick = (id: string | null) => {
     const layer = id ? layerOfId(id) : undefined;
     if (layer) {
@@ -268,20 +279,21 @@ function CoverDesigner() {
   const changeItem = (el: CoverElementSetting, step = `item:${el.id}`) => {
     const layer = layerOfId(el.id) ?? active;
     if (layer === 'elements') setDesign('elements', elements.map((e) => (e.id === el.id ? el : e)), step);
+    else if (layer === 'texts') setDesign('texts', textBoxes.map((b) => (b.id === el.id ? textBoxFromElement(b, el) : b)), step);
     else if (layer === 'effects') setDesign('effects', effects.map((e) => (e.id === el.id ? el : e)), step);
     else if (layer === 'logos') setDesign('logos', logos.map((e) => (e.id === el.id ? { ...e, ...el, kind: 'image' as const } : e)), step);
     else setDesign('finishes', finishes.map((f) => (f.id === el.id ? finishFromElement(f, el) : f)), step);
   };
   const deleteItem = (id: string) => {
     const layer = layerOfId(id) ?? active;
-    setDesign(layer, (layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes).filter((e) => e.id !== id));
+    setDesign(layer, listOf(layer).filter((e) => e.id !== id));
     if (selected === id) setSelected(null);
   };
   /** An item as its layer keeps it (a finish, not its box). */
   const itemOf = (id: string): { layer: ItemLayer; item: CoverItem } | undefined => {
     const layer = layerOfId(id);
     if (!layer) return undefined;
-    const item = (layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes).find((x) => x.id === id);
+    const item = listOf(layer).find((x) => x.id === id);
     return item ? { layer, item } : undefined;
   };
   /** A copy of an item into its layer, picked: moved a little, or put on
@@ -331,8 +343,7 @@ function CoverDesigner() {
   }, []);
   const add = (layer: ItemLayer, item: { id: string } | undefined, step?: string) => {
     if (!item) return;
-    const list = layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes;
-    setDesign(layer, [...list, item], step);
+    setDesign(layer, [...listOf(layer), item], step);
     setActive(layer);
     setOpen(layer);
     setSelected(item.id);
@@ -364,6 +375,10 @@ function CoverDesigner() {
     const el = item as CoverElementSetting;
     return el.kind === 'image' ? pictureName(el.resourceId) : el.kind === 'shape' ? labels.coverElementShape : labels.coverElementBox;
   };
+  /** A box by its name, else the general texts it shows, else its first
+   *  words. */
+  const boxName = (b: CoverTextBox): string =>
+    b.name || fieldsIn(b.text).map((f) => fieldLabel(labels, f)).join(' · ') || b.text.replace(/[#*_{}]/g, '').trim().slice(0, 30) || labels.coverTextBox;
   const checkName = (c: CoverCheck): string => {
     if (c.zone) return zoneName(c.zone as CoverZoneName);
     const layer = c.layer;
@@ -377,7 +392,8 @@ function CoverDesigner() {
 
   const selectedEl = canvasItems.find((e) => e.id === selected);
   const selectedFinish = active === 'finishes' ? finishes.find((f) => f.id === selected) : undefined;
-  const activeList: (CoverElementSetting | CoverFinishSetting)[] = active === 'elements' ? elements : active === 'effects' ? effects : active === 'logos' ? logos : finishes;
+  const activeList: CoverItem[] = listOf(active);
+  const selectedBox = active === 'texts' ? textBoxes.find((b) => b.id === selected) : undefined;
 
   return (
     <Dialog.Root open onOpenChange={(next) => { if (!next) closeCoverDesigner(); }}>
@@ -417,7 +433,7 @@ function CoverDesigner() {
                   const editing = isItemLayer(layer) && layer === active && mode === 'edit';
                   const expanded = layer === open;
                   const hint = LAYER_HINT[layer];
-                  const list = layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : layer === 'finishes' ? finishes : [];
+                  const list: CoverItem[] = isItemLayer(layer) ? listOf(layer) : [];
                   return (
                     <section key={layer} className={cn('flex flex-col gap-2 rounded-md border', expanded ? 'p-2' : 'px-2 py-1', editing ? 'border-(--brand)' : 'border-(--rule)')}>
                       <div className="flex items-center justify-between gap-1">
@@ -465,6 +481,9 @@ function CoverDesigner() {
                           <ShapeAdder labels={labels} onPick={(k) => add('elements', newBasicShape(sheet, k, '#808080'))} />
                         </>
                       )}
+                      {expanded && layer === 'texts' && (
+                        <TextAdder labels={labels} onPick={(field) => add('texts', newTextBox(sheet, field, field ? '' : labels.coverTextBoxNewWords))} />
+                      )}
                       {expanded && layer === 'effects' && (
                         <>
                           <PictureAdder pictures={pictures} gallery={gallery} labels={labels} onPick={(p) => add('effects', newElement(sheet, 'image', p))} />
@@ -500,14 +519,16 @@ function CoverDesigner() {
                       {expanded && isItemLayer(layer) && list.length > 0 && (
                         <ul className="m-0 flex list-none flex-col gap-1 p-0">
                           {[...list].reverse().map((item) => (
-                            <li key={item.id}>
+                            <li key={item.id} className="flex items-center gap-1">
                               <button
                                 type="button"
                                 aria-pressed={item.id === selected && layer === active}
                                 onClick={() => { setActive(layer); setSelected(item.id); setMode('edit'); }}
                                 className={cn('flex w-full items-center gap-2 rounded px-2 py-1 text-start hover:bg-(--surface)', item.id === selected && layer === active && 'bg-(--surface) font-medium text-(--brand)')}
                               >
-                                {layer === 'finishes'
+                                {layer === 'texts'
+                                  ? <Type size={12} aria-hidden="true" />
+                                  : layer === 'finishes'
                                   ? <Sparkles size={12} aria-hidden="true" />
                                   : layer === 'logos'
                                     ? <Stamp size={12} aria-hidden="true" />
@@ -516,8 +537,15 @@ function CoverDesigner() {
                                       : (item as CoverElementSetting).kind === 'shape'
                                         ? <PenTool size={12} aria-hidden="true" />
                                       : <Square size={12} aria-hidden="true" fill={(item as CoverElementSetting).color} />}
-                                <span className="truncate">{itemName(layer, item)}</span>
+                                <span className={cn('truncate', layer === 'texts' && (item as CoverTextBox).hidden && 'text-(--slate) line-through')}>{layer === 'texts' ? boxName(item as CoverTextBox) : itemName(layer, item as CoverElementSetting | CoverFinishSetting)}</span>
                               </button>
+                              {layer === 'texts' && (
+                                <IconButton
+                                  label={fill((item as CoverTextBox).hidden ? labels.coverTextBoxShow : labels.coverTextBoxHide, { name: boxName(item as CoverTextBox) })}
+                                  icon={(item as CoverTextBox).hidden ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+                                  onClick={() => { const b = item as CoverTextBox; const next = { ...b }; if (b.hidden) delete next.hidden; else next.hidden = true; changeBox(next, undefined); }}
+                                />
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -546,7 +574,7 @@ function CoverDesigner() {
                 />
               </main>
 
-              <aside className={cn(SIDE, 'border-s')}>
+              <aside className={cn(SIDE, 'w-72 border-s')}>
                 {mode === 'preview' ? (
                   <>
                     <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-(--slate)">{labels.coverChecks}</h3>
@@ -568,6 +596,21 @@ function CoverDesigner() {
                     {input.cover.clipSkipped && <p className="m-0">{fill(labels.coverClipSkipped, { pictures: input.cover.clipSkipped.map(pictureName).join(', ') })}</p>}
                     <Button variant="primary" size="sm" onClick={() => setMode('edit')}>{labels.coverDesignerEdit}</Button>
                   </>
+                ) : selectedBox ? (
+                  <TextBoxProperties
+                    key={selectedBox.id}
+                    box={selectedBox}
+                    zone={zoneName(selectedBox.zone)}
+                    fields={fields}
+                    families={families}
+                    labels={labels}
+                    canForward={textBoxes[textBoxes.length - 1]?.id !== selectedBox.id}
+                    canBackward={textBoxes[0]?.id !== selectedBox.id}
+                    onChange={(b) => changeBox(b)}
+                    onRestack={(step) => setDesign('texts', restack(textBoxes, selectedBox.id, step))}
+                    onDelete={() => deleteItem(selectedBox.id)}
+                    onDuplicate={() => duplicate(selectedBox.id)}
+                  />
                 ) : selectedFinish ? (
                   <FinishProperties
                     finish={selectedFinish}
@@ -753,6 +796,166 @@ function LogoAdder({ library, pictures, labels, onLibrary, onBook }: {
 }
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
+
+const FIELD_LABEL: Record<CoverField, keyof Labels> = {
+  title: 'coverFieldTitle',
+  subtitle: 'coverFieldSubtitle',
+  author: 'coverFieldAuthor',
+  back: 'productionZoneBack',
+  spine: 'productionZoneSpine',
+  flapFront: 'productionZoneFlapFront',
+  flapBack: 'productionZoneFlapBack',
+  front: 'productionZoneFront',
+};
+const fieldLabel = (labels: Labels, f: CoverField): string => String(labels[FIELD_LABEL[f]]);
+
+/** A box's Markdown as the field shows it, its fields by their names
+ *  (`{{Título}}`), and back. */
+function fieldsShown(text: string, labels: Labels): string {
+  return text.replace(/\{\{\s*([a-zA-Z]+)\s*\}\}/g, (m, key: string) => (key in FIELD_LABEL ? `{{${fieldLabel(labels, key as CoverField)}}}` : m));
+}
+function fieldsStored(text: string, labels: Labels): string {
+  const byName = new Map((Object.keys(FIELD_LABEL) as CoverField[]).map((f) => [fieldLabel(labels, f).toLocaleLowerCase(), f] as const));
+  return text.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (m, name: string) => {
+    const f = byName.get(name.toLocaleLowerCase()) ?? (name in FIELD_LABEL ? name : undefined);
+    return f ? `{{${f}}}` : m;
+  });
+}
+
+/** A new text box: of one of the general texts, or of words of its own. */
+function TextAdder({ labels, onPick }: { labels: Labels; onPick: (field: (typeof COVER_FIELDS)[number] | undefined) => void }) {
+  const OWN = '__own__';
+  return (
+    <Select
+      size="sm"
+      value=""
+      onValueChange={(v) => { if (v) onPick(v === OWN ? undefined : (v as (typeof COVER_FIELDS)[number])); }}
+      options={[{ value: '', label: labels.coverAddText }, ...COVER_FIELDS.map((f) => ({ value: f, label: fieldLabel(labels, f) })), { value: OWN, label: labels.coverAddTextOwn }]}
+      ariaLabel={labels.coverAddText}
+    />
+  );
+}
+
+const ROLE_LABEL: Record<TextBoxRole, keyof Labels> = { h1: 'coverTextRoleH1', h2: 'coverTextRoleH2', h3: 'coverTextRoleH3', text: 'coverTextRoleText' };
+
+/** A text box: its words (Markdown, the general texts by their names),
+ *  whether it shows, how it sits and turns, and the type of each of its
+ *  roles. */
+function TextBoxProperties({ box, zone, fields, families, labels, canForward, canBackward, onChange, onRestack, onDelete, onDuplicate }: {
+  box: CoverTextBox;
+  zone: string;
+  fields: CoverTexts;
+  families: string[];
+  labels: Labels;
+  canForward: boolean;
+  canBackward: boolean;
+  onChange: (box: CoverTextBox) => void;
+  onRestack: (step: 1 | -1) => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}) {
+  const [role, setRole] = useState<TextBoxRole>(() => (/^#\s/.test(box.text.trim()) ? 'h1' : 'text'));
+  const [draft, setDraft] = useState(() => fieldsShown(box.text, labels));
+  const set = (patch: Partial<CoverTextBox>, drop: (keyof CoverTextBox)[] = []) => {
+    const next = { ...box, ...patch };
+    for (const k of drop) delete next[k];
+    onChange(next);
+  };
+  const empty = COVER_FIELDS.filter((f) => fieldsIn(box.text).includes(f) && !fields[f]?.trim());
+  return (
+    <>
+      <h3 className="m-0 text-xs font-semibold uppercase tracking-wide text-(--slate)">{labels.coverTextBox}</h3>
+      <NameField value={box.name} label={labels.productionGalleryName} onChange={(name) => (name ? set({ name }) : set({}, ['name']))} />
+      <p className="m-0 text-(--slate)">{fill(labels.coverElementZone, { zone })}</p>
+      <label className="flex flex-col gap-1">
+        {labels.coverTextBoxText}
+        <textarea
+          value={draft}
+          rows={5}
+          onChange={(e) => { setDraft(e.target.value); set({ text: fieldsStored(e.target.value, labels) }); }}
+          className="rounded border border-(--pt-control-border) bg-(--background) px-2 py-1 font-mono text-xs text-(--foreground)"
+        />
+      </label>
+      <Select
+        size="sm"
+        value=""
+        onValueChange={(f) => {
+          if (!f) return;
+          const shown = `${draft.trim() ? `${draft.trimEnd()}\n\n` : ''}{{${fieldLabel(labels, f as CoverField)}}}`;
+          setDraft(shown);
+          set({ text: fieldsStored(shown, labels) });
+        }}
+        options={[{ value: '', label: labels.coverTextBoxInsert }, ...COVER_FIELDS.map((f) => ({ value: f, label: fieldLabel(labels, f) }))]}
+        ariaLabel={labels.coverTextBoxInsert}
+      />
+      <p className="m-0 text-(--slate)">{labels.coverTextBoxHint}</p>
+      {empty.length > 0 && <p className="m-0">{fill(labels.coverTextBoxEmptyFields, { fields: empty.map((f) => fieldLabel(labels, f)).join(', ') })}</p>}
+      <label className="flex items-center justify-between gap-2">
+        <span>{labels.coverTextBoxHidden}</span>
+        <Switch checked={!!box.hidden} onCheckedChange={(on) => (on ? set({ hidden: true }) : set({}, ['hidden']))} ariaLabel={labels.coverTextBoxHidden} />
+      </label>
+      <div className="flex flex-col gap-1">
+        {labels.productionStyleVertical}
+        <SegmentedControl
+          size="sm"
+          value={box.vertical ?? 'top'}
+          onValueChange={(v) => (v === 'top' ? set({}, ['vertical']) : set({ vertical: v }))}
+          options={[
+            { value: 'top', label: labels.productionVerticalTop },
+            { value: 'middle', label: labels.productionVerticalMiddle },
+            { value: 'bottom', label: labels.productionVerticalBottom },
+          ]}
+          ariaLabel={labels.productionStyleVertical}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        {labels.coverTextBoxTurn}
+        <SegmentedControl
+          size="sm"
+          value={box.rotate === -90 ? 'up' : box.rotate === 90 ? 'down' : 'none'}
+          onValueChange={(v) => (v === 'none' ? set({}, ['rotate']) : set({ rotate: v === 'up' ? -90 : 90 }))}
+          options={[
+            { value: 'none', label: labels.coverTextBoxTurnNone },
+            { value: 'up', label: labels.coverTextBoxTurnUp },
+            { value: 'down', label: labels.coverTextBoxTurnDown },
+          ]}
+          ariaLabel={labels.coverTextBoxTurn}
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        {labels.coverTextBoxStyleOf}
+        <SegmentedControl
+          size="sm"
+          value={role}
+          onValueChange={setRole}
+          options={TEXT_BOX_ROLES.map((r) => ({ value: r, label: String(labels[ROLE_LABEL[r]]) }))}
+          ariaLabel={labels.coverTextBoxStyleOf}
+        />
+      </div>
+      <RoleFields
+        key={role}
+        legend={String(labels[ROLE_LABEL[role]])}
+        style={box.styles?.[role] ?? {}}
+        families={families}
+        labels={labels}
+        more
+        onChange={(st) => {
+          const styles = { ...box.styles };
+          if (Object.keys(st).length) styles[role] = st;
+          else delete styles[role];
+          if (Object.keys(styles).length) set({ styles });
+          else set({}, ['styles']);
+        }}
+      />
+      <div className="flex items-center gap-1">
+        <IconButton label={labels.coverElementForward} icon={<ArrowUp size={14} aria-hidden="true" />} disabled={!canForward} onClick={() => onRestack(1)} />
+        <IconButton label={labels.coverElementBackward} icon={<ArrowDown size={14} aria-hidden="true" />} disabled={!canBackward} onClick={() => onRestack(-1)} />
+        <IconButton label={labels.coverElementDuplicate} icon={<Copy size={14} aria-hidden="true" />} onClick={onDuplicate} />
+        <IconButton label={labels.coverElementDelete} icon={<Trash2 size={14} aria-hidden="true" />} onClick={onDelete} />
+      </div>
+    </>
+  );
+}
 
 /** An item's own name, kept when the field is left (empty: none). */
 function NameField({ value, label, onChange }: { value: string | undefined; label: string; onChange: (name: string) => void }) {

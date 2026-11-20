@@ -24,7 +24,7 @@ import { bookMetadata } from '../book/compose.js';
 import { downloadBytes } from '../storage/persistence.js';
 import { fill } from '../print/fillTokens.js';
 import {
-  COVER_TEXT_ZONES,
+
   WORKING_BOOK,
   bookTrimMm,
   metadataIsbn,
@@ -37,13 +37,14 @@ import {
   bookMainPaper,
   type BookPaper,
   type BookProduction,
-  type CoverTextZone,
+
   type SheetChoice,
 } from './bookProduction.js';
 import { deleteProfile, putProfiles } from './productionStore.js';
 import { HEADING, INPUT, mm1, type Labels } from './productionUi.js';
 import { LogoLibrary } from './LogoLibrarySection.js';
-import { DesignSection, ZoneStylesSection } from './CoverDesignSections.js';
+import { DesignSection, bookFamilies } from './CoverDesignSections.js';
+import { COVER_FIELDS, coverFields, type CoverField } from './coverTexts.js';
 import { SheetPreview } from './SheetPreview.js';
 import { Fold } from './Fold.js';
 import { PaperSection } from './PaperSection.js';
@@ -65,13 +66,18 @@ const BUILT_IN_LABEL: Record<string, keyof Labels> = {
   'case-round': 'productionProfileCaseRound',
 };
 
-const ZONE_LABEL: Record<CoverTextZone, keyof Labels> = {
-  front: 'productionZoneFront',
-  spine: 'productionZoneSpine',
+const FIELD_LABEL: Record<CoverField, keyof Labels> = {
+  title: 'coverFieldTitle',
+  subtitle: 'coverFieldSubtitle',
+  author: 'coverFieldAuthor',
   back: 'productionZoneBack',
+  spine: 'productionZoneSpine',
   flapFront: 'productionZoneFlapFront',
   flapBack: 'productionZoneFlapBack',
+  front: 'productionZoneFront',
 };
+/** The general texts written on one line. */
+const ONE_LINE: ReadonlySet<CoverField> = new Set(['title', 'subtitle', 'author', 'spine']);
 
 const MEASURE_LABEL = {
   trimWidth: 'productionMeasureTrimWidth',
@@ -208,8 +214,15 @@ export function ProductionPanel() {
     updateGallery({ ...gallery, pictures: [...gallery.pictures, ...pictures] });
     return galleryResourceId(pictures[0].id);
   };
-  const fillFromBook = () => record && update({ ...record, texts: { ...record.texts, ...fromBook } });
-  const hasOwnText = !!(record?.texts.front?.trim() || record?.texts.spine?.trim());
+  const fillFromBook = () => {
+    if (!record) return;
+    // The book's title and author take the place of a front cover's old text.
+    const texts = { ...coverFields(record.texts), ...fromBook };
+    delete texts.front;
+    update({ ...record, texts });
+  };
+  const fields = useMemo(() => coverFields(record?.texts ?? {}), [record]);
+  const hasOwnText = !!(fields.title?.trim() || fields.author?.trim() || fields.spine?.trim() || fields.front?.trim());
 
   // In the order the work goes: the version, its spine, the sheet with
   // the designer and the files; then the texts; then what is set once
@@ -314,6 +327,7 @@ export function ProductionPanel() {
 
           {version && record && ready && complete && (
             <CoverIdmlImportButton
+              families={bookFamilies(config)}
               sheet={pickSheet(ready, shown === 'jacket' ? 'jacket' : 'cover', bookTrimMm(config))}
               record={record}
               gallery={gallery}
@@ -328,7 +342,7 @@ export function ProductionPanel() {
             <section className="flex flex-col gap-2">
               <h3 className={HEADING}>{labels.productionTexts}</h3>
               <p className="m-0 text-xs text-(--slate)">{labels.productionTextsIntro}</p>
-              {fromBook.front && (
+              {fromBook.title && (
                 hasOwnText ? (
                   <ConfirmPopover message={labels.productionFromBookConfirm} confirmLabel={labels.productionFromBook} onConfirm={fillFromBook}>
                     {({ open }) => <Button variant="outline" size="sm" onClick={open}>{labels.productionFromBook}</Button>}
@@ -337,18 +351,23 @@ export function ProductionPanel() {
                   <Button variant="outline" size="sm" onClick={fillFromBook}>{labels.productionFromBook}</Button>
                 )
               )}
-              {COVER_TEXT_ZONES.filter((zone) => !zone.startsWith('flap') || versions.some((v) => v.flaps)).map((zone) => (
-                <label key={zone} className="flex flex-col gap-1 text-xs">
-                  {String(labels[ZONE_LABEL[zone]])}
-                  <textarea
-                    rows={zone === 'spine' ? 1 : 3}
-                    value={record.texts[zone] ?? ''}
-                    placeholder={fromBook[zone] ?? ''}
-                    onChange={(e) => update({ ...record, texts: { ...record.texts, [zone]: e.target.value } })}
-                    className={cn(INPUT, 'font-mono')}
-                  />
-                </label>
-              ))}
+              {[...(fields.front !== undefined ? ['front' as const] : []), ...COVER_FIELDS]
+                .filter((f) => !f.startsWith('flap') || versions.some((v) => v.flaps))
+                .map((f) => (
+                  <label key={f} className="flex flex-col gap-1 text-xs">
+                    {String(labels[FIELD_LABEL[f]])}
+                    <textarea
+                      rows={ONE_LINE.has(f) ? 1 : 4}
+                      value={fields[f] ?? ''}
+                      placeholder={fromBook[f] ?? ''}
+                      // The fields as they now are: a front cover's old text,
+                      // split, is written split from here on.
+                      onChange={(e) => update({ ...record, texts: { ...fields, [f]: e.target.value } })}
+                      className={cn(INPUT, ONE_LINE.has(f) ? undefined : 'font-mono')}
+                    />
+                  </label>
+                ))}
+              <p className="m-0 text-xs text-(--slate)">{labels.productionTextsDesigner}</p>
             </section>
           )}
 
@@ -375,15 +394,6 @@ export function ProductionPanel() {
                   resources={coverPictures}
                   onUpload={uploadToGallery}
                   bookTextHex={bookTextHex}
-                  labels={labels}
-                  onChange={(design) => update({ ...record, design })}
-                />
-              </Fold>
-              <Fold title={labels.productionStyles}>
-                <ZoneStylesSection
-                  design={record.design ?? {}}
-                  config={config}
-                  hasFlaps={versions.some((v) => v.flaps)}
                   labels={labels}
                   onChange={(design) => update({ ...record, design })}
                 />

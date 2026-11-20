@@ -74,9 +74,10 @@ describe('a cover back from InDesign', () => {
     const want = elementRect(sheet, design(70).elements![0]!)!;
     expect(dot.x).toBeCloseTo(want.x, 1);
     expect(back.report.updated).toContain('cover-el-dot');
-    // The text, its heading kept.
-    expect(back.texts.front).toBe('# Otro título\n\nAutora');
-    expect(back.report.texts).toEqual(['front']);
+    // The title its box shows, changed there.
+    expect(back.texts.title).toBe('Otro título');
+    expect(back.texts.author).toBe('Autora');
+    expect(back.report.texts).toEqual(['title']);
     // The renamed varnish is new; the old one is missing and kept.
     const added = back.design.finishes!.find((f) => f.name === 'Brillo nuevo')!;
     expect(added).toMatchObject({ kind: 'varnish', ink: 'Barniz UVI' });
@@ -120,9 +121,13 @@ describe('a cover back from InDesign', () => {
     const red = back.design.elements!.find((e) => e.color === '#ff0000')!;
     expect(red.kind).toBe('box');
     expect(back.design.elements!.find((e) => e.kind === 'shape')!.path![0]!.nodes).toHaveLength(10);
-    // The texts by the zone their frames stand in.
-    expect(back.texts.front).toBe('El título\n\nAutora');
+    // The front cover's frame gives the title (its largest type) and the
+    // author; the spine's, what the spine says. Each frame is a box.
+    expect(back.texts.title).toBe('El título');
+    expect(back.texts.author).toBe('Autora');
     expect(back.texts.spine).toBe('Autora · Título');
+    expect(back.design.texts!.map((b) => [b.zone, b.text])).toEqual(expect.arrayContaining([['front', '# {{title}}\n\n## {{author}}'], ['spine', '{{spine}}']]));
+    expect(back.design.texts!.find((b) => b.zone === 'spine')!.rotate).toBeDefined();
     expect(back.report.missing).toEqual([]);
   });
 
@@ -139,8 +144,8 @@ describe('a cover back from InDesign', () => {
     expect(back.design.logos).toHaveLength(1);
     expect(back.design.logos![0]).toMatchObject({ logoId: 'seal', clearance: 4 });
     // The type: the front's title at its size, as InDesign sets it.
-    expect(back.design.zoneStyles?.front?.title?.fontSize).toBeCloseTo(30, 0);
-    expect(back.design.textColor).toBeDefined();
+    const front = back.design.texts!.find((b) => b.zone === 'front')!;
+    expect(Object.values(front.styles ?? {}).some((st) => Math.abs((st.fontSize ?? 0) - 30) < 0.5)).toBe(true);
     const template = templateFromDesign(back.design, designParts(back.design), { gallery: { projectId: '', pictures: back.pictures, traces: [] }, logos: [seal] }, 'De InDesign');
     expect(template.parts).toEqual(['background', 'elements', 'texts', 'effects', 'logos', 'finishes']);
     expect(template.logos.map((l) => l.id)).toEqual(['seal']);

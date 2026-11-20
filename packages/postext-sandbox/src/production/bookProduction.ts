@@ -21,7 +21,6 @@ import {
   type CoverPage,
   type ColorValue,
   type CoverDesign,
-  type CoverZoneName,
   type MirrorPicture,
   type Dimension,
   type PageRun,
@@ -48,6 +47,7 @@ import {
 import { logoFileId, logoResource, logoResourceId, type LogoRecord } from './logoLibrary.js';
 import { galleryFileId, galleryResource, galleryResourceId, type CoverGallery } from './coverGallery.js';
 import { adFileId, adResource, adResourceId, readEndpapers, type BookEndpapers, type CatalogueAd, type EndpaperSide } from './collections.js';
+import { COVER_FIELDS, coverFields, expandFields, readTextBoxes, styledBoxText, textBoxesOf, textBoxParagraphStyles, textBoxRect, type CoverTextBox, type CoverTexts } from './coverTexts.js';
 
 /** The zones whose text the panel edits. */
 export const COVER_TEXT_ZONES = ['front', 'spine', 'back', 'flapFront', 'flapBack'] as const;
@@ -70,6 +70,9 @@ export interface CoverDesignSettings {
   effects?: CoverElementSetting[];
   logos?: CoverLogoSetting[];
   finishes?: CoverFinishSetting[];
+  /** The text boxes (./coverTexts.ts), back to front; unset, the default
+   *  ones, a box over each zone. */
+  texts?: CoverTextBox[];
 }
 
 /** The paper of a book's text block, the same for every version: a paper
@@ -86,8 +89,9 @@ export interface BookProduction {
   projectId: string;
   versions: ProductionVersion[];
   activeVersionId?: string;
-  /** The cover's text by zone, Markdown; the same for every version. */
-  texts: Partial<Record<CoverTextZone, string>>;
+  /** The cover's general texts, Markdown, the same for every version
+   *  (./coverTexts.ts): the title, the author, the back cover's text… */
+  texts: CoverTexts;
   design?: CoverDesignSettings;
   paper?: BookPaper;
   /** What goes on the endpapers (a case's): ./collections.ts. */
@@ -117,15 +121,17 @@ export function newVersion(kind: 'paperback' | 'hardcover', name: string): Produ
 const text = (v: unknown): string => (typeof v === 'string' || typeof v === 'number' ? String(v).trim() : '');
 
 /** The cover texts the book's own metadata gives (the first chapter's
- *  front matter): the title, subtitle and author on the front cover, the
- *  author and title on the spine. Empty without a title. */
-export function metadataTexts(metadata: Record<string, unknown>): Partial<Record<CoverTextZone, string>> {
+ *  front matter): its title, subtitle and author, and the author and
+ *  title on the spine. Empty without a title. */
+export function metadataTexts(metadata: Record<string, unknown>): CoverTexts {
   const title = text(metadata.title);
   if (!title) return {};
   const subtitle = text(metadata.subtitle);
   const author = text(metadata.author);
   return {
-    front: [`# ${title}`, subtitle, author].filter(Boolean).join('\n\n'),
+    title,
+    ...(subtitle ? { subtitle } : {}),
+    ...(author ? { author } : {}),
     spine: [author, title].filter(Boolean).join(' · '),
   };
 }
@@ -282,9 +288,18 @@ export interface RoleStyle {
   fontFamily?: string;
   /** Points. */
   fontSize?: number;
+  /** Points; unset, 1.2 times the size. */
+  lineHeight?: number;
   bold?: boolean;
   italic?: boolean;
   align?: 'left' | 'center' | 'right' | 'justify';
+  /** `#rrggbb`; unset, the design's text colour. */
+  color?: string;
+  /** Thousandths of an em between letters, as InDesign's tracking. */
+  tracking?: number;
+  caps?: 'upper' | 'small';
+  /** Points after each paragraph. */
+  spaceAfter?: number;
 }
 
 /** A zone's type: its title (the lines that start with `#`), its text,
@@ -432,8 +447,16 @@ export function coverDocumentInput(
       .map((z) => [z, vertical(designZoneOf(z))] as const)
       .filter(([, v]) => v !== undefined),
   );
+  // The cover's text boxes, with their fields' texts in.
+  const fields = coverFields(texts);
+  const boxes = isCover && !hidden.has('texts') ? textBoxesOf(sheet, settings, fields, version.spineText).filter((b) => !b.hidden) : [];
+  const boxText = new Map(boxes.map((b) => [b.id, expandFields(b.text, fields)] as const));
   const cover = coverPage(sheet, {
     templateId: 'production-sheet',
+    ...(boxes.length ? { textBoxes: boxes.flatMap((b) => {
+      const rect = textBoxRect(sheet, b);
+      return rect && boxText.get(b.id) ? [{ name: b.id, rect, ...(b.rotate ? { rotate: b.rotate } : {}), ...(b.vertical ? { verticalAlign: b.vertical } : {}) }] : [];
+    }) } : {}),
     ...(isCover && version.isbn ? { isbn: version.isbn } : {}),
     ...(version.isbnAddOn ? { isbnAddOn: version.isbnAddOn } : {}),
     ...(isCover && workIsbn ? { workIsbnCaption: isbnCaption(version.workIsbn!, workIsbn).replace(/^ISBN/, options.workIsbnLabel ?? 'ISBN') } : {}),
@@ -462,12 +485,10 @@ export function coverDocumentInput(
     ...(design?.logos ?? []).map((e) => e.resourceId),
   ].flatMap((id) => bookResources.filter((r) => r.id === id));
   const textColor = isCover && settings?.textColor ? ink(settings.textColor) : undefined;
-  const content: Partial<Record<CoverZoneName, string>> = {};
-  if (isCover && !hidden.has('texts')) {
-    for (const zone of COVER_TEXT_ZONES) {
-      const t = texts[zone]?.trim();
-      if (t) content[zone] = styledZoneText(t, zone);
-    }
+  const content: Partial<Record<string, string>> = {};
+  for (const b of boxes) {
+    const t = boxText.get(b.id);
+    if (t) content[b.id] = styledBoxText(t, b.id);
   }
   // An endpaper's pages take the back cover's type.
   if (!isCover && options.endpaper?.side) {
@@ -485,7 +506,7 @@ export function coverDocumentInput(
     resources: [...cover.resources, ...libraryLogos.map(logoResource), ...galleryPictures.map(galleryResource), ...(endpaper?.ads ?? []).map(adResource), ...new Set(pictures)],
     config: {
       ...rest,
-      paragraphStyles: [...(config.paragraphStyles ?? []), ...coverParagraphStyles(config, isCover ? settings : undefined)],
+      paragraphStyles: [...(config.paragraphStyles ?? []), ...coverParagraphStyles(config, isCover ? settings : undefined), ...textBoxParagraphStyles(config, settings, boxes, ink)],
       ...(textColor ? { bodyText: { ...config.bodyText, color: textColor } } : {}),
       page: { ...config.page, ...cover.page, ...(config.page?.dpi ? { dpi: config.page.dpi } : {}) },
       header: { elements: [] },
@@ -514,9 +535,9 @@ export function readBookProduction(raw: unknown): BookProduction | null {
   );
   const texts: BookProduction['texts'] = {};
   if (isRecord(raw.texts)) {
-    for (const zone of COVER_TEXT_ZONES) {
-      const t = raw.texts[zone];
-      if (typeof t === 'string') texts[zone] = t;
+    for (const key of [...COVER_FIELDS, 'front'] as const) {
+      const t = raw.texts[key];
+      if (typeof t === 'string') texts[key] = t;
     }
   }
   const design = readDesign(raw.design);
@@ -588,6 +609,8 @@ function readDesign(raw: unknown): CoverDesignSettings | undefined {
   if (logos.length > 0) out.logos = logos;
   const finishes = readCoverFinishes(raw.finishes);
   if (finishes.length > 0) out.finishes = finishes;
+  const boxes = readTextBoxes(raw.texts, readRole);
+  if (boxes) out.texts = boxes;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -602,6 +625,11 @@ function readRole(raw: unknown): RoleStyle | undefined {
   if (typeof raw.bold === 'boolean') out.bold = raw.bold;
   if (typeof raw.italic === 'boolean') out.italic = raw.italic;
   if (typeof raw.align === 'string' && ALIGNS.has(raw.align)) out.align = raw.align as RoleStyle['align'];
+  if (typeof raw.lineHeight === 'number' && raw.lineHeight > 0 && raw.lineHeight < 500) out.lineHeight = raw.lineHeight;
+  if (typeof raw.color === 'string' && HEX.test(raw.color)) out.color = raw.color;
+  if (typeof raw.tracking === 'number' && Number.isFinite(raw.tracking) && Math.abs(raw.tracking) <= 1000) out.tracking = raw.tracking;
+  if (raw.caps === 'upper' || raw.caps === 'small') out.caps = raw.caps;
+  if (typeof raw.spaceAfter === 'number' && raw.spaceAfter >= 0 && raw.spaceAfter < 500) out.spaceAfter = raw.spaceAfter;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 

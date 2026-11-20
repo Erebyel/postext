@@ -10,6 +10,7 @@ import type { ProductionSheet } from 'postext';
 import type { GalleryPicture } from './coverGallery.js';
 import { galleryPictureOf, type CoverGallery } from './coverGallery.js';
 import { elementAt, elementRect, finishAsElement, finishFromElement, newElementId, type CoverElementSetting, type CoverFinishSetting, type ItemLayer } from './coverLayers.js';
+import { textBoxAsElement, textBoxFromElement, type CoverTextBox } from './coverTexts.js';
 
 /** Changes of the same thing this close together are one step (a number
  *  typed digit by digit, an arrow key held, a mask made with its picture). */
@@ -59,7 +60,7 @@ export function createCoverHistory<T>(): CoverHistory<T> {
   };
 }
 
-export type CoverItem = CoverElementSetting | CoverFinishSetting;
+export type CoverItem = CoverElementSetting | CoverFinishSetting | CoverTextBox;
 
 /** An item copied: its layer, and the gallery pictures it places, to paste
  *  it on a book whose gallery does not have them. */
@@ -97,6 +98,10 @@ export function duplicateCoverItem(sheet: ProductionSheet, layer: ItemLayer, ite
     if (!r) return el;
     return elementAt(sheet, el, 'rect' in to ? to.rect : { ...r, x: r.x + to.offset, y: r.y + to.offset });
   };
+  if (layer === 'texts') {
+    const box = item as CoverTextBox;
+    return { ...textBoxFromElement(box, place(textBoxAsElement(box))), id: id.replace(/^el-/, 'text-') };
+  }
   if (layer === 'finishes') {
     const finish = item as CoverFinishSetting;
     const asElement = finishAsElement(finish, '#000000');

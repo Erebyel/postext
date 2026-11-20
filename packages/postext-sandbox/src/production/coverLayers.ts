@@ -20,8 +20,8 @@ export type CoverLayer = (typeof COVER_LAYERS)[number];
 
 /** The layers whose items are placed on the sheet (the canvas edits the
  *  active one's). */
-export type ItemLayer = 'elements' | 'effects' | 'logos' | 'finishes';
-export const ITEM_LAYERS: readonly ItemLayer[] = ['elements', 'effects', 'logos', 'finishes'];
+export type ItemLayer = 'elements' | 'texts' | 'effects' | 'logos' | 'finishes';
+export const ITEM_LAYERS: readonly ItemLayer[] = ['elements', 'texts', 'effects', 'logos', 'finishes'];
 
 /** A movable element as the book stores it: a picture of the book, or a
  *  box of colour (`#rrggbb`), its box mm from its zone's top-left corner. */
@@ -61,6 +61,12 @@ export interface CoverElementSetting {
   /** A movable element painted as it is past the design margin, over the
    *  mirror, instead of folded out with the background. */
   bleed?: 'own';
+  /** A picture's fit in its box: whole (`contain`, the default) or
+   *  filling it, cropped (`cover`: a page with its bleed in a frame). */
+  fit?: 'contain' | 'cover';
+  /** Across zones: its right edge on the zone it ends in (the engine's
+   *  `CoverElement.to`). */
+  to?: { zone: CoverZoneName; x: number; basis?: number };
 }
 
 /** A logo on the cover: a picture of the logo library (`logoId`) or of
@@ -176,6 +182,8 @@ export function readCoverElements(raw: unknown): CoverElementSetting[] {
       height: e.height,
       ...(finite(e.opacity) && e.opacity >= 0 && e.opacity < 1 ? { opacity: e.opacity } : {}),
       ...(e.bleed === 'own' ? { bleed: 'own' as const } : {}),
+      ...(e.fit === 'cover' ? { fit: 'cover' as const } : {}),
+      ...(isRecord(e.to) && typeof e.to.zone === 'string' && finite(e.to.x) ? { to: { zone: e.to.zone as CoverZoneName, x: e.to.x, ...(finite(e.to.basis) && e.to.basis > 0 ? { basis: e.to.basis } : {}) } } : {}),
     }];
   });
 }
@@ -247,12 +255,16 @@ export const elementRect = (sheet: ProductionSheet, el: CoverElementSetting): Sh
 
 /** The element at `rect` (sheet mm), placed by the zone it now stands in. */
 export function elementAt(sheet: ProductionSheet, el: CoverElementSetting, rect: SheetRect): CoverElementSetting {
-  const { zone, x, y, width, height, basis } = placeCoverElement(sheet, geometryOf(el), rect);
-  return { ...el, zone, x, y, width, height, ...(basis ? { basis } : {}) };
+  const { zone, x, y, width, height, basis, to } = placeCoverElement(sheet, geometryOf(el), rect);
+  const out: CoverElementSetting = { ...el, zone, x, y, width, height, ...(basis ? { basis } : {}) };
+  // Across zones, its right edge on the zone it ends in.
+  if (to) out.to = to;
+  else delete out.to;
+  return out;
 }
 
 /** Only the placing of an element, which is all the engine's geometry reads. */
-const geometryOf = (el: CoverElementSetting): CoverElement => ({ id: el.id, kind: el.kind, zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height, ...(el.basis ? { basis: el.basis } : {}) });
+const geometryOf = (el: CoverElementSetting): CoverElement => ({ id: el.id, kind: el.kind, zone: el.zone, x: el.x, y: el.y, width: el.width, height: el.height, ...(el.basis ? { basis: el.basis } : {}), ...(el.to ? { to: el.to } : {}) });
 
 export function newElementId(): string {
   return `el-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;

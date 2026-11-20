@@ -4,8 +4,9 @@
  *
  * A template keeps the parts of a design it was saved with, each a layer
  * of the designer: the background (the ground, its picture, the zones'
- * colours), the movable elements, the type (each zone's styles and the
- * text colour, never the texts), the effects, the logos and the finishes.
+ * colours), the movable elements, the texts (their boxes and type, and
+ * the general texts they show, never what those say), the effects, the
+ * logos and the finishes.
  * It carries the pictures of the cover's gallery and the logos of the
  * library it places, so it lays the same on any book and travels as a
  * file. Every item is placed by its zone with that zone's size, so it
@@ -46,7 +47,7 @@ export function designParts(design: CoverDesignSettings | undefined): TemplatePa
   return TEMPLATE_PARTS.filter((p) => {
     switch (p) {
       case 'background': return !!(design.background || design.image || (design.zones && Object.keys(design.zones).length));
-      case 'texts': return !!(design.textColor || (design.zoneStyles && Object.keys(design.zoneStyles).length));
+      case 'texts': return !!(design.textColor || design.texts || (design.zoneStyles && Object.keys(design.zoneStyles).length));
       default: return !!design[p]?.length;
     }
   });
@@ -63,6 +64,8 @@ function partOf(design: CoverDesignSettings, part: TemplatePart): Partial<CoverD
     case 'texts': return {
       ...(design.textColor ? { textColor: design.textColor } : {}),
       ...(design.zoneStyles ? { zoneStyles: design.zoneStyles } : {}),
+      // The boxes, with their fields: what those say comes from each book.
+      ...(design.texts ? { texts: design.texts } : {}),
     };
     default: return design[part]?.length ? { [part]: design[part] } : {};
   }
@@ -78,6 +81,7 @@ function withoutPart(design: CoverDesignSettings, part: TemplatePart): CoverDesi
   } else if (part === 'texts') {
     delete out.textColor;
     delete out.zoneStyles;
+    delete out.texts;
   } else {
     delete out[part];
   }

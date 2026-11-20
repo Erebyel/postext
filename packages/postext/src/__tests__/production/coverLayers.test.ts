@@ -12,7 +12,7 @@ class StubCtx {
 };
 import { buildDocument } from '../../pipeline/build/drivers.js';
 import { composedPaintOrder, decorationOver } from '../../composed/paint.js';
-import { caseSheet, coverMarkdown, coverPage, resolveBindingMeasures, softcoverSheet, type CoverDesign } from '../../production/index.js';
+import { caseSheet, coverElementRect, coverMarkdown, coverPage, placeCoverElement, resolveBindingMeasures, softcoverSheet, type CoverDesign } from '../../production/index.js';
 import type { Resource } from '../../types.js';
 
 const trim = { width: 150, height: 230 };
@@ -167,5 +167,47 @@ describe('finish inks', () => {
     expect(els.find((e) => e.id === 'cover-el-figure')!.resourceId).toBe('cover-clip-figure');
     const mirror = new TextDecoder().decode(cover.files['cover-mirror.svg']);
     expect(mirror).toContain('<clipPath id="mclip');
+  });
+});
+
+describe('cover text boxes', () => {
+  it('are frames of their own where they were put, a turned one with its sides swapped', () => {
+    const trim = { width: 150, height: 230 };
+    const sheet = softcoverSheet(trim, 20, resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, trim), false);
+    const cover = coverPage(sheet, { textBoxes: [
+      { name: 'box-title', rect: { x: 200, y: 20, width: 100, height: 30 }, verticalAlign: 'bottom' },
+      { name: 'box-spine', rect: { x: 168, y: 20, width: 10, height: 150 }, rotate: -90 },
+    ] });
+    expect(cover.slots).toContain('box-title');
+    const frames = cover.template.frames ?? [];
+    const title = frames.find((f) => f.name === 'box-title')!;
+    expect(title.width).toEqual({ value: 100, unit: 'mm' });
+    expect(title.verticalAlign).toBe('bottom');
+    const spine = frames.find((f) => f.name === 'box-spine')!;
+    expect(spine.width).toEqual({ value: 150, unit: 'mm' });
+    expect(spine.rotate).toBe(-90);
+    expect(coverMarkdown('cover', { 'box-title': 'Título' }, cover.slots)).toContain(':::frame{slot="box-title"}');
+  });
+});
+
+describe('an element across zones', () => {
+  it('keeps each edge on its own zone when the spine grows', () => {
+    const trim = { width: 150, height: 230 };
+    const m = resolveBindingMeasures({ id: 'x', name: 'X', style: 'perfect' }, trim);
+    const thin = softcoverSheet(trim, 6, m, false);
+    const thick = softcoverSheet(trim, 30, m, false);
+    const back = thin.zones.find((z) => z.name === 'back')!.rect;
+    const front = thin.zones.find((z) => z.name === 'front')!.rect;
+    // A band from the middle of the back cover to the middle of the front.
+    const band = placeCoverElement(thin, { id: 'b', kind: 'box', zone: 'front', x: 0, y: 0, width: 1, height: 1 }, { x: back.x + 50, y: 10, width: front.x + 50 - back.x - 50, height: 5 });
+    expect(band.zone).toBe('back');
+    expect(band.to?.zone).toBe('front');
+    const r = coverElementRect(thick, band)!;
+    const backT = thick.zones.find((z) => z.name === 'back')!.rect;
+    const frontT = thick.zones.find((z) => z.name === 'front')!.rect;
+    expect(r.x).toBeCloseTo(backT.x + 50, 6);
+    expect(r.x + r.width).toBeCloseTo(frontT.x + 50, 6);
+    // Within one zone, as before: no `to`.
+    expect(placeCoverElement(thin, band, { x: front.x + 10, y: 10, width: 20, height: 5 }).to).toBeUndefined();
   });
 });

@@ -33,6 +33,7 @@ import { useCoverTemplates } from './useProduction.js';
 import { useObjectUrl } from './coverImages.js';
 import { useCoverThumbnail } from './sheetPainter.js';
 import { idmlSkipReason, pickedIdml } from './CoverIdmlImportButton.js';
+import { PICTURE_ACCEPT } from './printFiles.js';
 import { importCoverIdml, type CoverIdmlReport } from './coverIdmlImport.js';
 import { coverLayerNamesOf } from './coverIdml.js';
 
@@ -144,7 +145,7 @@ export function CoverTemplatesSection({ record, sheet, gallery, library, labels,
   const importRef = useRef<HTMLInputElement>(null);
   const idmlRef = useRef<HTMLInputElement>(null);
   // The template the last IDML made, and what it brought in and left out.
-  const [fromIdml, setFromIdml] = useState<{ template: CoverTemplate; report: CoverIdmlReport } | null>(null);
+  const [fromIdml, setFromIdml] = useState<{ template: CoverTemplate; report: CoverIdmlReport; postscript: string[] } | null>(null);
   const offered = designParts(record.design);
   const [name, setName] = useState('');
   const [parts, setParts] = useState<TemplatePart[] | null>(null);
@@ -198,7 +199,7 @@ export function CoverTemplatesSection({ record, sheet, gallery, library, labels,
       const thumb = await thumbnail?.(template.design, back.texts, template.pictures);
       const saved = thumb ? { ...template, thumbnail: thumb } : template;
       await putTemplates([saved]);
-      setFromIdml({ template: saved, report: back.report });
+      setFromIdml({ template: saved, report: back.report, postscript: got.postscript });
       announce(fill(labels.coverTemplateSaved, { name }));
     } catch {
       announce(labels.coverIdmlFailed);
@@ -233,13 +234,14 @@ export function CoverTemplatesSection({ record, sheet, gallery, library, labels,
         <p className="m-0 text-(--slate)">{sheet ? labels.coverTemplateFromIdmlHint : labels.productionSpinePending}</p>
         <div>
           <Button variant="outline" size="sm" icon={<FileUp size={13} />} disabled={!sheet} onClick={() => idmlRef.current?.click()}>{labels.coverTemplateFromIdml}</Button>
-          <input ref={idmlRef} type="file" multiple accept=".idml,image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void fromInDesign(e)} />
+          <input ref={idmlRef} type="file" multiple accept={`.idml,${PICTURE_ACCEPT}`} className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void fromInDesign(e)} />
         </div>
         {fromIdml && (
           <div role="status" className="flex flex-col gap-1 border-s-2 border-(--brand) bg-(--surface) px-2 py-1.5">
             <p className="m-0 font-semibold">{fill(labels.coverTemplateSaved, { name: fromIdml.template.name })}</p>
             <p className="m-0">{fromIdml.template.parts.map((p) => String(labels[PART_LABEL[p]])).join(' · ')}</p>
-            {fromIdml.report.links.length > 0 && <p className="m-0">{fill(labels.coverIdmlLinks, { files: fromIdml.report.links.join(', ') })}</p>}
+            {fromIdml.report.links.length > 0 && <p className="m-0">{fill(labels.coverIdmlLinks, { files: [...new Set(fromIdml.report.links)].join(', ') })}</p>}
+            {fromIdml.postscript.length > 0 && <p className="m-0">{fill(labels.productionPicturePostscript, { name: fromIdml.postscript.join(', ') })}</p>}
             {fromIdml.report.skipped.length > 0 && <p className="m-0">{fill(labels.coverIdmlSkipped, { items: fromIdml.report.skipped.map((x) => `${x.name} (${idmlSkipReason(labels, x.why)})`).join(', ') })}</p>}
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" size="sm" onClick={() => { void apply(fromIdml.template, fromIdml.template.parts); setFromIdml(null); }}>{labels.coverTemplateApplyNow}</Button>

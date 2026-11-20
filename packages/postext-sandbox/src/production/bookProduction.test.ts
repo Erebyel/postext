@@ -56,8 +56,9 @@ describe('book production', () => {
     expect(input.config.page?.width).toEqual(input.cover.page.width);
     expect(input.config.page?.dpi).toBe(150);
     expect(input.config.pageTemplates?.[0]?.id).toBe('production-sheet');
-    expect(input.markdown).toContain(':::frame{slot="front"}');
-    expect(input.markdown).toContain(':::frame{slot="back"}');
+    // Each zone's text in its default box (./coverTexts.ts).
+    expect(input.markdown).toContain(':::frame{slot="text-front"}');
+    expect(input.markdown).toContain(':::frame{slot="text-back"}');
     expect(input.cover.resources.length).toBe(1);
   });
 
@@ -90,10 +91,12 @@ describe('book production', () => {
 
   it('takes the cover and spine texts and the ISBN from the book metadata', () => {
     expect(metadataTexts({ title: 'El oficio', subtitle: 'Una guía', author: 'Reyes' })).toEqual({
-      front: '# El oficio\n\nUna guía\n\nReyes',
+      title: 'El oficio',
+      subtitle: 'Una guía',
+      author: 'Reyes',
       spine: 'Reyes · El oficio',
     });
-    expect(metadataTexts({ title: 'Solo título' })).toEqual({ front: '# Solo título', spine: 'Solo título' });
+    expect(metadataTexts({ title: 'Solo título' })).toEqual({ title: 'Solo título', spine: 'Solo título' });
     expect(metadataTexts({ author: 'Sin título' })).toEqual({});
     expect(metadataIsbn({ isbn: ' 978-84-00000-00-4 ' })).toBe('978-84-00000-00-4');
     expect(metadataIsbn({})).toBeUndefined();

@@ -139,7 +139,7 @@ export function DesignSection({ design, resources, bookTextHex, labels, onChange
 
 /** The type families the book uses: its body, its headings and the fonts
  *  it carries. */
-function bookFamilies(config: PostextConfig): string[] {
+export function bookFamilies(config: PostextConfig): string[] {
   const out = new Set<string>();
   out.add(resolveBodyTextConfig(config.bodyText, config.locale).fontFamily);
   const headings = resolveHeadingsConfig(config.headings);
@@ -149,11 +149,16 @@ function bookFamilies(config: PostextConfig): string[] {
   return [...out].filter(Boolean).sort((a, b) => a.localeCompare(b));
 }
 
-function RoleFields({ role, style, families, labels, onChange }: {
-  role: TextRole;
+/** A role's type: its font, size, weight and alignment; with `more`, as a
+ *  text box sets it, its leading, colour, tracking, capitals and the space
+ *  after each paragraph too. */
+export function RoleFields({ role, legend: ownLegend, style, families, labels, more = false, onChange }: {
+  role?: TextRole;
+  legend?: string;
   style: RoleStyle;
   families: string[];
   labels: Labels;
+  more?: boolean;
   onChange: (s: RoleStyle) => void;
 }) {
   const BOOK = '__book__';
@@ -163,9 +168,27 @@ function RoleFields({ role, style, families, labels, onChange }: {
     else next[key] = value;
     onChange(next);
   };
-  const legend = role === 'title' ? labels.productionStyleTitle : labels.productionStyleText;
+  const legend = ownLegend ?? (role === 'title' ? labels.productionStyleTitle : labels.productionStyleText);
+  const numberField = (key: 'lineHeight' | 'tracking' | 'spaceAfter', label: string, min: number, max: number, step: number) => (
+    <label className="flex items-center justify-between gap-2">
+      {label}
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={style[key] ?? ''}
+        placeholder="—"
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          set(key, e.target.value.trim() && Number.isFinite(n) ? n : undefined);
+        }}
+        className={cn(INPUT, 'w-16')}
+      />
+    </label>
+  );
   return (
-    <fieldset className="m-0 flex flex-col gap-2 rounded border border-(--rule) p-2">
+    <fieldset className="m-0 flex min-w-0 flex-col gap-2 rounded border border-(--rule) p-2">
       <legend className="px-1 text-xs font-semibold">{legend}</legend>
       <label className="flex flex-col gap-1 text-xs">
         {labels.productionStyleFont}
@@ -177,7 +200,7 @@ function RoleFields({ role, style, families, labels, onChange }: {
           ariaLabel={`${legend}: ${labels.productionStyleFont}`}
         />
       </label>
-      <div className="flex items-center justify-between gap-2 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <label className="flex items-center gap-2">
           {labels.productionStyleSize}
           <input
@@ -215,6 +238,31 @@ function RoleFields({ role, style, families, labels, onChange }: {
         ]}
         ariaLabel={`${legend}: ${labels.productionStyleAlign}`}
       />
+      {more && (
+        <div className="flex flex-col gap-2 text-xs">
+          {numberField('lineHeight', labels.coverStyleLeading, 2, 400, 0.5)}
+          {numberField('tracking', labels.coverStyleTracking, -200, 1000, 5)}
+          {numberField('spaceAfter', labels.coverStyleSpaceAfter, 0, 200, 0.5)}
+          <label className="flex items-center justify-between gap-2">
+            {labels.coverStyleColor}
+            <span className="flex items-center gap-1">
+              <input type="color" aria-label={`${legend}: ${labels.coverStyleColor}`} value={style.color ?? '#000000'} onChange={(e) => set('color', e.target.value)} className="h-6 w-9 cursor-pointer rounded border border-(--pt-control-border) bg-transparent p-0" />
+              {style.color && <IconButton label={labels.coverStyleColorClear} icon={<X size={12} aria-hidden="true" />} onClick={() => set('color', undefined)} />}
+            </span>
+          </label>
+          <SegmentedControl
+            size="sm"
+            value={style.caps ?? 'none'}
+            onValueChange={(c) => set('caps', c === 'none' ? undefined : c)}
+            options={[
+              { value: 'none', label: labels.coverStyleCapsNone },
+              { value: 'upper', label: labels.coverStyleCapsUpper },
+              { value: 'small', label: labels.coverStyleCapsSmall },
+            ]}
+            ariaLabel={`${legend}: ${labels.coverStyleCaps}`}
+          />
+        </div>
+      )}
     </fieldset>
   );
 }

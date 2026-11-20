@@ -129,6 +129,12 @@ export interface CoverElement extends CoverEffects {
    *  evenly, about where its centre falls, so it keeps its proportions.
    *  Absent: it stays as placed. */
   basis?: { width: number; height: number };
+  /** A box or a shape that runs across zones (a band, a ground): its
+   *  right edge, mm from the left of the zone it ends in, and that zone's
+   *  width when it was placed. Each edge then follows its own zone when
+   *  the zones change (a spine that grows moves the edge on the front
+   *  and stretches the band, not the band on the spine's scale). */
+  to?: { zone: CoverZoneName; x: number; basis?: number };
   /** Its box, mm from the zone's top-left corner; it may run out of the
    *  zone, onto the sheet's other zones or into the bleed. */
   x: number;
@@ -171,6 +177,15 @@ export function coverElementRect(sheet: ProductionSheet, el: CoverElement): Shee
     ?? sheet.zones.find((z) => z.name === ZONE_STAND_IN[el.zone]);
   if (!zone) return undefined;
   const b = el.basis;
+  const end = el.to && el.kind !== 'image' ? sheet.zones.find((z) => z.name === el.to!.zone) ?? sheet.zones.find((z) => z.name === ZONE_STAND_IN[el.to!.zone]) : undefined;
+  if (end && el.to) {
+    // Across zones: each edge with its own zone.
+    const sx = b && b.width > 0 ? zone.rect.width / b.width : 1;
+    const sy = b && b.height > 0 ? zone.rect.height / b.height : 1;
+    const ex = el.to.basis && el.to.basis > 0 ? end.rect.width / el.to.basis : 1;
+    const left = zone.rect.x + el.x * sx;
+    return { x: left, y: zone.rect.y + el.y * sy, width: Math.max(0, end.rect.x + el.to.x * ex - left), height: el.height * sy };
+  }
   if (!b || b.width <= 0 || b.height <= 0 || (Math.abs(b.width - zone.rect.width) < 0.01 && Math.abs(b.height - zone.rect.height) < 0.01)) {
     return { x: zone.rect.x + el.x, y: zone.rect.y + el.y, width: el.width, height: el.height };
   }
@@ -186,16 +201,51 @@ export function coverElementRect(sheet: ProductionSheet, el: CoverElement): Shee
   return { x: zone.rect.x + el.x * sx, y: zone.rect.y + el.y * sy, width: el.width * sx, height: el.height * sy };
 }
 
+/** How far into a zone an element must run to be across it, mm. */
+const SLIVER_MM = 3;
+
 /** The element at `rect` (sheet mm) placed by the zone its centre falls in
- *  (the nearest zone when it is off them all). */
+ *  (the nearest zone when it is off them all); a box or a shape that runs
+ *  across zones, by the zone its left edge falls in and the one its right
+ *  edge does (`to`). */
 export function placeCoverElement(sheet: ProductionSheet, el: CoverElement, rect: SheetRect): CoverElement {
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + rect.height / 2;
-  const distance = (r: SheetRect) => Math.hypot(Math.max(r.x - cx, 0, cx - r.x - r.width), Math.max(r.y - cy, 0, cy - r.y - r.height));
-  const zone = sheet.zones.reduce((best, z) => (distance(z.rect) < distance(best.rect) ? z : best), sheet.zones[0]!);
+  const distance = (r: SheetRect, x: number) => Math.hypot(Math.max(r.x - x, 0, x - r.x - r.width), Math.max(r.y - cy, 0, cy - r.y - r.height));
+  // The nearest zone; of zones one inside another (a joint in the front
+  // cover), the larger.
+  const nearest = (x: number) => sheet.zones.reduce((best, z) => {
+    const d = distance(z.rect, x) - distance(best.rect, x);
+    return d < -1e-9 || (Math.abs(d) <= 1e-9 && z.rect.width * z.rect.height > best.rect.width * best.rect.height) ? z : best;
+  }, sheet.zones[0]!);
   const round = (v: number) => Math.round(v * 100) / 100;
+  const out = { ...el };
+  delete out.to;
+  if (el.kind !== 'image') {
+    // The zones it runs over, left to right, but a sliver (an edge a few
+    // millimetres into the next zone, or into the bleed) does not count.
+    const over = sheet.zones
+      .map((z) => ({ z, len: Math.min(rect.x + rect.width, z.rect.x + z.rect.width) - Math.max(rect.x, z.rect.x) }))
+      .filter((o) => o.len > SLIVER_MM)
+      .sort((a, b) => a.z.rect.x - b.z.rect.x);
+    const first = over[0]?.z;
+    const last = over[over.length - 1]?.z;
+    if (first && last && first.name !== last.name) {
+      return {
+        ...out,
+        zone: first.name,
+        x: round(rect.x - first.rect.x),
+        y: round(rect.y - first.rect.y),
+        width: round(rect.width),
+        height: round(rect.height),
+        basis: { width: round(first.rect.width), height: round(first.rect.height) },
+        to: { zone: last.name, x: round(rect.x + rect.width - last.rect.x), basis: round(last.rect.width) },
+      };
+    }
+  }
+  const zone = nearest(cx);
   return {
-    ...el,
+    ...out,
     zone: zone.name,
     x: round(rect.x - zone.rect.x),
     y: round(rect.y - zone.rect.y),
@@ -243,6 +293,20 @@ export interface CoverPageOptions {
    *  picture missing here is left out of the mirror, and an effect's is
    *  drawn whole. */
   mirrorPictures?: Readonly<Record<string, MirrorPicture>>;
+  /** Text boxes placed by hand, each a frame of its own over the zones'
+   *  (whose slots then go unused): a title here, an author there. */
+  textBoxes?: readonly CoverTextFrame[];
+}
+
+/** A text box of a cover: a frame the Markdown slot `name` fills, on
+ *  `rect` (mm on the sheet, from its bleed's corner), its text laid
+ *  along it or, with `rotate`, across it and turned a quarter about its
+ *  centre (to read up the spine, −90, or down it, 90). */
+export interface CoverTextFrame {
+  name: string;
+  rect: SheetRect;
+  rotate?: 90 | -90;
+  verticalAlign?: 'top' | 'middle' | 'bottom';
 }
 
 /** A picture the mirror bleed draws (see `CoverPageOptions.mirrorPictures`). */
@@ -571,8 +635,9 @@ export interface CoverPage {
   resources: Resource[];
   /** The bytes of those resources by `fileId`. */
   files: Record<string, Uint8Array>;
-  /** The frames the Markdown can fill, by slot name. */
-  slots: CoverZoneName[];
+  /** The frames the Markdown can fill, by slot name: the zones' and the
+   *  text boxes'. */
+  slots: string[];
   /** With a mirror bleed, the part of the sheet the design is drawn on
    *  (the trim and the design margin past it); the rest is mirrored. */
   designed?: SheetRect;
@@ -634,6 +699,23 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     if (!SLOT_ZONES.has(zone.name)) continue;
     const frame = frameFor(zone, sheet, spineText, options.verticalAlign?.[zone.name]);
     if (frame) frames.push(frame);
+  }
+  for (const box of options.textBoxes ?? []) {
+    const r = box.rect;
+    const turned = !!box.rotate;
+    // A turned box is laid out with its sides swapped, then turned about
+    // its centre into the rectangle it was given.
+    const w = turned ? r.height : r.width;
+    const h = turned ? r.width : r.height;
+    frames.push({
+      name: box.name,
+      width: mm(w),
+      height: mm(h),
+      ...(box.rotate ? { rotate: box.rotate } : {}),
+      ...(box.verticalAlign && box.verticalAlign !== 'top' ? { verticalAlign: box.verticalAlign } : {}),
+      placement: { anchor: { to: 'container', edge: 'top-left' }, offset: { x: mm(r.x + r.width / 2 - w / 2 - sheet.trim.x), y: mm(r.y + r.height / 2 - h / 2 - sheet.trim.y) } },
+      optional: true,
+    });
   }
   // Fold marks inside the trim only: a case's turn-in folds are its trim.
   const folds = sheet.lines
@@ -781,7 +863,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
     template,
     resources,
     files,
-    slots: frames.map((f) => f.name as CoverZoneName),
+    slots: frames.map((f) => f.name as string),
     ...(mirror ? { designed: mirror.designed } : {}),
     ...(mirrorSkipped ? { mirrorSkipped } : {}),
     ...(clipSkipped.length > 0 ? { clipSkipped: [...new Set(clipSkipped)] } : {}),
@@ -790,7 +872,7 @@ export function coverPage(sheet: ProductionSheet, options: CoverPageOptions = {}
 
 /** The Markdown of a cover: the page fence with a frame for each slot that
  *  has text, in the order of `slots`. */
-export function coverMarkdown(templateId: string, content: Partial<Record<CoverZoneName, string>>, slots: readonly CoverZoneName[]): string {
+export function coverMarkdown(templateId: string, content: Partial<Record<string, string>>, slots: readonly string[]): string {
   const parts = [`::::page{template="${templateId}"}`];
   for (const slot of slots) {
     const text = content[slot]?.trim();
