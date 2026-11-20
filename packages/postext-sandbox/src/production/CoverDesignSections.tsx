@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Plus, X } from 'lucide-react';
 import {
   resolveBodyTextConfig,
   resolveHeadingsConfig,
   type PostextConfig,
   type Resource,
 } from 'postext';
-import { IconButton, SegmentedControl, Select, cn } from '../ui/index.js';
+import { Button, IconButton, SegmentedControl, Select, cn } from '../ui/index.js';
 import {
   DESIGN_ZONES,
   type CoverDesignSettings,
@@ -57,15 +57,25 @@ function ColorField({ label, value, fallback = '#ffffff', clearLabel, onChange }
  *  sheet, one of the book's pictures over it, a ground per zone, and the
  *  colour of the text. Its controls alone, without a heading: the Cover
  *  panel folds them, the designer opens them in its Background layer. */
-export function DesignSection({ design, resources, bookTextHex, labels, onChange }: {
+export function DesignSection({ design, resources, bookTextHex, labels, onChange, onUpload }: {
   design: CoverDesignSettings;
   resources: readonly Resource[];
+  /** Upload a picture (into the cover's gallery): its resource id, to
+   *  set as the background picture. */
+  onUpload?: (file: File) => Promise<string | undefined>;
   /** The book's text colour, the text's until the design sets one. */
   bookTextHex: string;
   labels: Labels;
   onChange: (d: CoverDesignSettings) => void;
 }) {
   const pictures = resources.filter((r) => r.kind === 'bitmap' || r.kind === 'svg');
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const id = file && onUpload ? await onUpload(file) : undefined;
+    if (id) set('image', { resourceId: id, ...(design.image?.area ? { area: design.image.area } : {}) });
+  };
   const NONE = '__none__';
   const set = <K extends keyof CoverDesignSettings>(key: K, value: CoverDesignSettings[K] | undefined) => {
     const next = { ...design };
@@ -96,6 +106,12 @@ export function DesignSection({ design, resources, bookTextHex, labels, onChange
           ariaLabel={labels.productionDesignImage}
         />
       </label>
+      {onUpload && (
+        <div>
+          <Button variant="outline" size="sm" icon={<Plus size={13} />} onClick={() => uploadRef.current?.click()}>{labels.coverUploadPicture}</Button>
+          <input ref={uploadRef} type="file" accept="image/png,image/jpeg,image/svg+xml,.svg" className="hidden" aria-hidden="true" tabIndex={-1} onChange={(e) => void upload(e)} />
+        </div>
+      )}
       {design.image && (
         <SegmentedControl
           size="sm"

@@ -49,7 +49,7 @@ import { CoverChecksList } from './CoverChecksList.js';
 import { coverChecks, overflowZones, type CoverCheck } from './coverChecks.js';
 import { CoverEffectsFields } from './CoverEffectsFields.js';
 import { outlineAsPath } from './pathEditing.js';
-import { galleryPictureOf, galleryPicturesFrom, galleryResource, type CoverGallery, type GalleryTrace } from './coverGallery.js';
+import { galleryPictureOf, galleryPicturesFrom, galleryResource, galleryResourceId, type CoverGallery, type GalleryTrace } from './coverGallery.js';
 import { pictureSize } from './coverImages.js';
 import { closeCoverDesigner, useCoverDesignerOpen } from './coverDesignerStore.js';
 import { DEFAULT_LOGO_CLEARANCE, logoResourceId, type LogoRecord } from './logoLibrary.js';
@@ -318,7 +318,19 @@ function CoverDesigner() {
                       </div>
                       {expanded && hint && <p className="m-0 text-(--slate)">{String(labels[hint])}</p>}
                       {expanded && layer === 'background' && record && (
-                        <DesignSection design={design} resources={backgroundChoices} bookTextHex={bookTextHex} labels={labels} onChange={(d) => update({ ...record, design: d })} />
+                        <DesignSection
+                          design={design}
+                          resources={backgroundChoices}
+                          bookTextHex={bookTextHex}
+                          labels={labels}
+                          onChange={(d) => update({ ...record, design: d })}
+                          onUpload={async (file) => {
+                            const { pictures: added } = await galleryPicturesFrom([file], pictureSize);
+                            if (!added[0]) return undefined;
+                            updateGallery({ ...gallery, pictures: [...gallery.pictures, ...added] });
+                            return galleryResourceId(added[0].id);
+                          }}
+                        />
                       )}
 
                       {expanded && layer === 'elements' && (

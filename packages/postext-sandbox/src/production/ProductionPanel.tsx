@@ -49,7 +49,8 @@ import { Fold } from './Fold.js';
 import { PaperSection } from './PaperSection.js';
 import { CoverGallerySection } from './CoverGallerySection.js';
 import { CoverIdmlImportButton } from './CoverIdmlImportButton.js';
-import { galleryResource } from './coverGallery.js';
+import { galleryPicturesFrom, galleryResource, galleryResourceId } from './coverGallery.js';
+import { pictureSize } from './coverImages.js';
 import { useBookProduction, useCollections, useCoverGallery, useLogos, useProfiles } from './useProduction.js';
 import { CoverTemplatesSection } from './CoverTemplatesSection.js';
 import { CollectionsSection } from './CollectionsSection.js';
@@ -195,6 +196,17 @@ export function ProductionPanel() {
 
   const metaTitle = typeof metadata.title === 'string' ? metadata.title.trim() : '';
   const title = projects.find((p) => p.id === activeProjectId)?.name ?? (metaTitle || 'book');
+  // A picture uploaded where the design asks for one goes into the cover's
+  // gallery.
+  const uploadToGallery = async (file: File) => {
+    const { pictures } = await galleryPicturesFrom([file], pictureSize);
+    if (!pictures[0]) {
+      announce(labels.productionLogoUnreadable);
+      return undefined;
+    }
+    updateGallery({ ...gallery, pictures: [...gallery.pictures, ...pictures] });
+    return galleryResourceId(pictures[0].id);
+  };
   const fillFromBook = () => record && update({ ...record, texts: { ...record.texts, ...fromBook } });
   const hasOwnText = !!(record?.texts.front?.trim() || record?.texts.spine?.trim());
 
@@ -360,6 +372,7 @@ export function ProductionPanel() {
                 <DesignSection
                   design={record.design ?? {}}
                   resources={coverPictures}
+                  onUpload={uploadToGallery}
                   bookTextHex={bookTextHex}
                   labels={labels}
                   onChange={(design) => update({ ...record, design })}
