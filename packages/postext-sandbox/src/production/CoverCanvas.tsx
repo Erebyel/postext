@@ -5,9 +5,10 @@
  * large as the room allows, with its guides over it — the edge of the
  * bleed or turn-in, the folds, scores and joints, and each zone's safe
  * area. In edit mode the movable elements can be picked, dragged and
- * resized on it: nothing snaps unless Alt is held, and Shift keeps an
- * element's proportions. The sheet is laid out again once a drag ends;
- * while it goes on, the element's box follows the pointer.
+ * resized on it: nothing snaps unless Cmd (Ctrl) is held, Shift keeps an
+ * element's proportions, and Alt drags a copy, leaving the element where
+ * it was. The sheet is laid out again once a drag ends; while it goes on,
+ * the element's box follows the pointer.
  *
  * A shape's points are edited on it too (`points`): its nodes are dragged,
  * a node's handles shape the curves on either side (Alt moves one handle
@@ -31,14 +32,15 @@ import { deleteNode, insertNode, moveHandle, moveNode, refitPath, sideMiddles, t
 const MM_PER_IN = 25.4;
 /** Handles and the room to grab them, CSS px. */
 const HANDLE_PX = 8;
-/** How near an edge lines up with Alt held, CSS px. */
+/** How near an edge lines up with Cmd (Ctrl) held, CSS px. */
 const SNAP_PX = 6;
 
-type Drag = { id: string; handle: Handle; start: SheetRect; x0: number; y0: number; moved: boolean };
+/** `copy`: the drag leaves the element and drops a copy (Alt held). */
+type Drag = { id: string; handle: Handle; start: SheetRect; x0: number; y0: number; moved: boolean; copy: boolean };
 /** Dragging a node or one of its handles: the path as it was, and where. */
 type PointDrag = { at: NodeRef; which: 'node' | 'in' | 'out'; start: CoverPath; x0: number; y0: number; moved: boolean };
 
-export function CoverCanvas({ sheet, input, mode, elements, clearance, selected, points = false, onSelect, onChange, onDelete, onLaid, label, failedLabel }: {
+export function CoverCanvas({ sheet, input, mode, elements, clearance, selected, points = false, onSelect, onChange, onDuplicate, onDelete, onLaid, label, failedLabel }: {
   sheet: ProductionSheet;
   input: ReturnType<typeof coverDocumentInput>;
   mode: 'preview' | 'edit';
@@ -50,6 +52,8 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
   points?: boolean;
   onSelect: (id: string | null) => void;
   onChange: (el: CoverElementSetting) => void;
+  /** A copy of `el` dropped on `rect` (dragged with Alt). */
+  onDuplicate?: (el: CoverElementSetting, rect: SheetRect) => void;
   onDelete: (id: string) => void;
   /** The sheet as laid out, each time it is (its warnings: a text that
    *  does not fit). */
@@ -130,6 +134,8 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
   };
   const selectedEl = elements.find((e) => e.id === selected);
   const selectedRect = selectedEl ? (drag?.id === selectedEl.id && draft ? draft : elementRect(sheet, selectedEl)) : undefined;
+  // Where the copy dragged with Alt goes, while it goes.
+  const copyRect = drag?.copy && drag.moved ? draft : null;
 
   // The shape whose points are edited, its box and its path.
   const pointEl = points && mode === 'edit' && selectedEl?.kind === 'shape' && selectedEl.path ? selectedEl : undefined;
@@ -191,7 +197,7 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
     const start = target ? elementRect(sheet, target) : undefined;
     if (!target || !handle || !start) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDrag({ id: target.id, handle, start, x0: p.x, y0: p.y, moved: false });
+    setDrag({ id: target.id, handle, start, x0: p.x, y0: p.y, moved: false, copy: handle === 'move' && e.altKey && !!onDuplicate });
     setDraft(start);
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -205,7 +211,7 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
     }
     if (!drag) return;
     const p = toSheet(e);
-    const snap = e.altKey ? { ...coverSnapLines(sheet), tol: SNAP_PX / scale } : undefined;
+    const snap = e.metaKey || e.ctrlKey ? { ...coverSnapLines(sheet), tol: SNAP_PX / scale } : undefined;
     setDraft(dragCoverRect(drag.start, drag.handle, p.x - drag.x0, p.y - drag.y0, { ...(snap ? { snap } : {}), keepAspect: e.shiftKey }));
     if (!drag.moved) setDrag({ ...drag, moved: true });
   };
@@ -217,7 +223,10 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
       return;
     }
     const el = drag && elements.find((x) => x.id === drag.id);
-    if (drag?.moved && el && draft) onChange(elementAt(sheet, el, draft));
+    if (drag?.moved && el && draft) {
+      if (drag.copy) onDuplicate?.(el, draft);
+      else onChange(elementAt(sheet, el, draft));
+    }
     setDrag(null);
     setDraft(null);
   };
@@ -263,7 +272,7 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
             width={css.width}
             height={css.height}
             viewBox={`0 0 ${pageMm.width} ${pageMm.height}`}
-            style={{ cursor: mode === 'edit' ? (drag ? 'grabbing' : 'default') : 'auto', touchAction: 'none' }}
+            style={{ cursor: mode === 'edit' ? (drag ? (drag.copy ? 'copy' : 'grabbing') : 'default') : 'auto', touchAction: 'none' }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -284,7 +293,7 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
                 <rect key={z.name} x={z.safe.x} y={z.safe.y} width={z.safe.width} height={z.safe.height} stroke="#00a0e0" strokeDasharray={`${3 * px} ${3 * px}`} />
               ))}
               {mode === 'edit' && elements.map((el) => {
-                const r = drag?.id === el.id && draft ? draft : elementRect(sheet, el);
+                const r = drag?.id === el.id && draft && !copyRect ? draft : elementRect(sheet, el);
                 if (!r) return null;
                 const on = el.id === selected;
                 const c = clearance?.(el.id) ?? 0;
@@ -295,6 +304,7 @@ export function CoverCanvas({ sheet, input, mode, elements, clearance, selected,
                   </g>
                 );
               })}
+              {copyRect && <rect x={copyRect.x} y={copyRect.y} width={copyRect.width} height={copyRect.height} stroke="#2563eb" strokeWidth={2 * px} strokeDasharray={`${3 * px} ${2 * px}`} />}
               {pointEl && pointRect && shownPath && (
                 <g>
                   <path d={pathData(shownPath, (q) => toMm(q, pointRect))} stroke="#2563eb" strokeWidth={1.5 * px} />

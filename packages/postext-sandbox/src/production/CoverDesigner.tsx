@@ -11,18 +11,22 @@
  * background with the cover's look, an item layer to edit). The canvas
  * picks and moves the items of every shown layer: picking one opens its
  * layer. It is opened from the Cover panel and from the
- * book's preview (./coverDesignerStore.ts).
+ * book's preview (./coverDesignerStore.ts). It has its own undo, and
+ * copies, cuts, pastes and duplicates items (./coverEditing.ts), by the
+ * usual keys while no text box has the focus.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { ArrowDown, ArrowUp, ChevronRight, Eye, EyeOff, Image as ImageIcon, PenTool, Plus, Sparkles, Square, Stamp, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight, Copy, Eye, EyeOff, Image as ImageIcon, PenTool, Plus, Redo2, Sparkles, Square, Stamp, Trash2, Undo2, X } from 'lucide-react';
 import { BASIC_SHAPES, COVER_FINISH_INKS, resolveBodyTextConfig, resolveColorValue, type BasicShape, type CoverFinishKind, type CoverZoneName, type Resource } from 'postext';
 import { useSandboxLabels, useSandboxSelector } from '../context/SandboxContext.js';
 import { Button, IconButton, NumberField, SegmentedControl, Select, Switch, cn, usePortalContainer } from '../ui/index.js';
 import { POPUP_Z_INDEX } from '../ui/layout/surface.js';
 import { fill } from '../print/fillTokens.js';
-import { bookTrimMm, coverDocumentInput, pickSheet, type CoverDesignSettings } from './bookProduction.js';
+import { bookTrimMm, coverDocumentInput, pickSheet, type BookProduction, type CoverDesignSettings } from './bookProduction.js';
+import { typesOwnUndo } from '../history/historyKeys.js';
+import { PASTE_OFFSET_MM, copiedCoverItem, copyCoverItem, createCoverHistory, duplicateCoverItem, setCopiedCoverItem, type CoverItem } from './coverEditing.js';
 import {
   newBasicShape,
   newShape,
@@ -105,9 +109,39 @@ function CoverDesigner() {
   const config = useSandboxSelector((s) => s.config);
   const bookResources = useSandboxSelector((s) => s.resources);
   const container = usePortalContainer();
-  const { record, update, version, sheets } = useCoverWorkspace();
+  const { record, update: saveRecord, version, sheets } = useCoverWorkspace();
   const library = useLogos();
-  const [gallery, updateGallery] = useCoverGallery();
+  const [gallery, saveGallery] = useCoverGallery();
+  // The designer's undo: the design and the gallery as they were before
+  // each change (./coverEditing.ts).
+  const [history] = useState(() => createCoverHistory<{ design: CoverDesignSettings | undefined; gallery: typeof gallery }>());
+  const [, setHistoryTick] = useState(0);
+  /** `key`: what a change edits, to join the quick changes of one thing
+   *  into a step; a command (add, delete, paste) has none. */
+  const remember = (key?: string) => {
+    history.remember({ design: record?.design, gallery }, key);
+    setHistoryTick((t) => t + 1);
+  };
+  const update = (next: BookProduction, key?: string) => {
+    if (next.design !== record?.design) remember(key);
+    saveRecord(next);
+  };
+  const updateGallery = (next: typeof gallery, key?: string) => {
+    remember(key);
+    saveGallery(next);
+  };
+  const travel = (dir: 'undo' | 'redo') => {
+    if (!record) return;
+    const now = { design: record.design, gallery };
+    const to = dir === 'undo' ? history.undo(now) : history.redo(now);
+    setHistoryTick((t) => t + 1);
+    if (!to) return;
+    const next = { ...record };
+    if (to.design) next.design = to.design;
+    else delete next.design;
+    saveRecord(next);
+    if (to.gallery !== gallery) saveGallery(to.gallery);
+  };
   const [mode, setMode] = useState<'preview' | 'edit'>('preview');
   const [hidden, setHidden] = useState<ReadonlySet<CoverLayer>>(new Set());
   const [active, setActive] = useState<ItemLayer>('elements');
@@ -157,11 +191,11 @@ function CoverDesigner() {
     overflow,
   }) : []), [sheet, design, allResources, library, version, config.print?.standard, input, overflow]);
 
-  const setDesign = (key: 'elements' | 'effects' | 'logos' | 'finishes', next: unknown[]) => {
+  const setDesign = (key: 'elements' | 'effects' | 'logos' | 'finishes', next: unknown[], step?: string) => {
     if (!record) return;
     const d = { ...design, [key]: next } as CoverDesignSettings;
     if (next.length === 0) delete d[key];
-    update({ ...record, design: d });
+    update({ ...record, design: d }, step);
   };
   const finishLabel = (kind: CoverFinishKind) => String(labels[FINISH_LABEL[kind]]);
   /** The mask a picture element is masked with, from its gallery picture. */
@@ -191,8 +225,8 @@ function CoverDesigner() {
     }
     const usedElsewhere = [design.image?.resourceId, ...[...elements, ...effects, ...logos].filter((e) => e.id !== el.id).map((e) => e.resourceId)].includes(el.resourceId);
     if (current.masked && !usedElsewhere) pictures = pictures.filter((p) => p.id !== current.id);
-    updateGallery({ ...gallery, pictures });
-    changeItem({ ...el, resourceId });
+    updateGallery({ ...gallery, pictures }, `mask:${el.id}`);
+    changeItem({ ...el, resourceId }, `mask:${el.id}`);
   };
   const settled = (el: CoverElementSetting): CoverElementSetting => {
     const r = sheet ? elementRect(sheet, el) : undefined;
@@ -229,22 +263,74 @@ function CoverDesigner() {
     setSelected(id);
   };
 
-  const changeItem = (el: CoverElementSetting) => {
+  const changeItem = (el: CoverElementSetting, step = `item:${el.id}`) => {
     const layer = layerOfId(el.id) ?? active;
-    if (layer === 'elements') setDesign('elements', elements.map((e) => (e.id === el.id ? el : e)));
-    else if (layer === 'effects') setDesign('effects', effects.map((e) => (e.id === el.id ? el : e)));
-    else if (layer === 'logos') setDesign('logos', logos.map((e) => (e.id === el.id ? { ...e, ...el, kind: 'image' as const } : e)));
-    else setDesign('finishes', finishes.map((f) => (f.id === el.id ? finishFromElement(f, el) : f)));
+    if (layer === 'elements') setDesign('elements', elements.map((e) => (e.id === el.id ? el : e)), step);
+    else if (layer === 'effects') setDesign('effects', effects.map((e) => (e.id === el.id ? el : e)), step);
+    else if (layer === 'logos') setDesign('logos', logos.map((e) => (e.id === el.id ? { ...e, ...el, kind: 'image' as const } : e)), step);
+    else setDesign('finishes', finishes.map((f) => (f.id === el.id ? finishFromElement(f, el) : f)), step);
   };
   const deleteItem = (id: string) => {
     const layer = layerOfId(id) ?? active;
     setDesign(layer, (layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes).filter((e) => e.id !== id));
     if (selected === id) setSelected(null);
   };
-  const add = (layer: ItemLayer, item: { id: string } | undefined) => {
+  /** An item as its layer keeps it (a finish, not its box). */
+  const itemOf = (id: string): { layer: ItemLayer; item: CoverItem } | undefined => {
+    const layer = layerOfId(id);
+    if (!layer) return undefined;
+    const item = (layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes).find((x) => x.id === id);
+    return item ? { layer, item } : undefined;
+  };
+  /** A copy of an item into its layer, picked: moved a little, or put on
+   *  `rect` (dragged there with Alt). */
+  const duplicate = (id: string, rect?: { x: number; y: number; width: number; height: number }) => {
+    const found = itemOf(id);
+    if (!found || !sheet) return;
+    add(found.layer, duplicateCoverItem(sheet, found.layer, found.item, rect ? { rect } : { offset: PASTE_OFFSET_MM }));
+  };
+  const paste = () => {
+    const copied = copiedCoverItem();
+    if (!copied || !sheet) return false;
+    // Its pictures, when it was copied from another book's cover.
+    const missing = copied.pictures.filter((p) => !gallery.pictures.some((g) => g.id === p.id));
+    const item = duplicateCoverItem(sheet, copied.layer, copied.item, { offset: PASTE_OFFSET_MM });
+    if (missing.length > 0) updateGallery({ ...gallery, pictures: [...gallery.pictures, ...missing] }, `paste:${item.id}`);
+    setCopiedCoverItem({ ...copied, item });
+    add(copied.layer, item, `paste:${item.id}`);
+    return true;
+  };
+  // The keys, over the whole designer while no text box has the focus:
+  // they are the designer's, not the Sandbox's history (window, capture).
+  const keys = useRef<(ev: KeyboardEvent) => boolean>(() => false);
+  keys.current = (ev) => {
+    const key = ev.key.toLowerCase();
+    if (key === 'z') { travel(ev.shiftKey ? 'redo' : 'undo'); return true; }
+    if (key === 'y' && !ev.shiftKey) { travel('redo'); return true; }
+    if (key === 'v' && !ev.shiftKey) return mode === 'edit' && paste();
+    const found = selected && mode === 'edit' ? itemOf(selected) : undefined;
+    if (!found || ev.shiftKey) return false;
+    if (key === 'c' || key === 'x') {
+      copyCoverItem(found.layer, found.item, gallery);
+      if (key === 'x') deleteItem(found.item.id);
+      return true;
+    }
+    if (key === 'd') { duplicate(found.item.id); return true; }
+    return false;
+  };
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!(ev.metaKey || ev.ctrlKey) || ev.altKey || ev.defaultPrevented) return;
+      if (typesOwnUndo(ev.target) || typesOwnUndo(document.activeElement)) return;
+      if (keys.current(ev)) ev.preventDefault();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+  const add = (layer: ItemLayer, item: { id: string } | undefined, step?: string) => {
     if (!item) return;
     const list = layer === 'elements' ? elements : layer === 'effects' ? effects : layer === 'logos' ? logos : finishes;
-    setDesign(layer, [...list, item]);
+    setDesign(layer, [...list, item], step);
     setActive(layer);
     setOpen(layer);
     setSelected(item.id);
@@ -305,6 +391,8 @@ function CoverDesigner() {
             <Dialog.Title className="m-0 text-sm font-semibold">{labels.coverDesignerTitle}</Dialog.Title>
             {version && <span className="text-xs text-(--slate)">{version.name}</span>}
             <div className="ms-auto flex items-center gap-2">
+              <IconButton label={labels.coverUndo} icon={<Undo2 size={15} aria-hidden="true" />} disabled={!history.canUndo} onClick={() => travel('undo')} />
+              <IconButton label={labels.coverRedo} icon={<Redo2 size={15} aria-hidden="true" />} disabled={!history.canRedo} onClick={() => travel('redo')} />
               <SegmentedControl
                 size="sm"
                 value={mode}
@@ -445,6 +533,7 @@ function CoverDesigner() {
                   points={points}
                   onSelect={pick}
                   onChange={changeItem}
+                  onDuplicate={(el, rect) => duplicate(el.id, rect)}
                   onDelete={deleteItem}
                   onLaid={(doc) => setOverflow(overflowZones(doc))}
                   label={labels.coverDesignerTitle}
@@ -488,6 +577,7 @@ function CoverDesigner() {
                     canBackward={finishes[0]?.id !== selectedFinish.id}
                     onRestack={(step) => setDesign('finishes', restack(finishes, selectedFinish.id, step))}
                     onDelete={() => deleteItem(selectedFinish.id)}
+                    onDuplicate={() => duplicate(selectedFinish.id)}
                     {...(selectedEl ? { zone: zoneName(selectedEl.zone) } : {})}
                   />
                 ) : selectedEl ? (
@@ -514,6 +604,7 @@ function CoverDesigner() {
                     }}
                     onRestack={(step) => setDesign(active, restack(activeList, selectedEl.id, step))}
                     onDelete={() => deleteItem(selectedEl.id)}
+                    onDuplicate={() => duplicate(selectedEl.id)}
                     points={points}
                     onPoints={(on) => {
                       // A traced outline becomes nodes the first time its points are edited.
@@ -678,7 +769,7 @@ const KEPT = '__kept__';
 /** The selected item's place, size and colour (an effect's opacity, a
  *  logo's clear space), and its order. A picture's height follows its
  *  width (its proportions). */
-function ElementProperties({ el, layer, zone, aspect, clearance, traces, masks, mask, onMask, points, onPoints, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete }: {
+function ElementProperties({ el, layer, zone, aspect, clearance, traces, masks, mask, onMask, points, onPoints, canForward, canBackward, labels, onChange, onClearance, onSize, onRestack, onDelete, onDuplicate }: {
   /** The gallery's masks, the one the picture is masked with, and how to
    *  mask it (none for a picture that is not the gallery's). */
   masks: readonly GalleryPicture[];
@@ -700,6 +791,7 @@ function ElementProperties({ el, layer, zone, aspect, clearance, traces, masks, 
   onSize: (width: number, height: number) => void;
   onRestack: (step: 1 | -1) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const row = (label: string, value: number, set: (v: number) => void, min?: number, max?: number, step = 0.5) => (
     <label className="flex items-center justify-between gap-2">
@@ -807,6 +899,7 @@ function ElementProperties({ el, layer, zone, aspect, clearance, traces, masks, 
       <div className="flex items-center gap-1">
         <IconButton label={labels.coverElementForward} icon={<ArrowUp size={14} aria-hidden="true" />} disabled={!canForward} onClick={() => onRestack(1)} />
         <IconButton label={labels.coverElementBackward} icon={<ArrowDown size={14} aria-hidden="true" />} disabled={!canBackward} onClick={() => onRestack(-1)} />
+        <IconButton label={labels.coverElementDuplicate} icon={<Copy size={14} aria-hidden="true" />} onClick={onDuplicate} />
         <IconButton label={labels.coverElementDelete} icon={<Trash2 size={14} aria-hidden="true" />} onClick={onDelete} />
       </div>
     </>
@@ -815,7 +908,7 @@ function ElementProperties({ el, layer, zone, aspect, clearance, traces, masks, 
 
 /** A finish's kind, the ink its plate is named after, and its shape: a box
  *  of its own (moved on the canvas) or an element's. */
-function FinishProperties({ finish, targets, traces, zone, labels, finishLabel, onChange, onBox, onTrace, canForward, canBackward, onRestack, onDelete }: {
+function FinishProperties({ finish, targets, traces, zone, labels, finishLabel, onChange, onBox, onTrace, canForward, canBackward, onRestack, onDelete, onDuplicate }: {
   finish: CoverFinishSetting;
   targets: { value: string; label: string }[];
   traces: readonly GalleryTrace[];
@@ -829,6 +922,7 @@ function FinishProperties({ finish, targets, traces, zone, labels, finishLabel, 
   canBackward: boolean;
   onRestack: (step: 1 | -1) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const ofElement = 'element' in finish.shape;
   const ofOutline = 'outline' in finish.shape;
@@ -900,6 +994,7 @@ function FinishProperties({ finish, targets, traces, zone, labels, finishLabel, 
       <div className="flex items-center gap-1">
         <IconButton label={labels.coverElementForward} icon={<ArrowUp size={14} aria-hidden="true" />} disabled={!canForward} onClick={() => onRestack(1)} />
         <IconButton label={labels.coverElementBackward} icon={<ArrowDown size={14} aria-hidden="true" />} disabled={!canBackward} onClick={() => onRestack(-1)} />
+        <IconButton label={labels.coverElementDuplicate} icon={<Copy size={14} aria-hidden="true" />} onClick={onDuplicate} />
         <IconButton label={labels.coverElementDelete} icon={<Trash2 size={14} aria-hidden="true" />} onClick={onDelete} />
       </div>
     </>

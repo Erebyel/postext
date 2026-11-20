@@ -14,7 +14,7 @@ describe('dragCoverRect', () => {
     expect(dragCoverRect(start, 'move', dx, 0).x).toBeCloseTo(front.safe.x + 0.5, 6);
   });
 
-  it('lines up with the sheet when asked (Alt)', () => {
+  it('lines up with the sheet when asked (Cmd or Ctrl)', () => {
     const front = sheet.zones.find((z) => z.name === 'front')!;
     const dx = front.safe.x - start.x + 0.5;
     const snap = { ...coverSnapLines(sheet), tol: 1 };

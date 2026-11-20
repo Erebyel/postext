@@ -5785,6 +5785,9 @@ export interface SandboxLabels {
   coverFinishShapeBox: string;
   coverFinishShapeElement: string;
   coverFinishPlateHint: string;
+  coverUndo: string;
+  coverRedo: string;
+  coverElementDuplicate: string;
   coverElementMask: string;
   coverElementMaskNone: string;
   coverElementMaskInvert: string;
