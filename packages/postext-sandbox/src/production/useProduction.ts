@@ -10,9 +10,10 @@ import type { MirrorPicture, ProductionVersion, Resource, VersionSheets } from '
 import { useBookPlan, useSandboxSelector } from '../context/SandboxContext.js';
 import { bookMetadata } from '../book/compose.js';
 import { WORKING_BOOK, emptyProduction, planPageCount, sheetsOf, type BookProduction } from './bookProduction.js';
-import { getBookProduction, getCoverGallery, listCollections, listLogos, listProfiles, onProductionChange, putBookProduction, putCoverGallery, type StoredProfile } from './productionStore.js';
+import { getBookProduction, getCoverGallery, listCollections, listLogos, listProfiles, listTemplates, onProductionChange, putBookProduction, putCoverGallery, type StoredProfile } from './productionStore.js';
 import { emptyGallery, type CoverGallery } from './coverGallery.js';
 import type { CollectionRecord } from './collections.js';
+import type { CoverTemplate } from './coverTemplates.js';
 import type { LogoRecord } from './logoLibrary.js';
 import { loadMirrorPictures } from './coverImages.js';
 import type { CoverDesignSettings } from './bookProduction.js';
@@ -55,6 +56,19 @@ export function useProfiles(): StoredProfile[] {
   useEffect(() => {
     let alive = true;
     const load = () => { listProfiles().then((l) => { if (alive) setList(l); }, () => undefined); };
+    load();
+    const off = onProductionChange(load);
+    return () => { alive = false; off(); };
+  }, []);
+  return list;
+}
+
+/** The user's cover templates, kept current. */
+export function useCoverTemplates(): CoverTemplate[] {
+  const [list, setList] = useState<CoverTemplate[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const load = () => { listTemplates().then((l) => { if (alive) setList(l); }, () => undefined); };
     load();
     const off = onProductionChange(load);
     return () => { alive = false; off(); };

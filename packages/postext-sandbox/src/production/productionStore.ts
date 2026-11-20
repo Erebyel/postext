@@ -4,21 +4,24 @@
 // `.postext-production.json` files (see `exportProductionProfiles`), and
 // the user's logo library (./logoLibrary.ts), and each book's cover
 // gallery (./coverGallery.ts), and the user's collections with their
-// catalogues of advertisements for the endpapers (./collections.ts).
+// catalogues of advertisements for the endpapers (./collections.ts), and
+// the user's cover templates (./coverTemplates.ts).
 
 import type { BindingProfile, PaperProfile } from 'postext';
 import { readBookProduction, type BookProduction } from './bookProduction.js';
 import type { LogoRecord } from './logoLibrary.js';
 import type { CoverGallery } from './coverGallery.js';
 import type { CollectionRecord } from './collections.js';
+import type { CoverTemplate } from './coverTemplates.js';
 
 const DB_NAME = 'postext-production';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const BOOKS = 'books';
 const PROFILES = 'profiles';
 const LOGOS = 'logos';
 const GALLERY = 'gallery';
 const COLLECTIONS = 'collections';
+const TEMPLATES = 'templates';
 
 /** A profile of the library as stored. */
 export type StoredProfile =
@@ -39,6 +42,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(LOGOS)) db.createObjectStore(LOGOS, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(GALLERY)) db.createObjectStore(GALLERY, { keyPath: 'projectId' });
       if (!db.objectStoreNames.contains(COLLECTIONS)) db.createObjectStore(COLLECTIONS, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(TEMPLATES)) db.createObjectStore(TEMPLATES, { keyPath: 'id' });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -159,5 +163,27 @@ export async function putCollection(collection: CollectionRecord): Promise<void>
 
 export async function deleteCollection(id: string): Promise<void> {
   await run(COLLECTIONS, 'readwrite', (st) => st.delete(id));
+  changed();
+}
+
+/** The cover templates, by name. */
+export async function listTemplates(): Promise<CoverTemplate[]> {
+  const all = await run<CoverTemplate[]>(TEMPLATES, 'readonly', (st) => st.getAll() as IDBRequest<CoverTemplate[]>);
+  return all.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Store templates; one whose id the library has replaces it. */
+export async function putTemplates(templates: readonly CoverTemplate[]): Promise<void> {
+  if (templates.length === 0) return;
+  await run(TEMPLATES, 'readwrite', (st) => {
+    let last: IDBRequest<IDBValidKey> | undefined;
+    for (const t of templates) last = st.put(t);
+    return last!;
+  });
+  changed();
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  await run(TEMPLATES, 'readwrite', (st) => st.delete(id));
   changed();
 }

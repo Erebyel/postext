@@ -5,6 +5,8 @@ import { coverDocumentInput, newVersion, type CoverDesignSettings } from './book
 import { elementRect } from './coverLayers.js';
 import { coverIdmlLayers, type CoverLayerNames } from './coverIdml.js';
 import { importCoverIdml } from './coverIdmlImport.js';
+import { designParts, templateFromDesign } from './coverTemplates.js';
+import type { LogoRecord } from './logoLibrary.js';
 
 class StubCtx {
   font = '';
@@ -28,10 +30,10 @@ const design = (dotX: number): CoverDesignSettings => ({
 });
 
 /** The cover of `d` and `texts` as the designer sends it to InDesign. */
-async function exported(d: CoverDesignSettings, texts: Record<string, string>): Promise<Uint8Array> {
+async function exported(d: CoverDesignSettings, texts: Record<string, string>, logos: LogoRecord[] = []): Promise<Uint8Array> {
   const { buildDocument } = await import('postext');
   const { idmlDocument } = await import('postext-idml');
-  const input = coverDocumentInput(sheet, version, texts, { page: { dpi: 72 } }, d, [], { press: true });
+  const input = coverDocumentInput(sheet, version, texts, { page: { dpi: 72 } }, d, [], { press: true, logos });
   const doc = buildDocument({ markdown: input.markdown, resources: input.resources }, input.config);
   return idmlDocument({ docs: [doc], layers: coverIdmlLayers(names), nameItems: true, resourceBytes: (id) => input.cover.files[id] }).bytes;
 }
@@ -122,5 +124,25 @@ describe('a cover back from InDesign', () => {
     expect(back.texts.front).toBe('El título\n\nAutora');
     expect(back.texts.spine).toBe('Autora · Título');
     expect(back.report.missing).toEqual([]);
+  });
+
+  it('saves a cover made elsewhere as a template: its logos the library’s, its type by zone', async () => {
+    const seal: LogoRecord = { id: 'seal', name: 'Sello', group: 'publisher', clearance: 4, mime: 'image/svg+xml', bytes: new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>'), width: 10, height: 10, updatedAt: 1 };
+    const d: CoverDesignSettings = {
+      ...design(40),
+      zoneStyles: { front: { title: { fontSize: 30 } } },
+      logos: [{ id: 'l1', kind: 'image', logoId: 'seal', resourceId: 'logo:seal', zone: 'back', x: 10, y: 10, width: 20, height: 20, clearance: 4 }],
+    };
+    const foreign = edited(await exported(d, texts, [seal]), (xml) => xml.replace(/ Name="[^"]*"/g, ''));
+    const back = importCoverIdml(foreign, { sheet, design: undefined, texts: {}, layerNames: names, library: [seal] });
+    // The picture linked as the library's file is that logo, with its clear space.
+    expect(back.design.logos).toHaveLength(1);
+    expect(back.design.logos![0]).toMatchObject({ logoId: 'seal', clearance: 4 });
+    // The type: the front's title at its size, as InDesign sets it.
+    expect(back.design.zoneStyles?.front?.title?.fontSize).toBeCloseTo(30, 0);
+    expect(back.design.textColor).toBeDefined();
+    const template = templateFromDesign(back.design, designParts(back.design), { gallery: { projectId: '', pictures: back.pictures, traces: [] }, logos: [seal] }, 'De InDesign');
+    expect(template.parts).toEqual(['background', 'elements', 'texts', 'effects', 'logos', 'finishes']);
+    expect(template.logos.map((l) => l.id)).toEqual(['seal']);
   });
 });

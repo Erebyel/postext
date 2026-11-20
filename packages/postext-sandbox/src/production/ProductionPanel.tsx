@@ -50,7 +50,8 @@ import { PaperSection } from './PaperSection.js';
 import { CoverGallerySection } from './CoverGallerySection.js';
 import { CoverIdmlImportButton } from './CoverIdmlImportButton.js';
 import { galleryResource } from './coverGallery.js';
-import { useBookProduction, useCollections, useCoverGallery, useProfiles } from './useProduction.js';
+import { useBookProduction, useCollections, useCoverGallery, useLogos, useProfiles } from './useProduction.js';
+import { CoverTemplatesSection } from './CoverTemplatesSection.js';
 import { CollectionsSection } from './CollectionsSection.js';
 import { EndpapersSection } from './EndpapersSection.js';
 import { chooseCoverSheet, openCoverDesigner, useCoverSheet } from './coverDesignerStore.js';
@@ -117,6 +118,7 @@ export function ProductionPanel() {
   const stored = useProfiles();
   const [gallery, updateGallery] = useCoverGallery();
   const collections = useCollections();
+  const logoLibrary = useLogos();
   // The background picture is one of the cover's gallery (or the book's
   // picture a design made before the gallery already uses).
   const coverPictures = useMemo(
@@ -302,6 +304,7 @@ export function ProductionPanel() {
               sheet={pickSheet(ready, shown === 'jacket' ? 'jacket' : 'cover', bookTrimMm(config))}
               record={record}
               gallery={gallery}
+              library={logoLibrary}
               labels={labels}
               onRecord={update}
               onGallery={updateGallery}
@@ -339,6 +342,7 @@ export function ProductionPanel() {
           {version && record && (
             <div className="flex flex-col gap-2">
               <CoverGallerySection labels={labels} />
+              <CoverTemplatesSection record={record} gallery={gallery} library={logoLibrary} labels={labels} onRecord={update} onGallery={updateGallery} />
               {ready?.endpapers && (
                 <EndpapersSection
                   endpapers={record.endpapers}

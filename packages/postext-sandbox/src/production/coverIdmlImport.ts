@@ -29,11 +29,11 @@
  */
 
 import type { CoverPath, ProductionSheet, SheetRect } from 'postext';
-import { isNoColour, itemGeometry, pageBoxInSpread, plainText, readIdml, resolveColour, type IdmlDocument, type IdmlPageItem, type Path } from 'postext-idml';
-import { COVER_TEXT_ZONES, type CoverDesignSettings, type CoverTextZone, type DesignZone } from './bookProduction.js';
+import { characterFormat, isNoColour, itemGeometry, pageBoxInSpread, paragraphFormat, plainText, readIdml, resolveColour, runProps, type IdmlDocument, type IdmlPageItem, type IdmlParagraph, type Path } from 'postext-idml';
+import { COVER_TEXT_ZONES, type CoverDesignSettings, type CoverTextZone, type DesignZone, type RoleStyle } from './bookProduction.js';
 import { elementAt, FINISH_KINDS, newElementId, type CoverElementSetting, type CoverFinishSetting } from './coverLayers.js';
 import { galleryResourceId, newGalleryId, type GalleryPicture } from './coverGallery.js';
-import { sniffLogoMime } from './logoLibrary.js';
+import { logoResourceId, sniffLogoMime, type LogoRecord } from './logoLibrary.js';
 import type { CoverLayerNames } from './coverIdml.js';
 
 const PT_TO_MM = 25.4 / 72;
@@ -131,6 +131,24 @@ const hexOf = (d: IdmlDocument, ref: string | undefined, tint?: string): { hex: 
   return c ? { hex: c.hex.slice(0, 7).toLowerCase(), ...(c.spot ? { spot: c.spot } : {}) } : undefined;
 };
 
+/** A paragraph's type as a zone's role style: its first run's face and
+ *  size, and its alignment. */
+function roleStyleOf(d: IdmlDocument, para: IdmlParagraph): RoleStyle | undefined {
+  const run = para.runs[0];
+  if (!run) return undefined;
+  const props = runProps(d, para, run);
+  const c = characterFormat(props);
+  const p = paragraphFormat(props);
+  const style = (c.fontStyle ?? '').toLowerCase();
+  return {
+    ...(c.fontFamily ? { fontFamily: c.fontFamily } : {}),
+    ...(c.pointSize > 0 ? { fontSize: Math.round(c.pointSize * 10) / 10 } : {}),
+    ...(/bold|black|heavy|semibold/.test(style) ? { bold: true } : {}),
+    ...(/italic|oblique/.test(style) ? { italic: true } : {}),
+    align: p.align,
+  };
+}
+
 export function importCoverIdml(bytes: Uint8Array, options: {
   sheet: ProductionSheet;
   design: CoverDesignSettings | undefined;
@@ -139,6 +157,9 @@ export function importCoverIdml(bytes: Uint8Array, options: {
   layerNames: CoverLayerNames;
   /** Linked files given with the IDML, by file name. */
   links?: ReadonlyMap<string, Uint8Array>;
+  /** The logo library: a picture whose file is named as one of its logos
+   *  (its name, or the file name the export gives it) is that logo. */
+  library?: readonly LogoRecord[];
 }): CoverIdmlImport {
   const { sheet, layerNames } = options;
   const d = readIdml(bytes);
@@ -344,6 +365,15 @@ export function importCoverIdml(bytes: Uint8Array, options: {
     if (it.graphic) {
       const link = it.graphic.link;
       const fileName = link ? decodeURIComponent((link.uri || link.name).split(/[\\/]/).pop() ?? '') : '';
+      // A logo of the library, by its name or its exported file's.
+      const base = fileName.replace(/\.[^.]+$/, '').toLowerCase();
+      const logo = base ? options.library?.find((l) => l.name.toLowerCase() === base || `logo-${l.id}`.toLowerCase() === base) : undefined;
+      if (logo) {
+        const placed = elementAt(sheet, { id: newElementId(), kind: 'image', resourceId: logoResourceId(logo.id), zone: 'front', x: 0, y: 0, width: 1, height: 1 }, rect);
+        lists.logos = [...lists.logos, { ...placed, kind: 'image', logoId: logo.id, clearance: logo.clearance }];
+        report.added.push(logo.name);
+        continue;
+      }
       const bytes = (fileName ? options.links?.get(fileName) ?? options.links?.get(link?.name ?? '') : undefined) ?? it.graphic.data;
       const mime = bytes ? sniffLogoMime(bytes) : undefined;
       if (!bytes || !mime) {
@@ -394,6 +424,18 @@ export function importCoverIdml(bytes: Uint8Array, options: {
     const el = paint(elementAt(sheet, { ...base, ...(it.name ? { name: it.name } : {}) }, rect), it);
     (lists[target === 'logos' ? 'elements' : target] as CoverElementSetting[]).push(el);
     report.added.push(label);
+  }
+
+  // Another IDML's type: each zone's first paragraph its title, the next
+  // its text; the colour of the first, the cover's text colour.
+  for (const [zone, list] of zoneTexts) {
+    const paras = list.slice().sort((a, b) => a.y - b.y).flatMap((x) => d.stories.get(x.story)?.paragraphs ?? []).filter((p) => plainText([p]).trim());
+    const title = paras[0] ? roleStyleOf(d, paras[0]) : undefined;
+    const text = paras[1] ? roleStyleOf(d, paras[1]) : undefined;
+    const key = (zone === 'flapFront' || zone === 'flapBack' ? 'flaps' : zone) as DesignZone;
+    if (title || text) design.zoneStyles = { ...design.zoneStyles, [key]: { ...design.zoneStyles?.[key], ...(title ? { title } : {}), ...(text ? { text } : {}) } };
+    const colour = paras[0]?.runs[0] ? hexOf(d, runProps(d, paras[0], paras[0].runs[0]).attrs.FillColor) : undefined;
+    if (colour && !design.textColor) design.textColor = colour.hex;
   }
 
   // Another IDML's texts: each zone's frames top to bottom.
