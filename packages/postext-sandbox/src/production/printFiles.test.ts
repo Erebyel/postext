@@ -19,6 +19,9 @@ describe('print files', () => {
     const eps = new File([text('%!PS-Adobe-3.0 EPSF-3.0\n')], 'Banderola.eps');
     const junk = new File([text('hello')], 'notas.txt');
     const read = async (f: File) => (f.name.endsWith('.eps') ? 'postscript' as const : undefined);
+    const pdf = new File([text('%PDF-1.6')], 'solapas.ai');
+    const pages = await galleryPicturesFrom([pdf], async () => ({ width: 1, height: 1 }), async () => [1, 2].map((page) => ({ bytes: new Uint8Array(), mime: 'image/png' as const, page })));
+    expect(pages.pictures.map((p) => p.name)).toEqual(['solapas · 1', 'solapas · 2']);
     const got = await galleryPicturesFrom([eps, junk], async () => ({ width: 1, height: 1 }), read);
     expect(got).toEqual({ pictures: [], unreadable: 1, postscript: ['Banderola.eps'] });
   });

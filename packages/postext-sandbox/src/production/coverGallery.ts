@@ -95,15 +95,16 @@ export function newGalleryId(kind: 'pic' | 'trace'): string {
   return `${kind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** A file read as a picture: its bytes, 'postscript' for an EPS, or
- *  undefined (`readPictureFile`, which makes print files PNG). */
-export type PictureReader = (file: File) => Promise<{ bytes: Uint8Array; mime: LogoMime } | 'postscript' | undefined>;
+/** A file read as pictures: one, or a PDF's pages (`page`); 'postscript'
+ *  for an EPS, or undefined (`readPictureFile`, which makes print files
+ *  PNG). */
+export type PictureReader = (file: File) => Promise<{ bytes: Uint8Array; mime: LogoMime; page?: number }[] | 'postscript' | undefined>;
 
 /** A file's bytes when they are a PNG, a JPEG or an SVG. */
 const readAsIs: PictureReader = async (file) => {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = sniffLogoMime(bytes);
-  return mime ? { bytes, mime } : undefined;
+  return mime ? [{ bytes, mime }] : undefined;
 };
 
 /** Pictures read from files, for the gallery, named after their file;
@@ -128,8 +129,11 @@ export async function galleryPicturesFrom(
       unreadable++;
       continue;
     }
-    const wh = await size(got.bytes, got.mime).catch(() => ({ width: 100, height: 100 }));
-    pictures.push({ id: newGalleryId('pic'), name: file.name.replace(/\.[^.]+$/, ''), mime: got.mime, bytes: got.bytes, ...wh, updatedAt: Date.now() });
+    for (const p of got) {
+      const wh = await size(p.bytes, p.mime).catch(() => ({ width: 100, height: 100 }));
+      const name = file.name.replace(/\.[^.]+$/, '');
+      pictures.push({ id: newGalleryId('pic'), name: p.page ? `${name} · ${p.page}` : name, mime: p.mime, bytes: p.bytes, ...wh, updatedAt: Date.now() });
+    }
   }
   return { pictures, unreadable, postscript };
 }

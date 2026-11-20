@@ -11,7 +11,7 @@ import { Download, Plus, Trash2, Upload } from 'lucide-react';
 import { Button, ConfirmPopover, IconButton, NumberField, Select, announce } from '../ui/index.js';
 import { downloadBytes } from '../storage/persistence.js';
 import { fill } from '../print/fillTokens.js';
-import { PICTURE_ACCEPT, readPictureFile } from './printFiles.js';
+import { PICTURE_ACCEPT, pictureName, readPictureFile } from './printFiles.js';
 import {
   DEFAULT_LOGO_CLEARANCE,
   LOGO_GROUPS,
@@ -53,18 +53,19 @@ export function LogoLibrary({ labels }: { labels: Labels }) {
         announce(got ? fill(labels.productionPicturePostscript, { name: file.name }) : labels.productionPictureUnreadable);
         continue;
       }
-      const { bytes, mime } = got;
-      const size = await pictureSize(bytes, mime).catch(() => ({ width: 100, height: 100 }));
-      added.push({
-        id: newLogoId(),
-        name: file.name.replace(/\.[^.]+$/, ''),
-        group: 'publisher',
-        clearance: DEFAULT_LOGO_CLEARANCE,
-        mime,
-        bytes,
-        ...size,
-        updatedAt: Date.now(),
-      });
+      for (const { bytes, mime, page } of got) {
+        const size = await pictureSize(bytes, mime).catch(() => ({ width: 100, height: 100 }));
+        added.push({
+          id: newLogoId(),
+          name: pictureName(file.name, page),
+          group: 'publisher',
+          clearance: DEFAULT_LOGO_CLEARANCE,
+          mime,
+          bytes,
+          ...size,
+          updatedAt: Date.now(),
+        });
+      }
     }
     await putLogos(added);
   };

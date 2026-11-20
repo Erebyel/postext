@@ -11,7 +11,7 @@ import { useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button, ConfirmPopover, IconButton, announce } from '../ui/index.js';
 import { fill } from '../print/fillTokens.js';
-import { PICTURE_ACCEPT, readPictureFile } from './printFiles.js';
+import { PICTURE_ACCEPT, pictureName, readPictureFile } from './printFiles.js';
 import { newCollectionId, type CatalogueAd, type CollectionRecord } from './collections.js';
 import { pictureSize, useObjectUrl } from './coverImages.js';
 import { Fold } from './Fold.js';
@@ -41,9 +41,10 @@ function CollectionCard({ collection, labels }: { collection: CollectionRecord; 
         announce(got ? fill(labels.productionPicturePostscript, { name: file.name }) : labels.productionPictureUnreadable);
         continue;
       }
-      const { bytes, mime } = got;
-      const size = await pictureSize(bytes, mime).catch(() => ({ width: 100, height: 140 }));
-      added.push({ id: newCollectionId('ad'), title: file.name.replace(/\.[^.]+$/, ''), mime, bytes, ...size });
+      for (const { bytes, mime, page } of got) {
+        const size = await pictureSize(bytes, mime).catch(() => ({ width: 100, height: 140 }));
+        added.push({ id: newCollectionId('ad'), title: pictureName(file.name, page), mime, bytes, ...size });
+      }
     }
     if (added.length) save({ ads: [...collection.ads, ...added] });
   };

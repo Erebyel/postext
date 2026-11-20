@@ -2,8 +2,9 @@
  * Print files as pictures of the cover's libraries (its gallery, the logos,
  * a collection's ads): a TIFF, and an Illustrator file saved
  * PDF-compatible (Illustrator's default) or a PDF, become a PNG, made in
- * the browser when the file is picked. A PDF's first page (an Illustrator
- * file's first artboard) is drawn at 300 ppi with its transparency. An EPS,
+ * the browser when the file is picked. Each page of a PDF (each artboard
+ * of an Illustrator file) is drawn at 300 ppi as a picture of its own, on
+ * nothing: where the page has nothing drawn, the picture is clear. An EPS,
  * or an Illustrator file saved without its PDF, is PostScript, which a
  * browser cannot read: it is told apart, to say how to save it.
  *
@@ -38,22 +39,36 @@ export function sniffPrintFile(bytes: Uint8Array): PrintFileKind | undefined {
 const MAX_PIXELS = 16_000_000;
 const PDF_PPI = 300;
 
-/** A file's bytes as a picture the libraries keep; 'postscript' for a
- *  file a browser cannot read, undefined for one that is no picture. */
-export async function readPictureFile(file: File): Promise<{ bytes: Uint8Array; mime: LogoMime } | 'postscript' | undefined> {
+/** A picture read from a file; `page` for one of a PDF's several pages. */
+export type ReadPicture = { bytes: Uint8Array; mime: LogoMime; page?: number };
+
+/** A file's pictures (one, or a PDF's pages) as the libraries keep them;
+ *  'postscript' for a file a browser cannot read, undefined for one that
+ *  is no picture. */
+export async function readPictureFile(file: File): Promise<ReadPicture[] | 'postscript' | undefined> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const mime = sniffLogoMime(bytes);
-  if (mime) return { bytes, mime };
+  if (mime) return [{ bytes, mime }];
   const kind = sniffPrintFile(bytes);
   if (kind === 'postscript') return 'postscript';
   if (!kind) return undefined;
   try {
-    const canvas = kind === 'tiff' ? await tiffCanvas(bytes) : await pdfCanvas(bytes);
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
-    return blob ? { bytes: new Uint8Array(await blob.arrayBuffer()), mime: 'image/png' } : undefined;
+    const canvases = kind === 'tiff' ? [await tiffCanvas(bytes)] : await pdfCanvases(bytes);
+    const out: ReadPicture[] = [];
+    for (const [i, canvas] of canvases.entries()) {
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+      if (blob) out.push({ bytes: new Uint8Array(await blob.arrayBuffer()), mime: 'image/png', ...(canvases.length > 1 ? { page: i + 1 } : {}) });
+    }
+    return out.length > 0 ? out : undefined;
   } catch {
     return undefined;
   }
+}
+
+/** A picture's name: its file's, with its page when it is one of several. */
+export function pictureName(fileName: string, page?: number): string {
+  const base = fileName.replace(/\.[^.]+$/, '');
+  return page ? `${base} · ${page}` : base;
 }
 
 /** The scale that keeps `width` × `height` within {@link MAX_PIXELS}. */
@@ -88,7 +103,10 @@ async function tiffCanvas(bytes: Uint8Array): Promise<HTMLCanvasElement> {
   return out;
 }
 
-async function pdfCanvas(bytes: Uint8Array): Promise<HTMLCanvasElement> {
+/** The most pages of a PDF made into pictures. */
+const MAX_PAGES = 20;
+
+async function pdfCanvases(bytes: Uint8Array): Promise<HTMLCanvasElement[]> {
   const pdfjs = await import('pdfjs-dist');
   // PDF.js runs its worker's code on the page when it finds it here, so no
   // worker file has to be served.
@@ -96,15 +114,22 @@ async function pdfCanvas(bytes: Uint8Array): Promise<HTMLCanvasElement> {
   g.pdfjsWorker ??= await import('pdfjs-dist/build/pdf.worker.mjs');
   const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
   try {
-    const page = await doc.getPage(1);
-    const base = page.getViewport({ scale: 1 });
-    const scale = (PDF_PPI / 72) * fitScale((base.width * PDF_PPI) / 72, (base.height * PDF_PPI) / 72);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.floor(viewport.width));
-    canvas.height = Math.max(1, Math.floor(viewport.height));
-    await page.render({ canvas, viewport }).promise;
-    return canvas;
+    const out: HTMLCanvasElement[] = [];
+    for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
+      const page = await doc.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const scale = (PDF_PPI / 72) * fitScale((base.width * PDF_PPI) / 72, (base.height * PDF_PPI) / 72);
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.floor(viewport.width));
+      canvas.height = Math.max(1, Math.floor(viewport.height));
+      // PDF.js draws on an opaque context of its own, white under the page,
+      // unless given one with transparency and told to lay nothing.
+      const canvasContext = canvas.getContext('2d')!;
+      await page.render({ canvas, canvasContext, viewport, background: 'rgba(0,0,0,0)' }).promise;
+      out.push(canvas);
+    }
+    return out;
   } finally {
     void doc.destroy();
   }
