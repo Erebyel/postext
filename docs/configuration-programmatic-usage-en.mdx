@@ -400,7 +400,7 @@ console.log(`Document has ${vdt.pages.length} pages`);
     </tr>
     <tr>
       <td><code>hyphenLadder</code>, <code>hyphenSpacing</code></td>
-      <td>More than <code>max</code> (<code>maxConsecutive</code>) lines in a row end on a hyphen: <code>lines</code> is how many, <code>text</code> the lines. <code>hyphenSpacing</code>: <code>hyphens</code> hyphens over <code>lines</code> lines, each within <code>max</code> (<code>spacingLines</code>) of the one before. All reported under <code>'warn'</code> (<code>hyphenation.ladders</code>, <code>spacing</code>); under <code>'avoid'</code>, those the breaker kept. Points at the lines and their page. Since postext 1.74 (<code>hyphenSpacing</code> 1.78).</td>
+      <td>More than <code>max</code> (<code>maxConsecutive</code>) consecutive lines end on a hyphen: <code>lines</code> counts them, <code>text</code> holds them. <code>hyphenSpacing</code>: <code>hyphens</code> hyphens over <code>lines</code> lines, each within <code>max</code> (<code>spacingLines</code>) of the last. Reported under <code>'warn'</code> (<code>hyphenation.ladders</code>, <code>spacing</code>); under <code>'avoid'</code>, those the breaker kept. Points at the lines and their page. Since postext 1.74 (<code>hyphenSpacing</code> 1.78).</td>
       <td>The lines are set as they are.</td>
     </tr>
     <tr>

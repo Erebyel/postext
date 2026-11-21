@@ -6363,7 +6363,7 @@
     "productionGallery": "封面图库",
     "productionGalleryDelete": "删除 __name__",
     "productionGalleryEmpty": "此封面的图片，与书中插图分开。在此处或设计器中上传。",
-    "productionGalleryIntro": "描边图片后，工艺与蒙版可沿其形状；或将其标为蒙版（◐），柔和地裁切其他图片：白色显示，黑色隐藏。",
+    "productionGalleryIntro": "描边图片后，工艺与蒙版可沿其形状；或将其标为蒙版，柔和地裁切其他图片：白色显示，黑色隐藏。",
     "productionGalleryName": "名称",
     "productionGalleryTrace": "描边 __name__",
     "productionGalleryTraces": "描边",

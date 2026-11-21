@@ -6363,7 +6363,7 @@
     "productionGallery": "Galerie de la couverture",
     "productionGalleryDelete": "Supprimer __name__",
     "productionGalleryEmpty": "Les images de cette couverture, à part des figures du livre. Téléversez-les ici ou depuis le concepteur.",
-    "productionGalleryIntro": "Tracez une image pour que finitions et voiles suivent sa forme, ou marquez-la comme masque (◐) pour découper d’autres images en douceur : le blanc montre, le noir cache.",
+    "productionGalleryIntro": "Tracez une image pour que finitions et voiles suivent sa forme, ou marquez-la comme masque pour découper d’autres images en douceur : le blanc montre, le noir cache.",
     "productionGalleryName": "Nom",
     "productionGalleryTrace": "Tracer __name__",
     "productionGalleryTraces": "Tracés",

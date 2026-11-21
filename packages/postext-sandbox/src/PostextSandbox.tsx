@@ -347,18 +347,17 @@ function SandboxLayout({
         <ChapterPaginator />
         {/* With the Cover panel open, its sheet as it is now in place of the
             book's pages, which are not what the panel works on. */}
-        {activePanel === 'production' ? (
-          <div className="relative min-h-0 flex-1 overflow-hidden"><CoverStage /></div>
-        ) : (
-          <>
-            <ViewportTabs />
-            <div className="relative min-h-0 flex-1 overflow-hidden">
-              {renderViewport()}
-              <SelectionBreadcrumb />
-              {loadingCover}
-            </div>
-          </>
-        )}
+        {activePanel === 'production' && <div className="relative min-h-0 flex-1 overflow-hidden"><CoverStage /></div>}
+        {/* The book's pages stay laid out under it, hidden: the cover's spine
+            waits for the whole book to be paginated. */}
+        <div className={activePanel === 'production' ? 'hidden' : 'contents'}>
+          <ViewportTabs />
+          <div className="relative min-h-0 flex-1 overflow-hidden">
+            {renderViewport()}
+            <SelectionBreadcrumb />
+            {loadingCover}
+          </div>
+        </div>
         <SandboxAnnouncer />
         <PortalHost />
         <BundleReplaceDialog />

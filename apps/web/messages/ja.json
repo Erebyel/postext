@@ -6363,7 +6363,7 @@
     "productionGallery": "カバーのギャラリー",
     "productionGalleryDelete": "__name__ を削除",
     "productionGalleryEmpty": "本の図版とは別の、このカバーの画像です。ここかデザイナーからアップロードします。",
-    "productionGalleryIntro": "画像をトレースすると加工やベールがその形に沿います。マスク（◐）にすると他の画像を柔らかく切り抜けます。白は見せ、黒は隠します。",
+    "productionGalleryIntro": "画像をトレースすると加工やベールがその形に沿います。マスクにすると他の画像を柔らかく切り抜けます。白は見せ、黒は隠します。",
     "productionGalleryName": "名前",
     "productionGalleryTrace": "__name__ をトレース",
     "productionGalleryTraces": "トレース",

@@ -6363,7 +6363,7 @@
     "productionGallery": "Galería de la cubierta",
     "productionGalleryDelete": "Eliminar __name__",
     "productionGalleryEmpty": "Las imágenes de esta cubierta, aparte de las figuras del libro. Súbelas aquí o desde el diseñador.",
-    "productionGalleryIntro": "Traza una imagen para que los acabados y los velos sigan su forma, o márcala como máscara (◐) para recortar otras con suavidad: el blanco deja ver y el negro oculta.",
+    "productionGalleryIntro": "Traza una imagen para que los acabados y los velos sigan su forma, o márcala como máscara para recortar otras con suavidad: el blanco deja ver y el negro oculta.",
     "productionGalleryName": "Nombre",
     "productionGalleryTrace": "Trazar __name__",
     "productionGalleryTraces": "Trazados",
